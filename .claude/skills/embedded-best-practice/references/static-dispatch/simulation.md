@@ -2,6 +2,8 @@
 
 在 Wink-AI 平台中，Wasm 仿真（UniSim）的性能和可靠性直接决定了“低代码运行体验”。为兼顾 Web 渲染的高帧率与安全代码的严格测试，项目对仿真分流和测试提出了明确的保真分级与注入方法。
 
+> ⚠ `js_sim_*` 桥接（Wasm ↔ JS 内存写入）属**安全沙箱范畴**，完整约束见 `docs/design/07-platform-governance/03-security-sandbox.md`；本页只讲保真分级与错误注入（跨界写入契约见 §3.4）。
+
 ---
 
 ## 1. 仿真保真度分级 (Simulation Fidelity Levels)
@@ -109,3 +111,24 @@ void check_radar_avoidance(void) {
     }
 }
 ```
+
+### 3.4 `js_sim_*` 跨界写入契约（安全沙箱）
+
+`js_sim_*` 桩向 Wasm 线性内存写物理量时，**必须走 Emscripten 的类型化 heap 抽象**，禁止裸地址算术——否则内存布局变化会导致野写、且无运行时检查：
+
+```typescript
+/* ✓ 走 Emscripten 类型化 API（ccall/cwrap 返回值，或 setValue / HEAPF32） */
+Module.setValue(distancePtr, simDistance, 'float');          // 单值
+Module.HEAPF32.set(float32Array, distancePtr >> 2);          // 批量
+
+/* ❌ 禁止：用 HEAP8.buffer + 偏移做裸地址运算 */
+const view = new Float32Array(Module.HEAP8.buffer, distancePtr, 1); // 禁
+view[0] = simDistance;
+```
+
+规则：
+1. **优先**让 `js_sim_*` 通过返回值传状态 + 用 `Module.setValue` / `HEAPF32.set` 写数据，而非手算偏移。
+2. **禁止** `js_sim_*` 侧自行用 `Module.HEAP8.buffer` + 偏移做地址运算。
+3. 一旦 Wasm 线性内存布局变化（增删全局、改导出），`distancePtr` 等必须由 Emscripten 重新导出的符号获取，绝不硬编码。
+
+> 完整沙箱边界（`js_sim_*` import 数量治理、多线程/异步路径越界、野写防护）见 [03-security-sandbox.md](../../../../../docs/design/07-platform-governance/03-security-sandbox.md)。

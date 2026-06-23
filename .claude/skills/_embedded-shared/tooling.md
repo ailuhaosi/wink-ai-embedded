@@ -105,6 +105,10 @@ done
 - **运行时高水位**：debug 构建里 FreeRTOS 任务用 `uxTaskGetStackHighWaterMark` 断言余量 > 阈值，
   启动自检阶段打印各任务栈余量。
 - **init/deinit 对称**：lint 规则或 CI 脚本核对每个 `*_init` 是否有配对 `*_deinit` 路径。
+- **Wasm Asyncify 栈预算**（ADR-0002 已知风险，[realtime-hardware.md](./realtime-hardware.md)）：`-fstack-usage` / FreeRTOS 高水位只覆盖真机；Wasm 的 Asyncify 栈是**独立预算**，溢出表现为深调用链时仿真**静默挂起**（无明确 reset reason，极难定位）。三道闸：
+  - **栈预算声明**：wasm target 构建脚本把 `ASYNCIFY_STACK_SIZE` 显式声明为项目常量，文档化其与最深同步阻塞调用链（如 `BAL → DAL → pal_delay_ms → Asyncify 栈帧`）的关系。
+  - **编译期断言**：对已知深嵌套路径用 `static_assert` 或构建期脚本校验调用链深度 < `ASYNCIFY_STACK_SIZE` 余量。
+  - **CI 回归**：CI 跑 wasm target 时对最深的同步阻塞路径做 Asyncify 栈用量回归（与真机 `.su` 栈门禁并列，任一超阈 fail）。
 
 ---
 

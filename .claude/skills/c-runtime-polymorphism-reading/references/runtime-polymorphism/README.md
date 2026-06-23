@@ -78,4 +78,4 @@ static int gpio_on(struct led_base *me) {
 | [evolution.md](./evolution.md) | 5 阶段 OOP 演化路径 |
 | [reference.md](./reference.md) | Linux/C++/框架对照（**ops 表已修正为 3 列**）+ 与静态分发对照 |
 
-> 范式无关的工程纪律（错误码、内存、并发、清单）在 [../shared/](../shared/)，同样适用。
+> 范式无关的工程纪律（错误码、内存、并发、清单）在 [../../../_embedded-shared/](../../../_embedded-shared/)，两 skill 共用，同样适用。

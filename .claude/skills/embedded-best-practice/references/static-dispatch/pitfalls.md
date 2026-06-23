@@ -1,7 +1,7 @@
 # 静态分发常见陷阱
 
 > 写 wink-micro-os / chigo-micro 代码时的避坑指南。范式无关的陷阱（内存/并发）见
-> [../shared/](../shared/)。
+> [../../../_embedded-shared/](../../../_embedded-shared/)。
 
 ---
 
@@ -14,7 +14,7 @@ if (s < 0) { /* ✓ */ }                  /* 正确 */
 if (s != WINK_OK) { /* ✓ */ }           /* 正确 */
 ```
 
-详见 [../shared/error-codes.md](../shared/error-codes.md)。这是 AI 代码生成头号雷。
+详见 [../../../_embedded-shared/error-codes.md](../../../_embedded-shared/error-codes.md)。这是 AI 代码生成头号雷。
 
 ---
 
@@ -67,7 +67,7 @@ wink-micro-os README 里残留 `vdl_[device]_[action]` 说法，但代码与其�
 
 Wasm 单线程，`pal_mutex_create` 返回常量、lock/unlock 是空操作——**假锁**。仿真里没有真实
 竞争，不要依赖 PAL mutex 在仿真环境保证跨任务正确性。真机并发正确性靠 xtensa target 的
-真实 OSAL。详见 [../shared/concurrency.md](../shared/concurrency.md)。
+真实 OSAL。详见 [../../../_embedded-shared/concurrency.md](../../../_embedded-shared/concurrency.md)。
 
 ---
 

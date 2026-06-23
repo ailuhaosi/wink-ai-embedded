@@ -24,7 +24,7 @@ description: Use when reading or explaining C runtime polymorphism in Linux, Zep
 | 排错与代码审查 | `references/runtime-polymorphism/pitfalls.md` |
 | 演化路径 | `references/runtime-polymorphism/evolution.md` |
 | 与 Linux / C++ / 静态分发对照 | `references/runtime-polymorphism/reference.md` |
-| 工程纪律 | `references/shared/` |
+| 工程纪律 | `../_embedded-shared/`（两 skill 共用） |
 
 ## 使用原则
 

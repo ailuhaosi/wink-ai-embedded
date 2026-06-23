@@ -55,7 +55,7 @@
 | 禁止模式（示例 grep） | 含义 | 合法例外 |
 |----------------------|------|----------|
 | `if\s*\(\s*\w*[sS]tatus\s*\)` | `if(status)`：负数 truthy，把失败当成功（[error-codes.md](./error-codes.md) 头号雷） | 无——一律 `if(status < 0)` |
-| `\bcontainer_of\b` | 运行期多态向下转型，违反 ADR-0004 | 仅 `c-runtime-polymorphism-reading` 参考文档 |
+| `\bcontainer_of\b` | 运行期多态向下转型，违反 ADR-0004 | 仅运行期多态参考基线（对照阅读） |
 | `struct\s+\w+_ops\b` | 器件抽象 ops 虚表 | `control_algo_t` 策略层（封装在模块内） |
 | `\b(strcpy\|sprintf\|strncpy\|gets\|alloca\)\s*\(` | 无界写入 / 栈分配 | 无（见 [memory-safety.md](./memory-safety.md)） |
 | `\b(malloc\|free\|calloc\|realloc\)\s*\(` | 实时路径动态分配 | 非实时路径 + 配对释放 + 文档化所有权 |

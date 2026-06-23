@@ -157,7 +157,7 @@ void ISR(void)
 
 > 对应 zhaoming `hardware-interaction.md` 的「ISR → osSemaphoreRelease → 高优先级
 > 工作线程」模式：ISR 最小化，回调在任务上下文执行。详见
-> [shared/concurrency.md](../shared/concurrency.md)。
+> [concurrency.md](../../../_embedded-shared/concurrency.md)。
 
 ---
 

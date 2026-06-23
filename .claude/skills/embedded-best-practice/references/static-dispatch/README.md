@@ -87,4 +87,4 @@ wink-micro-os 的**实际代码尚处于 ADR-0001 / ADR-0004 落地前**的形�
 | [evolution.md](./evolution.md) | 局部多态化退出路径 + bool/float→wink_status_t 迁移 delta (含 callback 改造示例) |
 | [grilling.md](./grilling.md) | [NEW] 架构评审 Grilling 挑战与深度解答 Checklist |
 
-> 范式无关的工程纪律（错误码、内存、并发、清单）在 [../shared/](../shared/)，同样适用。
+> 范式无关的工程纪律（错误码、内存、并发、清单）在 [../../../_embedded-shared/](../../../_embedded-shared/)，两 skill 共用，同样适用。

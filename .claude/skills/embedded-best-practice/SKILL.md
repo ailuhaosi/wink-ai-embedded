@@ -8,6 +8,7 @@ description: 嵌入式 C 最佳实践（本项目静态分发专用）。Use whe
 本 skill 服务 wink-micro-os / chigo-micro 的嵌入式 C 编码、修改、审查与排错。默认范式是**编译期静态分发**：POD 结构 + 命名 API + CMake/codegen 静态绑定。
 
 > **文档集根（唯一权威源）**：`.claude/skills/embedded-best-practice/references/`（下文简称 `REF/`）。
+> **共享工程纪律（两 skill 共用同一份）**：`.claude/skills/_embedded-shared/`（下文简称 `SHARED/`）。
 > 运行期多态阅读已拆到 `c-runtime-polymorphism-reading`。
 
 ---
@@ -19,14 +20,14 @@ description: 嵌入式 C 最佳实践（本项目静态分发专用）。Use whe
 │
 ├── 写 / 改 / 审 wink-micro-os 或 chigo-micro 的 C 固件 / 驱动 / HAL
 │     → 使用本 skill
-│     → 读 REF/static-dispatch/ + REF/shared/
+│     → 读 REF/static-dispatch/ + SHARED/
 │     → 禁止生成 vtable / container_of / struct xxx_ops 作为器件抽象
 │
 ├── 读 Linux / Zephyr / RT-Thread / STM32 HAL 源码，理解 C-OOP
 │     → 改用 c-runtime-polymorphism-reading
 │
 └── 只做通用 C 工程纪律判断
-      → 读 REF/shared/
+      → 读 SHARED/
 ```
 
 ### 本项目 = 静态分发（ADR-0004）
@@ -47,16 +48,16 @@ description: 嵌入式 C 最佳实践（本项目静态分发专用）。Use whe
 | 接口契约模板 (Blocking/ISR) / YAML 元数据 | `REF/static-dispatch/contracts.md` |
 | 资源生命周期 / No-malloc / 配置状态分离 | `REF/static-dispatch/lifecycle.md` |
 | 仿真保真分级 / Wasm-JS 错误注入 | `REF/static-dispatch/simulation.md` |
-| 函数设计、命名、错误处理、const/static | `REF/shared/clean-code.md` |
-| 错误码（0=ok/负数=错误，禁 `if(status)`） | `REF/shared/error-codes.md` |
-| 堆 / 栈 / 缓冲区 / VLA·strcpy·sprintf 禁令 | `REF/shared/memory-safety.md` |
-| 线程 / 临界区 / ISR→信号量→工作线程 / ISR 优先级上限 / volatile≠原子 | `REF/shared/concurrency.md` |
-| RTC / 非阻塞驱动 / DMA / 看门狗 / NVS / 双 target 同源 | `REF/shared/realtime-hardware.md` |
-| 工具链 / CI 正则门禁 / lint / 栈用量门禁 | `REF/shared/tooling.md` |
-| 测试策略 / host 单测 / 帧解析 fuzzing / HIL | `REF/shared/testing.md` |
+| 函数设计、命名、错误处理、const/static | `SHARED/clean-code.md` |
+| 错误码（0=ok/负数=错误，禁 `if(status)`） | `SHARED/error-codes.md` |
+| 堆 / 栈 / 缓冲区 / VLA·strcpy·sprintf 禁令 | `SHARED/memory-safety.md` |
+| 线程 / 临界区 / ISR→信号量→工作线程 / ISR 优先级上限 / volatile≠原子 | `SHARED/concurrency.md` |
+| RTC / 非阻塞驱动 / DMA / 看门狗 / NVS / 双 target 同源 | `SHARED/realtime-hardware.md` |
+| 工具链 / CI 正则门禁 / lint / 栈用量门禁 | `SHARED/tooling.md` |
+| 测试策略 / host 单测 / 帧解析 fuzzing / HIL | `SHARED/testing.md` |
 | 代码审查 / 排错（本项目） | `REF/static-dispatch/pitfalls.md` |
 | 架构评审 Grilling 问题清单 | `REF/static-dispatch/grilling.md` |
-| 编辑后安全审查 | `REF/shared/safety-checklist.md` |
+| 编辑后安全审查 | `SHARED/safety-checklist.md` |
 
 如有疑问，先读 `REF/index.md`。安全关键代码，过度检查总好过检查不足。
 
@@ -114,7 +115,7 @@ Safety review:
 | 字符串拷贝 | 禁 `strcpy`/`sprintf`/`strncpy`，用 `snprintf` 或显式界限拷贝 |
 | 命名 | 纯 snake_case：函数 `模块_动作()`、类型 `xxx_t`、宏 `UPPER` |
 
-详见 `REF/shared/clean-code.md`。
+详见 `SHARED/clean-code.md`。
 
 ## 上下文感知编码
 
@@ -218,8 +219,8 @@ if ((written < 0) || ((size_t)written >= sizeof(buf))) {
 ```text
 references/
 ├── index.md                 静态分发边界 + 导航
-├── shared/                  工程纪律
 └── static-dispatch/         本项目标准（wink-micro-os + chigo-micro）
 
+工程纪律（两 skill 共用，SHARED/）：.claude/skills/_embedded-shared/
 运行期多态参考已拆到：.claude/skills/c-runtime-polymorphism-reading/
 ```

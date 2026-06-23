@@ -9,7 +9,7 @@
 | 子目录 | 性质 | 是否本项目标准 |
 |--------|------|----------------|
 | [`static-dispatch/`](./static-dispatch/README.md) | 本项目实际采用的架构 | 是——写本项目代码以此为准 |
-| [`shared/`](./shared/clean-code.md) | 范式无关的工程纪律 | 是 |
+| [`_embedded-shared/`](../../_embedded-shared/clean-code.md) | 范式无关的工程纪律（两 skill 共用） | 是 |
 
 运行期多态（`ops` / `container_of` / Linux 风格）已拆到独立 skill：`.claude/skills/c-runtime-polymorphism-reading/`。写本项目代码时不要套用该范式，见 ADR-0004。
 
@@ -49,32 +49,32 @@
 你在做什么？
 │
 ├── 在 wink-micro-os / chigo-micro 里写 / 改 / 审 C 代码
-│     → static-dispatch/ + shared/
+│     → static-dispatch/ + ../../_embedded-shared/
 │     → 禁 vtable / container_of / struct device_ops 器件抽象
 │
 ├── 读 Linux / Zephyr / RT-Thread / HAL 源码，理解 C-OOP
 │     → 使用 c-runtime-polymorphism-reading skill
 │
 └── 任何 C 代码都要遵守的工程纪律
-      → shared/
+      → ../../_embedded-shared/
 ```
 
 ---
 
 ## 快速导航
 
-### `shared/`（工程纪律）
+### 工程纪律（`_embedded-shared/`，两 skill 共用）
 
 | 文档 | 内容 |
 |------|------|
-| [clean-code.md](./shared/clean-code.md) | 硬限表、命名约定、函数设计、防御式编程、const/static、BARR-C、MISRA-C/CERT-C 对齐 |
-| [error-codes.md](./shared/error-codes.md) | 0=成功/负数=错误、禁 `if(status)`、两项目错误码布局 |
-| [memory-safety.md](./shared/memory-safety.md) | 实时路径禁 malloc、堆规、VLA/strcpy/sprintf/strncpy 禁令、栈/缓冲 |
-| [concurrency.md](./shared/concurrency.md) | 线程安全选择表、临界区四规、ISR→工作线程、ISR 优先级上限、volatile≠原子 |
-| [realtime-hardware.md](./shared/realtime-hardware.md) | RTC 合规、非阻塞驱动、DMA+环形+D-Cache、看门狗、NVS、双 target 同源 |
-| [tooling.md](./shared/tooling.md) | 编译器警告门禁、clang-tidy/cppcheck、CI 正则门禁、栈用量门禁、双 target 一致性 |
-| [testing.md](./shared/testing.md) | host 单测共享层、帧解析 fuzzing、HIL、静态分发可测性红利 |
-| [safety-checklist.md](./shared/safety-checklist.md) | 12 阶段安全清单、风险分级、严重性分级 |
+| [clean-code.md](../../_embedded-shared/clean-code.md) | 硬限表、命名约定、函数设计、防御式编程、const/static、BARR-C、MISRA-C/CERT-C 对齐 |
+| [error-codes.md](../../_embedded-shared/error-codes.md) | 0=成功/负数=错误、禁 `if(status)`、两项目错误码布局 |
+| [memory-safety.md](../../_embedded-shared/memory-safety.md) | 实时路径禁 malloc、堆规、VLA/strcpy/sprintf/strncpy 禁令、栈/缓冲 |
+| [concurrency.md](../../_embedded-shared/concurrency.md) | 线程安全选择表、临界区四规、ISR→工作线程、ISR 优先级上限、volatile≠原子 |
+| [realtime-hardware.md](../../_embedded-shared/realtime-hardware.md) | RTC 合规、非阻塞驱动、DMA+环形+D-Cache、看门狗、NVS、双 target 同源 |
+| [tooling.md](../../_embedded-shared/tooling.md) | 编译器警告门禁、clang-tidy/cppcheck、CI 正则门禁、栈用量门禁、双 target 一致性 |
+| [testing.md](../../_embedded-shared/testing.md) | host 单测共享层、帧解析 fuzzing、HIL、静态分发可测性红利 |
+| [safety-checklist.md](../../_embedded-shared/safety-checklist.md) | 12 阶段安全清单、风险分级、严重性分级 |
 
 ### `static-dispatch/`（本项目标准）
 

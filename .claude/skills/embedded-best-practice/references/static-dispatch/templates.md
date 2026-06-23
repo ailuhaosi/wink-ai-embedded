@@ -325,8 +325,8 @@ static inline uint16_t unpack_u16_le(const uint8_t *buf) {
 /* u32 同理：4 字节移位 + 掩码。CRC16 计算也走字节级，不依赖宿主字节序。 */
 ```
 
-要点：移位用无符号、掩码到位宽（BARR-C 位操作安全，[../shared/clean-code.md](../shared/clean-code.md)）；
-这套 helper 属共享层 → host 单测覆盖（[../shared/testing.md](../shared/testing.md)）。
+要点：移位用无符号、掩码到位宽（BARR-C 位操作安全，[../../../_embedded-shared/clean-code.md](../../../_embedded-shared/clean-code.md)）；
+这套 helper 属共享层 → host 单测覆盖（[../../../_embedded-shared/testing.md](../../../_embedded-shared/testing.md)）。
 
 ---
 

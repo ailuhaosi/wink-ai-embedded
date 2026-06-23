@@ -98,26 +98,21 @@ Safety review:
 5. **验证到底层** —— 硬件交互查到寄存器级；永远不假设某 API 非阻塞。
 6. **防御性编程** —— 断言内部契约、运行时校验外部输入、错误码传播、绝不静默吞失败。
 
-## 硬性规则（速查）
+## 改完代码 30 秒自检（致命 5 项）
 
-| 规则 | 限制 |
-|------|------|
-| 最大行宽 | 80 列 |
-| 最大函数长度 | 80 行 |
-| 最大嵌套深度 | 4 层 |
-| 最大参数数 | 5 个（超过则组合成结构体） |
-| 魔法数字 | 禁止，用宏（`U`/`UL` 后缀 + 括号） |
-| 死代码 / 注释掉的代码 | 必须删除 |
-| 非公共符号 | 必须 `static`（文件级 static 用 `s_` 前缀，全局 `g_`） |
-| 未修改的指针参数 | 必须 `const`（但不要 const 值参数） |
-| 整数类型 | 必须 `stdint.h` 固定宽度（禁裸 int/short/long） |
-| 头文件 | 必须有保护宏 + 自包含 |
-| 错误码检查 | 禁 `if(status)`，用 `if(status < 0)` |
-| 实时路径 | 禁 `malloc/free`（PID 回调 / ISR / Wasm 热路径） |
-| 字符串拷贝 | 禁 `strcpy`/`sprintf`/`strncpy`，用 `snprintf` 或显式界限拷贝 |
-| 命名 | 纯 snake_case：函数 `模块_动作()`、类型 `xxx_t`、宏 `UPPER` |
+低 / 中风险改动用这个秒级自检；**任一项不过 → 转完整 12 阶段清单**（见上方「编辑后安全审查协议」）。
 
-详见 `SHARED/clean-code.md`。
+```text
+□ 返回 wink_status_t 且用 if(status<0) 检查？（非 bool / 非 float 哨兵）
+□ 业务层没直接碰 PAL / 寄存器？（走 DAL 命名 API）
+□ 没扩大 #ifdef SIMULATION 范围？（只旁路最低物理信号层）
+□ 没发明未在契约 / Registry 注册的 API？
+□ 没在实时路径 malloc / 没吞错误码？
+```
+
+## 硬性规则
+
+行宽 80 列、函数 ≤80 行、嵌套 ≤4 层、参数 ≤5、禁魔法数字、禁裸 int、禁 `if(status)`、禁实时路径 `malloc`、禁 `strcpy`/`sprintf`/`strncpy`、纯 snake_case（函数 `模块_动作()` / 类型 `xxx_t` / 宏 `UPPER`）——**完整硬限表见 `SHARED/clean-code.md` §硬性限制**（不在本文件重复，避免两份漂移）。
 
 ## 上下文感知编码
 
@@ -175,44 +170,11 @@ Safety review:
 
 ## 好坏例子
 
-```c
-/* bad */
-if (status) {
-    return WINK_OK;
-}
-
-/* good */
-if (status < 0) {
-    return status;
-}
-```
-
-```c
-/* bad: 器件抽象不要用运行期虚表 */
-dev->ops->set_angle(dev, angle);
-
-/* good: 本项目命名 API */
-status = dal_servo_set_angle(&servo, angle);
-```
-
-```c
-/* bad */
-sprintf(buf, "%u", value);
-
-/* good */
-written = snprintf(buf, sizeof(buf), "%u", value);
-if ((written < 0) || ((size_t)written >= sizeof(buf))) {
-    return WINK_ERR_BUFFER_TOO_SMALL;
-}
-```
+`if(status)` vs `if(status<0)`、命名 API vs `dev->ops->`、`snprintf` vs `sprintf` 等好坏对照——**见 `SHARED/error-codes.md`（头号雷）与 `REF/static-dispatch/pitfalls.md`**，本文件不重复以避免两份漂移。
 
 ## SOLID / Clean Code 速查
 
-- **SRP** —— 一个模块 = 一个职责 = 一个变更理由。
-- **OCP** —— 通过扩展而非修改：加命名 API + Device Registry 条目。
-- **LSP** —— 所有实现遵守同一契约。
-- **ISP** —— 使用者只依赖其用到的接口。
-- **DIP** —— 高层依赖 PAL/DAL 命名契约，不依赖底层芯片细节。
+SRP / OCP / LSP / ISP / DIP 速查与函数设计要点——**见 `SHARED/clean-code.md`**。
 
 ---
 

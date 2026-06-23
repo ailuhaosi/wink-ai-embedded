@@ -20,8 +20,10 @@
 
 ### 推荐的设计模式：
 
+> ⚠ **目标形态（尚未落地）**：当前实际头文件（`dal_servo.h` / `dal_ultrasonic.h`）是**扁平字段、非 `const`**（见 README 偏差框）。下面是 ADR 目标形态；迁移示例见 evolution.md §1.4。写新代码按此目标形态，读写现有实例仍用扁平字段（`dev->last_distance`）。
+
 ```c
-/* dal_servo.h 中的定义 */
+/* dal_servo.h 中的定义（目标形态；现状为扁平字段） */
 typedef struct {
     // --- 1. 静态只读配置区（由 Codegen 填入） ---
     const uint8_t  pwm_channel;   /* const 锁定物理通道，防篡改 */
@@ -70,7 +72,7 @@ dal_servo_t neck_servo = {
 *   **逃逸禁令**：**严禁将任何临时局部变量（Stack 变量）的指针缓存到全局实例中**。一旦函数调用结束，栈上的临时变量被销毁，全局实例中指向该栈地址的指针将变为野指针。
 
 ```c
-/* ❌ 严重错误示范：缓存栈上临时数据指针 */
+/* ❌ 严重错误示范：缓存栈上临时数据指针（dev->state.* 为目标形态示意，现状扁平） */
 wink_status_t dal_temp_cache_data(dal_temp_t *dev) {
     float temp_data = 25.4f;
     dev->state.last_reading_ptr = &temp_data; // ❌ 逃逸！temp_data 在出栈后失效

@@ -77,7 +77,7 @@ wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     }
     
     *distance_cm = (float)echo_time * 0.017f;
-    dev->state.last_distance = *distance_cm;
+    dev->state.last_distance = *distance_cm;  /* 目标形态：state 区；现状扁平 dev->last_distance 见 README 偏差框 */
     return WINK_OK;
 }
 ```
@@ -122,10 +122,40 @@ wink_status_t dal_sensor_read(dal_sensor_t *dev, float *out) {
     
     // --- 共享同源换算逻辑：不管是仿真还是真机，校验和转换在同一段代码运行 ---
     *out = ((float)(raw[0] << 8 | raw[1])) * 0.1f; 
-    dev->state.last_value = *out;
+    dev->state.last_value = *out;  /* 目标形态：state 区；现状扁平见 README 偏差框 */
     return WINK_OK;
 }
 ```
+
+---
+
+### 1.4 典型迁移重构示例 4：扁平结构体 → config/state 显式分离
+
+现状（`dal_ultrasonic.h` / `dal_servo.h`）是扁平字段、非 `const`：
+
+```c
+/* BEFORE（现状扁平）：配置与状态平级，字段可被任意篡改 */
+typedef struct {
+    uint16_t trig_pin;       /* 配置，但未用 const 锁定 */
+    uint16_t echo_pin;
+    float    last_distance;  /* 运行期状态，与配置平级 */
+} dal_ultrasonic_t;
+```
+
+```c
+/* AFTER（目标：const 配置区 + struct state{} 可变区分离，见 lifecycle.md §2） */
+typedef struct {
+    const uint16_t trig_pin;     /* const 锁定物理引脚，防篡改 */
+    const uint16_t echo_pin;
+
+    struct {
+        float         last_distance;  /* 运行期可变状态 */
+        wink_status_t last_status;
+    } state;
+} dal_ultrasonic_t;
+```
+
+迁移要点：所有读写点 `dev->last_distance` → `dev->state.last_distance`；Codegen 实例化时 `.trig_pin` / `.echo_pin` 由 `const` 初始化器锁定，`.state` 由运行期驱动填充。
 
 ---
 

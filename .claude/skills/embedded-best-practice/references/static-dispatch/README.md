@@ -49,6 +49,7 @@ wink-micro-os 的**实际代码尚处于 ADR-0001 / ADR-0004 落地前**的形�
 | 项 | 代码现状（旧） | 目标（ADR） | 说明 |
 |----|----------------|-------------|------|
 | 返回类型 | `bool` / `float` + 哨兵 `-1.0f` | `wink_status_t`（0=ok，负数=错误） | ADR-0001 |
+| 结构体形态 | 扁平字段（顶层 `last_distance` / `current_angle`，字段非 `const`） | `const` 配置区 + `struct state{}` 可变区分离 | 见 lifecycle.md §2、evolution.md §1.4 |
 | 超声波读 API | `dal_ultrasonic_get_distance` | `dal_ultrasonic_read` | Device Registry SSOT 命名 |
 | `js_sim_*` 签名 | 三处冲突（代码 / DAL doc / Registry） | 以 Registry 为准 | SSOT 未强制，反例 |
 | `device_tree.c` | **尚未生成**（codegen 设计态） | 由 codegen 静态生成 | 见 templates.md |

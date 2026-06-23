@@ -41,7 +41,7 @@ wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     // 直通调用，返回仿真电路线路的物理厘米值
     wink_status_t status = js_sim_get_ultrasonic_distance(dev->trig_pin, distance_cm);
     if (status == WINK_OK) {
-        dev->state.last_distance = *distance_cm;
+        dev->last_distance = *distance_cm;  /* 现状扁平字段；目标 config/state 分离见 lifecycle.md §2 */
     }
     return status;
 }

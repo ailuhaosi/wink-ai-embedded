@@ -40,11 +40,13 @@ if (status != WINK_OK)  { /* 失败处理 */ }   /* WINK_OK == 0 */
 
 | 项目 | 返回类型 | 布局 |
 |------|----------|------|
-| **wink-micro-os** | `wink_status_t` | 分段：`0 = WINK_OK`；`-1..-11` 常见可恢复；`-20..-29` 功能安全可恢复（如 `WINK_ERR_OVERCURRENT`）；`-30..-49` 致命（如 `WINK_ERR_WATCHDOG`）；`-99 = WINK_ERR_PANIC` |
+| **wink-micro-os** | `wink_status_t` | 分段：`0 = WINK_OK`；`-1..-11` 常见可恢复；`-20..-29` 功能安全可恢复（如 `WINK_ERR_OVERCURRENT`）；`-30..-49` 致命（如 `WINK_ERR_WATCHDOG`）；`-50..-59` **可恢复降级**（ADR-0005，如 `WINK_ERR_CONFIG_CORRUPT_DEGRADED(-50)`、`WINK_ERR_FAILED_INIT(-51)`——系统继续运行）；`-99 = WINK_ERR_PANIC` |
 | **chigo-micro** | `int` + 位域 | `0` 成功 / 负数错误（非结构化 int）；安全状态另用 `ERR_BIT_*` 位域（OVERCURRENT/OVERHEAT/STALL/COLLISION/COMM_TIMEOUT/CRC_ERROR 等，见 `message_parser.h`） |
 
 > 写 wink-micro-os 代码用 `wink_status_t` + 分段码；写 chigo-micro 代码用 `int` + `ERR_BIT_*`。
 > 两者共享「0=成功 / 负数=错误 / 禁 `if(status)`」这条铁律。
+>
+> **无正数 warning 段**（ADR-0005）：「降级但继续运行」也归负数（`-50s`），故 `if(status<0)` 对降级状态依然正确捕获——BAL 用 `status == WINK_ERR_CONFIG_CORRUPT_DEGRADED` / `== WINK_ERR_FAILED_INIT` 特判走保守降级，其余 `<0` 走常规错误恢复。统一 `ERR_*` 前缀，**禁用 `WARN_*` 前缀**。
 
 ---
 

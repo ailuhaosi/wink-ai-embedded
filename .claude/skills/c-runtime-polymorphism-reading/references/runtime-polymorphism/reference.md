@@ -417,10 +417,7 @@ module_platform_driver(gpio_driver);
 | Wasm 仿真 | ❌ `call_indirect` 破坏优化 | ✅ 可旁路直通、零跳转 |
 | RAM 开销 | 每实例 + ops 指针 | 0 |
 
-本项目（WinkMicroOS / chigo-micro）**有意偏离**本参考基线，采用静态分发——决策依据是
-ADR-0004（`docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md`），写法见
-[../static-dispatch/](../static-dispatch/README.md)。
-**在 wink-micro-os / chigo-micro 里写代码时，请勿套用本文件夹的 vtable / container_of 范式。**
+本项目（WinkMicroOS / chigo-micro）**有意偏离**本参考基线，采用静态分发——决策依据是 ADR-0004（`docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md`）。写本项目代码时请使用 `embedded-best-practice`，请勿套用本文件夹的 vtable / container_of 范式。
 
 ---
 

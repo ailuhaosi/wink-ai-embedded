@@ -6,7 +6,7 @@
 
 ## 一、代码迁移 delta（bool/float → wink_status_t）
 
-wink-micro-os 现有代码处于 ADR-0001 / ADR-0004 落地前。迁移清单：
+wink-micro-os 现有代码处于 ADR-0001 / ADR-0004 落地前。迁移对照表：
 
 | 现状 | 迁移到 | 动作 |
 |------|--------|------|
@@ -19,6 +19,113 @@ wink-micro-os 现有代码处于 ADR-0001 / ADR-0004 落地前。迁移清单：
 | `if (status)` 检查 | `if (status < 0)` | 全局搜替换 + lint |
 
 迁移**不得静默改变**物理引脚、默认电压、DAL API 语义（`07-platform-governance/01` §8）。
+
+---
+
+### 1.1 典型迁移重构示例 1：Callback 签名上下文改造
+
+在旧代码中，中断或异步回调往往不带上下文指针，导致回调函数内不得不强行读取全局变量，丧失了封装性：
+
+```c
+/* BEFORE (旧版回调设计：全局状态耦合，不利于多实例) */
+typedef void (*dal_gpio_isr_cb)(void);
+static dal_gpio_isr_cb s_button_cb = NULL;
+
+void gpio_isr_handler(void) {
+    if (s_button_cb) s_button_cb(); // 无法得知是哪个按键触发的
+}
+
+/* AFTER (新版契约设计：携带静态 user_data 上下文) */
+typedef void (*dal_gpio_isr_cb)(void *user_data);
+
+typedef struct {
+    uint16_t pin;
+    dal_gpio_isr_cb callback;
+    void *user_data; // 静态绑定对应的设备实例指针 (如 &emergency_stop_btn)
+} dal_gpio_btn_t;
+
+void gpio_isr_handler_new(dal_gpio_btn_t *btn) {
+    if (btn->callback) {
+        btn->callback(btn->user_data); // 传入上下文，解耦逻辑
+    }
+}
+```
+
+---
+
+### 1.2 典型迁移重构示例 2：消除 float 哨兵值返回值，改用带状态指针
+
+旧代码经常为了图省事，让 API 直接返回测量物理量（如 `float`），并规定 `-1.0f` 代表超时错误。这在噪声较大或边界值测量时极易引起逻辑判断失误：
+
+```c
+/* BEFORE (旧版设计：物理量与状态混合，哨兵值存在二义性风险) */
+float dal_ultrasonic_get_distance(dal_ultrasonic_t *dev) {
+    if (dev == NULL) return -1.0f;
+    uint32_t echo_time = measure_echo();
+    if (echo_time == 0) return -1.0f; // 超时错误
+    return (float)echo_time * 0.017f;
+}
+
+/* AFTER (新版契约设计：返回值仅表达状态，数据由指针出参带回) */
+wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
+    if (dev == NULL || distance_cm == NULL) return WINK_ERR_INVALID_ARG;
+    
+    uint32_t echo_time = 0;
+    wink_status_t status = measure_echo(&echo_time);
+    if (status < 0) {
+        return status; // 返回具体的错误代码 (如 WINK_ERR_TIMEOUT)
+    }
+    
+    *distance_cm = (float)echo_time * 0.017f;
+    dev->state.last_distance = *distance_cm;
+    return WINK_OK;
+}
+```
+
+---
+
+### 1.3 典型迁移重构示例 3：收窄 `#ifdef SIMULATION` 条件编译范围
+
+旧的 DAL 驱动粗暴地将整个读写函数在 Wasm 和真机下完全分立成两个实体，导致大量的中间协议校验与数据转换逻辑无法被仿真端覆盖（同源性低）：
+
+```c
+/* BEFORE (旧版隔离：全函数隔离，逻辑完全分叉) */
+#ifdef SIMULATION
+wink_status_t dal_sensor_read(dal_sensor_t *dev, float *out) {
+    *out = js_sim_get_sensor_raw();
+    return WINK_OK;
+}
+#else
+wink_status_t dal_sensor_read(dal_sensor_t *dev, float *out) {
+    uint8_t raw[2];
+    pal_i2c_read(dev->i2c_port, raw, 2);
+    *out = ((float)(raw[0] << 8 | raw[1])) * 0.1f;
+    return WINK_OK;
+}
+#endif
+
+/* AFTER (新版隔离：只隔离最低层物理电平/总线 IO，数据换算同源) */
+static wink_status_t read_raw_bytes(dal_sensor_t *dev, uint8_t *buf) {
+#ifdef SIMULATION
+    // 旁路直通物理电平：向仿真环境索取模拟的 I2C 原始数据包
+    return js_sim_get_i2c_payload(dev->i2c_port, buf, 2);
+#else
+    // 物理 I2C 传输
+    return pal_i2c_read(dev->i2c_port, buf, 2);
+#endif
+}
+
+wink_status_t dal_sensor_read(dal_sensor_t *dev, float *out) {
+    uint8_t raw[2] = {0};
+    wink_status_t status = read_raw_bytes(dev, raw);
+    if (status < 0) return status;
+    
+    // --- 共享同源换算逻辑：不管是仿真还是真机，校验和转换在同一段代码运行 ---
+    *out = ((float)(raw[0] << 8 | raw[1])) * 0.1f; 
+    dev->state.last_value = *out;
+    return WINK_OK;
+}
+```
 
 ---
 

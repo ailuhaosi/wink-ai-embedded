@@ -55,7 +55,7 @@
 | 禁止模式（示例 grep） | 含义 | 合法例外 |
 |----------------------|------|----------|
 | `if\s*\(\s*\w*[sS]tatus\s*\)` | `if(status)`：负数 truthy，把失败当成功（[error-codes.md](./error-codes.md) 头号雷） | 无——一律 `if(status < 0)` |
-| `\bcontainer_of\b` | 运行期多态向下转型，违反 ADR-0004 | 仅 `c-runtime-polymorphism-reading` 参考文档 |
+| `\bcontainer_of\b` | 运行期多态向下转型，违反 ADR-0004 | 仅 `runtime-polymorphism/` 参考基线文档 |
 | `struct\s+\w+_ops\b` | 器件抽象 ops 虚表 | `control_algo_t` 策略层（封装在模块内） |
 | `\b(strcpy\|sprintf\|strncpy\|gets\|alloca\)\s*\(` | 无界写入 / 栈分配 | 无（见 [memory-safety.md](./memory-safety.md)） |
 | `\b(malloc\|free\|calloc\|realloc\)\s*\(` | 实时路径动态分配 | 非实时路径 + 配对释放 + 文档化所有权 |
@@ -79,20 +79,6 @@ for pattern in \
     fi
 done
 ```
-
----
-
-## 规则追踪表
-
-| 规则 | 自动化手段 | 人工检查 |
-|------|------------|----------|
-| 禁 `if(status)` | CI 正则 / clang-tidy 自定义检查 | 确认错误路径传播语义 |
-| 禁器件 `ops` / `container_of` | CI 正则 + 白名单 | 确认没有绕开 ADR-0004 |
-| 禁 VLA / alloca | `-Wvla` / CI 正则 | 检查栈帧与调用链深度 |
-| 禁 `strcpy` / `sprintf` / `strncpy` | CI 正则 / cppcheck | 检查截断处理与显式终止 |
-| 实时路径禁动态分配 | CI 正则 + 路径白名单 | 确认所有权、失败路径、时序影响 |
-| 栈帧过大 | `-fstack-usage` 阈值 | 检查任务栈高水位 |
-| 回调上下文 | 难自动化 | 必须文档化线程 / ISR / 锁上下文 |
 
 ---
 

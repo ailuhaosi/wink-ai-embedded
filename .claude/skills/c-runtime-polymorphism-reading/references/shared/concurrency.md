@@ -135,7 +135,7 @@ while (self->running) {
 - `osThreadNew` 的 `cb_mem` 与 `stack_mem` 必须**同时提供或同时为 NULL**；混搭（一个提供一个 NULL）→ 返回 NULL → 启动崩溃。先搜项目现有用法再跟随。
 - `osSemaphoreNew` 可在 `osKernelStart()` 前调用；`osSemaphoreRelease()` 是 **ISR 安全**的。
 
-> ISR 安全的完整讨论：优先保持 ISR 最小化；如果阅读外部运行期多态代码中的 ISR dispatch，使用 `c-runtime-polymorphism-reading` 查看其 pitfalls。
+> ISR 安全的完整讨论（含多态 dispatch 在 ISR 的澄清）见 `references/runtime-polymorphism/pitfalls.md` 陷阱 3。
 
 ---
 > **源出（溯源）**：zhaoming `memory-safety.md`（线程安全）+ `hardware-interaction.md`（ISR→工作线程）、chigo-micro `main.c` + `c-embedded.md`、wink-micro-os `pal_osal.h` + `targets/wasm/pal_hal_wasm.c`。

@@ -1,7 +1,7 @@
 # ✅ 静态分发 —— 本项目实际采用的标准
 
 > **本项目标准**。在 `wink-micro-os/` 与 `chigo-micro/` 里写 C 代码时，**以本文件夹为准**。
-> 不要套用 [../runtime-polymorphism/](../runtime-polymorphism/)（那是外部参考基线，本项目有意偏离）。
+> 不要套用运行期多态（`ops` / `container_of`）；该主题已拆到 `c-runtime-polymorphism-reading`，本项目有意偏离。
 
 ---
 
@@ -26,6 +26,18 @@
 | **Wasm 仿真性能** | 无 `call_indirect`，控制流可优化；可旁路直通渲染器 | 大量 `call_indirect` 破坏优化、增大体积 |
 | RAM | 每实例零指针开销 | 每实例 +4~8B ops 指针 |
 | 可调试 | gdb 直接看 POD 全部数据 | 虚表迷雾 |
+
+---
+
+## 二、静态分发的反例边界（何时不适用）
+
+静态分发（方案 B）并非包治百病的万灵药。作为架构师，必须清晰界定其局限性，避免在以下场景盲目套用静态分发：
+
+1. **运行时热插拔设备 (Hot-plug Devices)**：若设备在系统运行期间需要动态插入或拔出（如 USB 鼠标、SD 卡挂载、外部传感器热拔插），必须依赖运行时动态枚举和注册机制。
+2. **统一设备模型驱动系统 (Unified Device Model)**：类似 Linux、Zephyr、RT-Thread 的标准驱动框架，需要通过同一套通用 API（如 `device_find` / `device_read`）集中调度和轮询任意挂载的设备，此时运行时虚表（`ops`）是唯一解。
+3. **闭源二进制驱动分发 (Binary-only Drivers)**：当第三方供应商仅提供编译好的二进制驱动文件（如 `.a` 或 `.o` 包）且没有开放源码时，系统无法通过 Codegen 静态交织它们的内部字段，必须使用标准运行期接口（Vtable）进行动态调用绑定。
+4. **运行时动态加载的算法或协议 (Dynamic Loading)**：如支持运行时从 Flash 加载不同的滤波或运动控制算法，必须使用函数指针或运行时多态来动态切入执行逻辑。
+5. **大规模同类设备运行时动态枚举与池化 (Heterogeneous Pooling)**：例如有一个动态传感器池，任务会根据运行时可用性，任意抓取一个空闲的距离传感器用于计算，此时将设备抽象为统一父类句柄更利于容器化管理。
 
 ---
 
@@ -66,9 +78,13 @@ wink-micro-os 的**实际代码尚处于 ADR-0001 / ADR-0004 落地前**的形�
 
 | 文档 | 内容 |
 |------|------|
-| [architecture.md](./architecture.md) | BAL→DAL→PAL→Targets 分层 + 4 种静态分发形态 |
-| [templates.md](./templates.md) | DAL POD 器件 / device_tree codegen / 平台文件切换 / control_algo 局部 vtable 模板 |
+| [architecture.md](./architecture.md) | BAL→DAL→PAL→Targets 分层 + 4 种静态分发形态及 Codegen 拓扑排序规则 |
+| [templates.md](./templates.md) | DAL POD 器件 / device_tree codegen / X-Macros 批量生成 / 静态 Observer |
+| [contracts.md](./contracts.md) | [NEW] DAL / PAL 接口契约规范模板 (Blocking/ISR-safe/线程安全) |
+| [lifecycle.md](./lifecycle.md) | [NEW] 资源所有权与生命周期模型 (No-malloc / 配置状态显式分离) |
+| [simulation.md](./simulation.md) | [NEW] 仿真保真分级 (L0-L4) 与 Wasm-JS 错误注入策略 |
 | [pitfalls.md](./pitfalls.md) | 命名漂移 / 签名冲突 / SIMULATION 过宽 / wasm 假锁 / 何时回退运行期多态 |
-| [evolution.md](./evolution.md) | 局部多态化退出路径 + bool/float→wink_status_t 迁移 delta |
+| [evolution.md](./evolution.md) | 局部多态化退出路径 + bool/float→wink_status_t 迁移 delta (含 callback 改造示例) |
+| [grilling.md](./grilling.md) | [NEW] 架构评审 Grilling 挑战与深度解答 Checklist |
 
 > 范式无关的工程纪律（错误码、内存、并发、清单）在 [../shared/](../shared/)，同样适用。

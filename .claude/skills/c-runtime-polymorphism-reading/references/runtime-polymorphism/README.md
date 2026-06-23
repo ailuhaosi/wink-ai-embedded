@@ -1,8 +1,7 @@
 # ⚠ 运行期多态 —— 外部参考基线（非本项目标准）
 
-> **这不是本项目的编码标准。** 本项目（wink-micro-os / chigo-micro）采用
-> [静态分发](../static-dispatch/README.md)，有意偏离本基线（见
-> [ADR-0004](../../../../../docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md)）。
+> **这不是本项目的编码标准。** wink-micro-os / chigo-micro 采用静态分发，
+> 有意偏离本基线（见 `docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md`）。
 > 本文件夹存在的目的：**对照理解** + **阅读 Linux/Zephyr 源码**。
 
 ---
@@ -16,11 +15,11 @@
 
 ## 什么时候**不要**读这里
 
-- ❌ 你在 **wink-micro-os / chigo-micro 里写代码**。本项目器件是 POD + 命名 API，
-  **禁用** `struct xxx_ops` 虚表与 `container_of`。请去 [../static-dispatch/](../static-dispatch/README.md)。
+- 你在 **wink-micro-os / chigo-micro 里写代码**。本项目器件是 POD + 命名 API，
+  禁用 `struct xxx_ops` 虚表与 `container_of`。请使用 `embedded-best-practice`。
 
-> 即便本 Skill 被触发，也请先确认你在写**本项目代码**还是**读内核源码**——前者去
-> `static-dispatch/`，后者留这里。
+> 即便本 skill 被触发，也请先确认你在写**本项目代码**还是**读内核源码**——前者改用
+> `embedded-best-practice`，后者留这里。
 
 ---
 

@@ -174,6 +174,105 @@ static inline bool control_handle_update(control_handle_t *h,
 
 ---
 
+## 形态 5：X-Macros 模式（批量生成与统一迭代）
+
+在没有运行期对象数组的情况下，若需要对同类型的多个全局外设进行批量操作（如统一初始化、统一低功耗睡眠），推荐使用 **X-Macros 模式**。这保持了 C 语言零运行时开销的优势，且能在编译期展开：
+
+### 头文件声明 (例如 `device_tree.h`)
+
+```c
+#ifndef DEVICE_TREE_H
+#define DEVICE_TREE_H
+
+#include "dal_ultrasonic.h"
+
+/* 定义设备树 X-Macro 元表 */
+#define ULTRASONIC_DEVICES(X) \
+    X(front_radar) \
+    X(back_radar)  \
+    X(side_radar)
+
+/* 使用 X-Macro 自动展开 extern 外部声明 */
+#define X_DECLARE(name) extern dal_ultrasonic_t name;
+ULTRASONIC_DEVICES(X_DECLARE)
+#undef X_DECLARE
+
+#endif
+```
+
+### 源文件实现 (例如 `device_tree.c`)
+
+```c
+#include "device_tree.h"
+
+/* 实例化所有雷达设备 */
+dal_ultrasonic_t front_radar = { .trig_pin = 4, .echo_pin = 5 };
+dal_ultrasonic_t back_radar  = { .trig_pin = 6, .echo_pin = 7 };
+dal_ultrasonic_t side_radar  = { .trig_pin = 8, .echo_pin = 9 };
+
+/* 批量初始化所有超声波传感器 */
+wink_status_t device_tree_init_ultrasonics(void) {
+    wink_status_t status;
+    
+    #define X_INIT(name) \
+        status = dal_ultrasonic_init(&name); \
+        if (status < 0) { \
+            return status; /* 链式报错中断 */ \
+        }
+        
+    ULTRASONIC_DEVICES(X_INIT)
+    #undef X_INIT
+    
+    return WINK_OK;
+}
+```
+
+---
+
+## 形态 6：静态 Observer 模式（解耦事件通知）
+
+静态分发下**禁止**使用动态分配链表来注册观察者（Observer）。对于外设事件发生时通知上层业务（BAL），推荐使用编译期绑定的**静态回调**：
+
+### 驱动头文件 (例如 `dal_button.h`)
+
+```c
+#ifndef DAL_BUTTON_H
+#define DAL_BUTTON_H
+
+#include "wink_status.h"
+#include <stdint.h>
+
+typedef struct {
+    const uint16_t pin;
+} dal_button_t;
+
+/* 声明全局静态回调函数，由应用层在 device_tree.c 或业务层实现 */
+extern void dal_button_on_press(dal_button_t *dev);
+
+#endif
+```
+
+### 业务层/设备树实现绑定 (例如 `device_tree.c`)
+
+```c
+#include "dal_button.h"
+#include "bal_control.h"
+
+extern dal_button_t emergency_stop_btn;
+extern dal_button_t mode_switch_btn;
+
+/* 静态分发的回调接口：用 if-else / switch 代替动态回调指针 */
+void dal_button_on_press(dal_button_t *dev) {
+    if (dev == &emergency_stop_btn) {
+        bal_emergency_halt(); // 静态直调
+    } else if (dev == &mode_switch_btn) {
+        bal_toggle_work_mode();
+    }
+}
+```
+
+---
+
 ## PAL 契约参考（wink-micro-os）
 
 `pal_hal.h`：`pal_gpio_init/write/read/enable_interrupt`、`pal_pwm_init/set_duty`、

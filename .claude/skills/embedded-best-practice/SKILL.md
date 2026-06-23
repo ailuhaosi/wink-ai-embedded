@@ -1,60 +1,41 @@
 ---
 name: embedded-best-practice
-description: 嵌入式 C 最佳实践路由器（双范式）。本工作区 wink-micro-os / chigo-micro 采用编译期静态分发（POD + 命名 API，禁用 vtable / container_of，见 ADR-0004）；另附运行期多态（ops vtable + container_of）作为阅读 Linux / Zephyr 源码的外部参考基线。在编写、修改或审查 C 代码、嵌入式固件、驱动、HAL、RTOS 任务或任何嵌入式平台代码时使用；用户提到 C 语言、嵌入式系统、MCU、STM32、驱动、外设或固件开发时也会触发。强制执行内存安全、线程安全、硬件交互规则与编辑后 12 阶段安全审查。
+description: 嵌入式 C 最佳实践（本项目静态分发专用）。Use when writing, modifying, reviewing, or debugging wink-micro-os / chigo-micro C firmware, drivers, DAL, PAL, HAL, RTOS tasks, or embedded platform code. Enforces POD + named APIs, compile-time static dispatch, wink_status_t negative error codes, memory/concurrency/hardware safety, dual-target wasm/ESP32 constraints, and risk-based post-edit safety review. Do NOT use for Linux/Zephyr runtime-polymorphism reading; use c-runtime-polymorphism-reading instead.
 ---
 
-# 嵌入式 C 最佳实践（双范式路由器）
+# 嵌入式 C 最佳实践（本项目静态分发专用）
 
-本工作区有**两套**嵌入式 C 架构范式。**动手前先判断场景**，读对应文档，不要混用。
+本 skill 服务 wink-micro-os / chigo-micro 的嵌入式 C 编码、修改、审查与排错。默认范式是**编译期静态分发**：POD 结构 + 命名 API + CMake/codegen 静态绑定。
 
-> **文档集根（唯一权威源）**：`.claude/skills/embedded-best-practice/references/`（下文简称 `REF/`，skill 自带 bundle）。
-> 该 `references/` 是本 skill 内容的**唯一 SSOT**——旧版在 `chigo-micro/docs/vendor/` 的副本已删除，勿再引用。
-> 总览与决策树：`REF/index.md`
+> **文档集根（唯一权威源）**：`.claude/skills/embedded-best-practice/references/`（下文简称 `REF/`）。
+> 运行期多态阅读已拆到 `c-runtime-polymorphism-reading`。
 
 ---
 
-## ⚠ 第 0 步：判断你在哪种场景（最重要）
+## 第 0 步：确认边界
 
-```
+```text
 你在做什么？
 │
-├── 写 / 改 / 审  本项目代码（wink-micro-os、chigo-micro 的 C 固件 / 驱动 / HAL）
-│     → 静态分发（本项目标准）
-│     → 读 REF/static-dispatch/  +  REF/shared/
-│     → ❌ 不要生成 vtable / container_of / struct xxx_ops（违反 ADR-0004）
+├── 写 / 改 / 审 wink-micro-os 或 chigo-micro 的 C 固件 / 驱动 / HAL
+│     → 使用本 skill
+│     → 读 REF/static-dispatch/ + REF/shared/
+│     → 禁止生成 vtable / container_of / struct xxx_ops 作为器件抽象
 │
-├── 读 Linux / Zephyr / RT-Thread / STM32 HAL 源码，或理解 C 怎么手搓 OOP
-│     → 运行期多态（外部参考基线，非本项目标准）
-│     → 读 REF/runtime-polymorphism/
+├── 读 Linux / Zephyr / RT-Thread / STM32 HAL 源码，理解 C-OOP
+│     → 改用 c-runtime-polymorphism-reading
 │
-└── 任何 C 代码都要遵守的工程纪律（错误码 / 内存 / 并发 / 安全清单）
-      → 读 REF/shared/（两种范式共用）
+└── 只做通用 C 工程纪律判断
+      → 读 REF/shared/
 ```
 
 ### 本项目 = 静态分发（ADR-0004）
 
-本项目器件是 **POD 结构 + 命名式 API**：`dal_servo_set_angle(&dev, angle)`、
-`motor_driver_set_outputs(&drv, out)`。**没有** `struct device_ops`、**没有** 运行期虚表、
-**没有** `container_of`。换芯片 / 换器件靠**编译期选择**（CMake 链接 / codegen 静态绑定）。
+本项目器件是 **POD 结构 + 命名式 API**：`dal_servo_set_angle(&dev, angle)`、`motor_driver_set_outputs(&drv, out)`。**没有** `struct device_ops`、**没有**运行期虚表、**没有** `container_of`。换芯片 / 换器件靠**编译期选择**（CMake 链接 / codegen 静态绑定）。
 
-> 即便本 Skill 被触发，写**本项目代码**时也**绝不**生成 `me->ops->on(me)` 这类运行期多态
-> 代码——那是 `REF/runtime-polymorphism/` 的范式，本项目有意偏离。决策依据：
-> `docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md`。
->
-> （已知偏差：wink-micro-os 现有代码尚有 `bool`/`float` 返回 + `dal_*_get_distance` 旧命名，
-> 属待迁移形态，见 `REF/static-dispatch/README.md` 偏差框。）
+如果用户明确要求解释 `ops` / `container_of` / Linux 设备模型，停止使用本 skill，改用 `c-runtime-polymorphism-reading`。
 
----
-
-## 两范式适用场景
-
-| 范式 | 何时用 | 何处读 |
-|------|--------|--------|
-| **静态分发**（本项目标准 ✅） | 写 wink-micro-os / chigo-micro 代码；拓扑编译期确定；AI 生成 + Wasm 仿真是 P0 | `REF/static-dispatch/` |
-| **运行期多态**（外部参考基线 ⚠） | 读 Linux / Zephyr / RT-Thread 内核驱动源码；面试讲清 `container_of` / vtable 原理 | `REF/runtime-polymorphism/` |
-| **共享工程纪律**（两者共用） | 任何 C 代码：错误码、内存、并发、RTC、双 target、安全清单 | `REF/shared/` |
-
-完整对比表见 `REF/index.md`。
+（已知偏差：wink-micro-os 现有代码尚有 `bool`/`float` 返回 + `dal_*_get_distance` 旧命名，属待迁移形态，见 `REF/static-dispatch/README.md` 偏差框。）
 
 ---
 
@@ -63,6 +44,9 @@ description: 嵌入式 C 最佳实践路由器（双范式）。本工作区 win
 | 任务 | 读 |
 |------|----|
 | 设计本项目模块结构 / 写新器件驱动 | `REF/static-dispatch/architecture.md` → `templates.md` |
+| 接口契约模板 (Blocking/ISR) / YAML 元数据 | `REF/static-dispatch/contracts.md` |
+| 资源生命周期 / No-malloc / 配置状态分离 | `REF/static-dispatch/lifecycle.md` |
+| 仿真保真分级 / Wasm-JS 错误注入 | `REF/static-dispatch/simulation.md` |
 | 函数设计、命名、错误处理、const/static | `REF/shared/clean-code.md` |
 | 错误码（0=ok/负数=错误，禁 `if(status)`） | `REF/shared/error-codes.md` |
 | 堆 / 栈 / 缓冲区 / VLA·strcpy·sprintf 禁令 | `REF/shared/memory-safety.md` |
@@ -71,36 +55,47 @@ description: 嵌入式 C 最佳实践路由器（双范式）。本工作区 win
 | 工具链 / CI 正则门禁 / lint / 栈用量门禁 | `REF/shared/tooling.md` |
 | 测试策略 / host 单测 / 帧解析 fuzzing / HIL | `REF/shared/testing.md` |
 | 代码审查 / 排错（本项目） | `REF/static-dispatch/pitfalls.md` |
-| 读内核源码 / 理解 C-OOP | `REF/runtime-polymorphism/architecture.md` |
-| **每次编辑后（强制）** | `REF/shared/safety-checklist.md`（12 阶段） |
+| 架构评审 Grilling 问题清单 | `REF/static-dispatch/grilling.md` |
+| 编辑后安全审查 | `REF/shared/safety-checklist.md` |
 
-**如有疑问，先读 `REF/index.md`。** 安全关键代码，过度检查总好过检查不足。
+如有疑问，先读 `REF/index.md`。安全关键代码，过度检查总好过检查不足。
 
 ---
 
-## 强制的编辑后协议
+## 编辑后安全审查协议
 
-每次代码修改后（无论多小），执行 `REF/shared/safety-checklist.md` 的**完整 12 阶段安全审查**。
-这不是可选的——一行改动就可能引入内存泄漏、竞态或栈溢出。**修复任何问题后，从阶段 1 重新
-跑完整清单**（修复本身可能引入新问题），重复直到全清。致命 / 高级问题必须本次解决。
+按改动风险选择清单范围。修复任何致命 / 高级问题后，从阶段 1 重新审查受影响范围。
 
-> **风险分级触发（建议）**：纯注释 / 格式化 / 重命名改动可只跑阶段 1、10、12；普通 DAL/PAL
-> 业务逻辑跑阶段 1、2、3、4、10、12；**触 ISR / DMA / 内存分配 / 共享状态 / 驱动 / 并发**
-> 的改动必须跑**完整 12 阶段**。分级是为把精力压在真正安全相关的改动上，不是放松要求。
+| 风险级别 | 触发条件 | 必跑阶段 |
+|----------|----------|----------|
+| 低 | 纯注释、格式化、无语义重命名 | 1、10、12 |
+| 中 | 普通 DAL/PAL 业务逻辑、错误处理、API 调整 | 1、2、3、4、10、12 |
+| 高 | ISR、DMA、内存分配、共享状态、驱动时序、并发、硬件访问 | 完整 1–12 |
+
+输出审查结论时使用：
+
+```text
+Safety review:
+- Risk level:
+- Checklist phases run:
+- Findings:
+- Fixed:
+- Assumptions:
+- Commands run:
+```
 
 ---
 
 ## 核心原则
 
 1. **安全第一** —— 安全关键系统代码，每次修改都当生命攸关对待。
-2. **面向对象设计思维** —— 数据 + 行为归位、封装、信息隐藏。**本项目以 POD + 命名 API 落地**
-   （非 vtable）；运行期多态基线用 struct 嵌套 + ops 表。
+2. **面向对象设计思维** —— 数据 + 行为归位、封装、信息隐藏；本项目以 POD + 命名 API 落地。
 3. **Clean Code** —— 函数只做一件事、命名揭示意图、无副作用、同抽象层级、DRY、表驱动。
-4. **零容忍阻塞** —— 事件驱动 / RTC 执行模型下，整条调用链非阻塞；阻塞操作交给内部工作线程。
+4. **零容忍阻塞** —— RTC/事件驱动调用链非阻塞；阻塞操作交给内部工作线程。
 5. **验证到底层** —— 硬件交互查到寄存器级；永远不假设某 API 非阻塞。
 6. **防御性编程** —— 断言内部契约、运行时校验外部输入、错误码传播、绝不静默吞失败。
 
-## 硬性规则（速查 · 不可商量）
+## 硬性规则（速查）
 
 | 规则 | 限制 |
 |------|------|
@@ -114,54 +109,117 @@ description: 嵌入式 C 最佳实践路由器（双范式）。本工作区 win
 | 未修改的指针参数 | 必须 `const`（但不要 const 值参数） |
 | 整数类型 | 必须 `stdint.h` 固定宽度（禁裸 int/short/long） |
 | 头文件 | 必须有保护宏 + 自包含 |
-| 错误码检查 | 禁 `if(status)`（负数 truthy），用 `if(status < 0)` |
+| 错误码检查 | 禁 `if(status)`，用 `if(status < 0)` |
 | 实时路径 | 禁 `malloc/free`（PID 回调 / ISR / Wasm 热路径） |
-| 字符串拷贝 | 禁 `strcpy`/`sprintf`/`strncpy`，用 `snprintf`（见 `REF/shared/memory-safety.md`） |
+| 字符串拷贝 | 禁 `strcpy`/`sprintf`/`strncpy`，用 `snprintf` 或显式界限拷贝 |
 | 命名 | 纯 snake_case：函数 `模块_动作()`、类型 `xxx_t`、宏 `UPPER` |
 
-> 详见 `REF/shared/clean-code.md`。
+详见 `REF/shared/clean-code.md`。
 
 ## 上下文感知编码
 
 写任何代码前，先看周围代码库：
 
-1. **同目录兄弟文件**如何用信号 / 回调 / 事件 / 命名 API —— 跟随同一模式。
-2. **头文件包含路径** —— 搜项目里其他文件如何 include 同一头文件，用同样路径格式。
-3. **堆内存 API** —— 嵌入式可能用非标准 allocator（`platform_malloc` / `pvPortMalloc`），查现有用法跟随，**绝不混用**。
-4. **设备访问** —— 本项目用命名 API（`dal_xxx_read(&dev, ...)`）传实例指针，**不要**套 vtable。
-5. **编码风格** —— 匹配同目录文件的结构与格式约定。
+1. 同目录兄弟文件如何用信号 / 回调 / 事件 / 命名 API。
+2. 头文件包含路径如何写。
+3. 堆内存 API 是否使用项目 allocator，绝不混用。
+4. 设备访问是否使用命名 API：`dal_xxx_read(&dev, ...)`。
+5. 编码风格、错误传播、测试方式如何组织。
 
-## 驱动开发检查清单（本项目 · 静态分发）
+## 驱动开发检查清单（本项目）
 
-1. 器件结构是纯 **POD**（无函数指针 / 无 ops / 无父类嵌入）。
+1. 器件结构是纯 POD（无函数指针 / 无 ops / 无父类嵌入）。
 2. 公共 API 是命名自由函数，返回 `wink_status_t`（0=ok，负数=错误）。
-3. 内部需要非阻塞时，用「工作线程 + 消息队列 + 回调」封装在模块内；公共 API 入队即返回。
+3. 内部需要非阻塞时，用工作线程 + 消息队列 + 回调封装；公共 API 入队即返回。
 4. 周期性轮询留在驱动内部，不对外暴露 poll 接口。
 5. 错误状态变化通过回调通知上层。
-6. 完成后文档化：初始化顺序、线程安全保证、回调上下文、清理要求（init/deinit 对称）。
+6. 文档化初始化顺序、线程安全保证、回调上下文、清理要求。
 
-> vtable 仅在「同抽象需切换多算法」（策略模式，如 `control_algo_t`）时合法，且封装在模块内部、
-> ops 是 const、**绝不用于器件抽象**。见 `REF/static-dispatch/architecture.md` 形态 4。
+> vtable 仅在「同抽象需切换多算法」（策略模式，如 `control_algo_t`）时合法，且封装在模块内部、ops 是 const、绝不用于器件抽象。见 `REF/static-dispatch/architecture.md` 形态 4。
+
+## AI 生成代码专用开发禁令（安全护栏）
+
+为保证 AI 自动生成的 C 代码具备绝对的安全性与确定性，AI 编码必须遵守以下硬性防呆禁令。CI 中的 AST 静态检查器（Linter）将强行验证这些规则：
+
+1. **禁止直接调用 PAL / 寄存器**：BAL（业务逻辑层）必须且仅能通过 DAL 命名式 API（如 `dal_led_on`）操控器件，严禁绕过 DAL 直接调用 `pal_` 接口或物理引脚读写函数，更严禁直接读写芯片外设寄存器（如 `*(volatile uint32_t *)`）。
+2. **零动态内存分配 (Zero Dynamic Allocation)**：在整个驱动与业务层代码中，严禁调用 `malloc`、`free`、`realloc`、`calloc` 等任何堆内存分配 API。所有设备实例与状态结构体必须静态全局实例化。
+3. **严禁吞错误码**：所有返回 `wink_status_t` 类型的 API 必须使用 `__attribute__((warn_unused_result))` 进行修饰或被显式检查，严禁静默吞掉任何错误。错误码必须逐级向上安全传播，直至 BAL 层进行安全降级。
+4. **禁止扩大 `#ifdef SIMULATION` 范围**：禁止将整个业务函数包裹在 `#ifdef SIMULATION` 中。只有最底层的物理信号电平读取或 Web 仿真直通（DAL Value Bypass）允许条件编译隔离，上层的物理转换与防抖逻辑必须仿真与真机同源。
+5. **禁止引入非项目第三方库**：禁止在 C 固件中包含未在 CMake 依赖树中声明的第三方头文件或数学计算库。
+6. **禁止运行期多态**：禁止发明 `ops` 函数指针虚表做器件抽象；如果有演进多态需求，必须封装在 DAL 文件内部并使用 `switch-case` 进行静态路由分发。
+
+## 例外机制
+
+硬性规则需要例外时，必须满足：
+
+1. 例外局部化，范围尽可能小。
+2. 注明原因与替代方案评估。
+3. 不降低内存安全、并发安全、实时性或双 target 同源要求。
+4. 可被 review 和 CI 明确识别。
+
+## 术语表
+
+| 术语 | 含义 |
+|------|------|
+| BAL | 业务应用层，只调 DAL 语义 API |
+| DAL | 器件语义抽象，负责把器件行为翻译到 PAL |
+| PAL | 平台抽象层，包含 HAL 与 OSAL 契约 |
+| Target | wasm / esp32 / stm32 等平台实现 |
+| POD | 纯数据结构，无函数指针、无继承式嵌入 |
+| 静态绑定 | 通过 CMake / codegen 在编译期决定实现 |
+| 同源编译 | 同一 C 逻辑同时过 wasm 与真机 target |
+| Simulation bypass | 仿真旁路，范围应压到底层物理信号层 |
+
+## 好坏例子
+
+```c
+/* bad */
+if (status) {
+    return WINK_OK;
+}
+
+/* good */
+if (status < 0) {
+    return status;
+}
+```
+
+```c
+/* bad: 器件抽象不要用运行期虚表 */
+dev->ops->set_angle(dev, angle);
+
+/* good: 本项目命名 API */
+status = dal_servo_set_angle(&servo, angle);
+```
+
+```c
+/* bad */
+sprintf(buf, "%u", value);
+
+/* good */
+written = snprintf(buf, sizeof(buf), "%u", value);
+if ((written < 0) || ((size_t)written >= sizeof(buf))) {
+    return WINK_ERR_BUFFER_TOO_SMALL;
+}
+```
 
 ## SOLID / Clean Code 速查
 
 - **SRP** —— 一个模块 = 一个职责 = 一个变更理由。
-- **OCP** —— 通过扩展而非修改。*静态分发*：加命名 API + Device Registry 条目；*运行期多态*：加 ops 表项。
-- **LSP** —— 所有实现遵守同一契约（静态分发里即同一命名 API 语义）。
+- **OCP** —— 通过扩展而非修改：加命名 API + Device Registry 条目。
+- **LSP** —— 所有实现遵守同一契约。
 - **ISP** —— 使用者只依赖其用到的接口。
-- **DIP** —— 高层依赖抽象（静态分发里即 PAL/DAL 命名契约），不依赖底层芯片细节。
+- **DIP** —— 高层依赖 PAL/DAL 命名契约，不依赖底层芯片细节。
 
 ---
 
 ## 附：文档集结构
 
-```
-references/                  本 skill 自带 bundle（.claude/skills/embedded-best-practice/references/）—— 唯一 SSOT
-├── index.md                 两范式对比 + 决策树 + 导航
-├── shared/                  范式无关纪律（两者共用）
-├── static-dispatch/         ✅ 本项目标准（wink-micro-os + chigo-micro）
-└── runtime-polymorphism/    ⚠ 外部参考基线（zhaoming/Linux，非本项目标准）
-```
+```text
+references/
+├── index.md                 静态分发边界 + 导航
+├── shared/                  工程纪律
+└── static-dispatch/         本项目标准（wink-micro-os + chigo-micro）
 
-> 注：本 skill 的全部详细规范都在 `references/`（skill 自带 bundle，随 skill 走、相对路径自洽）。
-> 旧版在 `chigo-micro/docs/vendor/embedded-best-practice/` 的副本已删除——`references/` 是唯一权威源。
+运行期多态参考已拆到：.claude/skills/c-runtime-polymorphism-reading/
+```

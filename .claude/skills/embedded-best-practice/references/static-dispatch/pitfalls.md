@@ -74,8 +74,7 @@ Wasm 单线程，`pal_mutex_create` 返回常量、lock/unlock 是空操作—�
 ## 陷阱 7：把器件抽象写成 vtable
 
 静态分发的铁律是器件用 POD + 命名 API。如果你发现自己在写 `struct xxx_ops { ... }` +
-`container_of` 来抽象一个**器件**——停。那是 [../runtime-polymorphism/](../runtime-polymorphism/)
-的范式，本项目有意不用。器件就该是 `dal_xxx_t` + `dal_xxx_read/set/...`。
+`container_of` 来抽象一个**器件**——停。那是运行期多态范式（见 `c-runtime-polymorphism-reading`），本项目有意不用。器件就该是 `dal_xxx_t` + `dal_xxx_read/set/...`。
 
 > vtable 仅在「同抽象需切换多算法」（策略模式，如 `control_algo_t`）时合法，且封装在模块内部。
 

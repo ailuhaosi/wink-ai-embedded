@@ -50,13 +50,13 @@
 
 ## ⭐ CI 正则门禁（防 AI 翻车的第一道闸）
 
-在 CI 对**全量改动 diff** 跑以下正则，命中即 fail（除非在白名单文件里，如 `control_algo` 策略层）：
+在 CI 对**全量改动 diff** 跑以下正则，命中即 fail（合法策略 vtable 必须在调用行加 `/* lint-allow: strategy-vtable */` 显式行级豁免，否则 fail）：
 
 | 禁止模式（示例 grep） | 含义 | 合法例外 |
 |----------------------|------|----------|
 | `if\s*\(\s*\w*[sS]tatus\s*\)` | `if(status)`：负数 truthy，把失败当成功（[error-codes.md](./error-codes.md) 头号雷） | 无——一律 `if(status < 0)` |
 | `\bcontainer_of\b` | 运行期多态向下转型，违反 ADR-0004 | 仅运行期多态参考基线（对照阅读） |
-| `struct\s+\w+_ops\b` | 器件抽象 ops 虚表 | `control_algo_t` 策略层（封装在模块内） |
+| `struct\s+\w+_ops\b` / `\w+_ops_t` 类型名、`->ops->` / `.ops->` 调用点 | 器件抽象 ops 虚表（类型名 **+ ops 字段 + 调用点**） | 仅策略层 + **行级 `/* lint-allow: strategy-vtable */`** 标注，否则 fail |
 | `\b(strcpy\|sprintf\|strncpy\|gets\|alloca\)\s*\(` | 无界写入 / 栈分配 | 无（见 [memory-safety.md](./memory-safety.md)） |
 | `\b(malloc\|free\|calloc\|realloc\)\s*\(` | 实时路径动态分配 | 非实时路径 + 配对释放 + 文档化所有权 |
 | `#pragma\s+pack` | 跨 target 强制对齐，破坏 wasm/xtensa 一致性 | 无（ADR-0002） |
@@ -67,14 +67,16 @@
 落地示例（CI 脚本片段，伪代码）：
 
 ```sh
-# 对本 PR 改动的 .c/.h 跑禁令扫描
+# 对本 PR 改动的 .c/.h 跑禁令扫描；带 `lint-allow:` 行级标注的命中行豁免
 for pattern in \
   'if[[:space:]]*\([[:space:]]*[A-Za-z_]*[Ss]tatus[[:space:]]*\)' \
   '\bcontainer_of\b' \
+  '\b(struct[[:space:]]+\w+_ops|\w+_ops_t)\b' \
+  '->\s*ops\s*->|\.\s*ops\s*->' \
   '\b(strcpy|sprintf|strncpy|gets|alloca)[[:space:]]*\(' \
   '#pragma[[:space:]]+pack' ; do
     if git diff --name-only | grep -E '\.[ch]$' \
-       | xargs grep -nE "$pattern" ; then
+       | xargs grep -nE "$pattern" | grep -v 'lint-allow:' ; then
         echo "FORBIDDEN PATTERN: $pattern" ; exit 1
     fi
 done
@@ -87,7 +89,7 @@ done
 | 规则 | 自动化手段 | 人工检查 |
 |------|------------|----------|
 | 禁 `if(status)` | CI 正则 / clang-tidy 自定义检查 | 确认错误路径传播语义 |
-| 禁器件 `ops` / `container_of` | CI 正则 + 白名单 | 确认没有绕开 ADR-0004 |
+| 禁器件 `ops` / `container_of` | CI 正则（类型名 + ops 字段 + `->ops->` 调用点）+ 行级 `lint-allow` | 确认没有绕开 ADR-0004 |
 | 禁 VLA / alloca | `-Wvla` / CI 正则 | 检查栈帧与调用链深度 |
 | 禁 `strcpy` / `sprintf` / `strncpy` | CI 正则 / cppcheck | 检查截断处理与显式终止 |
 | 实时路径禁动态分配 | CI 正则 + 路径白名单 | 确认所有权、失败路径、时序影响 |

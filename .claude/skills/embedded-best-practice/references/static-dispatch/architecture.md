@@ -20,7 +20,7 @@ BAL  →  DAL  →  PAL  →  Targets (wasm / esp32 / stm32)
   **OSAL**（`pal_osal.h`：时间/mutex）。只定义契约，无实现。
 - **Targets**：每平台一份 `.c` 适配（`targets/wasm/`、`targets/esp32/`、`targets/stm32/`）。
 
-> chigo-micro 对照：`comms/ → control/ → driver/ → sensor/ → platform/`，`platform/` 是叶子，
+> chigo-micro（**外部对照仓库**，非本仓库子目录）对照：`comms/ → control/ → driver/ → sensor/ → platform/`，`platform/` 是叶子，
 > 同样「依赖向下、无跨层 HAL 直调」。
 
 ---

@@ -69,7 +69,7 @@ wink-micro-os 的**实际代码尚处于 ADR-0001 / ADR-0004 落地前**的形�
 - **ADR-0002**：双 target 同源编译（`docs/design/decisions/0002-...`）
 - `docs/design/02-wink-micro-os/01-dal-device-abstraction.md`、`02-pal-platform-abstraction.md`
 - `docs/design/07-platform-governance/01-device-model-registry.md`（Device Registry / SSOT）
-- 实际代码：`wink-micro-os/dal/`、`wink-micro-os/pal/`、`wink-micro-os/targets/`、`chigo-micro/project/embedded/`
+- 实际代码：`wink-micro-os/dal/`、`wink-micro-os/pal/`、`wink-micro-os/targets/`；chigo-micro（外部对照仓库 `D:\workspaces\ai-coding\chigo\chigo-micro`，**非本仓库路径**）
 
 > 本文件夹是上述 SSOT 的**蒸馏 + 模板 + 陷阱**，不替代它们。ADR 变更时以 ADR 为准。
 

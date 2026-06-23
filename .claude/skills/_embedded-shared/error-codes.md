@@ -72,5 +72,24 @@ int init_system(void)
 > 详细的「断言 vs 运行时检查」区分见 [clean-code.md](./clean-code.md)。
 
 ---
+
+## 必检返回值：`warn_unused_result` 便携宏
+
+所有返回 `wink_status_t` 的公共 API 应标记「返回值不可忽略」。直接裸写 `__attribute__((warn_unused_result))` 是编译器特有语法——未来引入 MSVC 会直接编译失败，且与「禁 clang-only / GCC-only 特性」（[tooling.md](./tooling.md)）精神有张力。**统一用便携宏**：
+
+```c
+/* 放入 wink_status.h（该头尚待创建，属已知技术债）；落地前 AI 按此宏名引用，不裸写 __attribute__ */
+#if defined(__GNUC__) || defined(__clang__)
+    #define WINK_WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#else
+    #define WINK_WARN_UNUSED_RESULT
+#endif
+
+WINK_WARN_UNUSED_RESULT wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm);
+```
+
+> 禁止裸写 `__attribute__((warn_unused_result))`；统一 `WINK_WARN_UNUSED_RESULT`。`wink_status.h` 尚未落地是已知技术债，创建时须含此宏（连同 ADR-0001 方案 C + ADR-0005 `-50s` 段）。
+
+---
 > **源出（溯源）**：ADR-0001（`docs/design/decisions/0001-error-code-sign-convention.md`）、
 > zhaoming `clean-code.md` 错误处理策略、chigo-micro `.claude/rules/c-embedded.md`。

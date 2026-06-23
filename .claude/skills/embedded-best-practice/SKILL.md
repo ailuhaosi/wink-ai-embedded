@@ -7,6 +7,8 @@ description: 嵌入式 C 最佳实践（本项目静态分发专用）。Use whe
 
 本 skill 服务 wink-micro-os / chigo-micro 的嵌入式 C 编码、修改、审查与排错。默认范式是**编译期静态分发**：POD 结构 + 命名 API + CMake/codegen 静态绑定。
 
+> ⚠ **chigo-micro 为外部对照仓库**（`D:\workspaces\ai-coding\chigo\chigo-micro`，见 MEMORY），**非本仓库子目录**；其代码仅作对照/溯源，AI 勿在本仓库内按相对路径 Read/Grep 它。
+
 > **文档集根（唯一权威源）**：`.claude/skills/embedded-best-practice/references/`（下文简称 `REF/`）。
 > **共享工程纪律（两 skill 共用同一份）**：`.claude/skills/_embedded-shared/`（下文简称 `SHARED/`）。
 > 运行期多态阅读已拆到 `c-runtime-polymorphism-reading`。
@@ -144,7 +146,7 @@ Safety review:
 
 1. **禁止直接调用 PAL / 寄存器**：BAL（业务逻辑层）必须且仅能通过 DAL 命名式 API（如 `dal_led_on`）操控器件，严禁绕过 DAL 直接调用 `pal_` 接口或物理引脚读写函数，更严禁直接读写芯片外设寄存器（如 `*(volatile uint32_t *)`）。
 2. **零动态内存分配 (Zero Dynamic Allocation)**：在整个驱动与业务层代码中，严禁调用 `malloc`、`free`、`realloc`、`calloc` 等任何堆内存分配 API。所有设备实例与状态结构体必须静态全局实例化。
-3. **严禁吞错误码**：所有返回 `wink_status_t` 类型的 API 必须使用 `__attribute__((warn_unused_result))` 进行修饰或被显式检查，严禁静默吞掉任何错误。错误码必须逐级向上安全传播，直至 BAL 层进行安全降级。
+3. **严禁吞错误码**：所有返回 `wink_status_t` 类型的 API 必须使用 `WINK_WARN_UNUSED_RESULT` 宏（见 error-codes.md）修饰或被显式检查，严禁静默吞掉任何错误。错误码必须逐级向上安全传播，直至 BAL 层进行安全降级。
 4. **禁止扩大 `#ifdef SIMULATION` 范围**：禁止将整个业务函数包裹在 `#ifdef SIMULATION` 中。只有最底层的物理信号电平读取或 Web 仿真直通（DAL Value Bypass）允许条件编译隔离，上层的物理转换与防抖逻辑必须仿真与真机同源。
 5. **禁止引入非项目第三方库**：禁止在 C 固件中包含未在 CMake 依赖树中声明的第三方头文件或数学计算库。
 6. **禁止运行期多态**：禁止发明 `ops` 函数指针虚表做器件抽象；如果有演进多态需求，必须封装在 DAL 文件内部并使用 `switch-case` 进行静态路由分发。

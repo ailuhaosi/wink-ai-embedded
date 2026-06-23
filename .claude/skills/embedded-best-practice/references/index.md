@@ -1,6 +1,8 @@
 # 嵌入式 C 架构最佳实践 · 本项目静态分发导览
 
 > 在 wink-micro-os / chigo-micro 写代码前，先读本页。本 docset 的默认范式是**编译期静态分发**。
+>
+> ⚠ **chigo-micro 为外部对照仓库**（`D:\workspaces\ai-coding\chigo\chigo-micro`，见 MEMORY），**非本仓库子目录**；本文 chigo-micro 示例仅作对照/溯源，勿在本仓库内按相对路径 Read/Grep 它。
 
 ---
 

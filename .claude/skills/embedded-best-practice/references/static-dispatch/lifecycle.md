@@ -88,3 +88,36 @@ wink_status_t dal_temp_cache_data(dal_temp_t *dev) {
 1. **回调签名规范**：所有的回调函数必须遵循 `void (*cb)(void *user_data)` 的签名格式。
 2. **user_data 所有权**：`user_data` 指针通常由 Codegen 在静态绑定时填入对应外设实例的指针。禁止传递任何栈上临时对象的地址作为 `user_data`。
 3. **中断限制**：若回调是在 ISR（中断服务程序）上下文中执行，则该回调内绝对禁止再调用任何带阻塞的 API，必须保证回调生命周期在微秒级结束。
+
+---
+
+## 6. 器件健康状态机（Health Model）
+
+静态分发下，BAL 需要统一查询「这个器件现在 OK / 降级 / 故障」，以决定走正常逻辑还是保守降级——否则只能为每个器件写特判，违背表驱动 / DRY。每个器件的可变状态区（§2 的 `state`）统一含一个 `health` 字段：
+
+```c
+typedef enum {
+    DAL_HEALTH_OK       = 0,   /* 初始化成功、运行正常 */
+    DAL_HEALTH_DEGRADED = 1,   /* 部分功能受限（如 NVS 损坏用默认值、单通道失效） */
+    DAL_HEALTH_FAULTED  = 2,   /* init 失败或运行期故障，BAL 必须隔离 / 停用该器件 */
+} dal_health_t;
+
+/* 每个器件 state 区统一含： */
+dal_health_t health;
+```
+
+**与错误码的关系**（ADR-0005）：`init` / 读返回 `WINK_ERR_CONFIG_CORRUPT_DEGRADED(-50)` → 置 `health = DAL_HEALTH_DEGRADED`；返回 `WINK_ERR_FAILED_INIT(-51)` 或致命码 → 置 `health = DAL_HEALTH_FAULTED`。返回码承载**瞬时信号**，`health` 字段承载**持续状态**——两者互补。
+
+**BAL 统一巡检**（复用 templates.md 形态 5 的 X-macro 批量遍历，无需为每个器件写特判）：
+
+```c
+#define X_CHECK_HEALTH(name) \
+    do { \
+        if ((name).state.health >= DAL_HEALTH_FAULTED) { bal_quarantine(&(name)); } \
+        else if ((name).state.health == DAL_HEALTH_DEGRADED) { bal_conservative(&(name)); } \
+    } while (0)
+ULTRASONIC_DEVICES(X_CHECK_HEALTH)   /* 遍历所有超声波，跳过故障、对降级走保守逻辑 */
+#undef X_CHECK_HEALTH
+```
+
+> 现状（扁平结构体）下 `health` 是顶层字段 `dev->health`；目标 config/state 分离后归入 `dev->state.health`（见 §2）。

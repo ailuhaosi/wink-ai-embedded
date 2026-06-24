@@ -23,23 +23,18 @@ add_subdirectory(runtime)
 
 # 根据目标平台配置可执行程序或测试用例 (主要针对 WebAssembly / Wasm 仿真)
 if(TARGET_PLATFORM STREQUAL "wasm" AND EMSCRIPTEN)
-    # 为 Wasm 仿真沙箱构建目标
     add_executable(wink_simulator
         targets/wasm/pal_hal_wasm.c
-    )
-    
-    # 链接子组件库
+        targets/wasm/pal_osal_wasm.c
+        targets/wasm/wasm_entry.c)
     target_link_libraries(wink_simulator PRIVATE pal dal)
-    
-    # 配置 Emscripten 特殊链接参数，包含 Asyncify 支持和共享内存导出
     target_link_options(wink_simulator PRIVATE
         "-s" "ASYNCIFY=1"
         "-s" "ASYNCIFY_IMPORTS=['js_sim_get_ultrasonic_distance']"
         "-s" "EXPORTED_FUNCTIONS=['_main','_trigger_wasm_interrupt']"
         "-s" "EXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
         "-s" "MODULARIZE=1"
-        "-s" "EXPORT_NAME='WasmSandbox'"
-    )
+        "-s" "EXPORT_NAME='WasmSandbox'")
 endif()
 
 # ---- host 单元测试（非 wasm target 时启用）----

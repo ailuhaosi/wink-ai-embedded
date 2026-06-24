@@ -41,6 +41,7 @@ function(add_wink_host_test name src)
     target_include_directories(${name} PRIVATE
         ${UNITY_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/stubs
         ${CMAKE_CURRENT_SOURCE_DIR}/../pal/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../dal/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include

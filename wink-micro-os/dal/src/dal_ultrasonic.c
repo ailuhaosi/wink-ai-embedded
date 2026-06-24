@@ -11,6 +11,27 @@ float dal_pulse_us_to_cm(uint32_t pulse_us) {
     return (float)pulse_us * ULTRASONIC_CM_PER_US;
 }
 
+wink_status_t dal_ultrasonic_init(dal_ultrasonic_t *dev, uint16_t trig_pin, uint16_t echo_pin) {
+    if (dev == NULL) { return WINK_ERR_INVALID_ARG; }
+    if (trig_pin == echo_pin) { return WINK_ERR_INVALID_ARG; }
+    dev->trig_pin = trig_pin;
+    dev->echo_pin = echo_pin;
+    dev->last_distance = 0.0f;
+#ifdef SIMULATION
+    /* 仿真：跳过物理 GPIO 配置（旁路最低物理信号层，ADR-0003 决策2），仅置结构状态 */
+    dev->initialized = true;
+    return WINK_OK;
+#else
+    /* 真机：配置 GPIO 方向（Phase 3 status 透传；失败含 BUSY/EXHAUSTED）。 */
+    wink_status_t status = pal_gpio_init(trig_pin, PAL_GPIO_OUTPUT_PUSH_PULL);
+    if (wink_status_is_error(status)) { return status; }
+    status = pal_gpio_init(echo_pin, PAL_GPIO_INPUT);
+    if (wink_status_is_error(status)) { return status; }
+    dev->initialized = true;
+    return WINK_OK;
+#endif
+}
+
 #ifdef SIMULATION
 /* --- 仿真模式：仅旁路底层物理量来源（trigger + echo 脉宽），
        换算与超时与真机同源 (ADR-0003 决策2 / c-code.md §2)。
@@ -19,6 +40,7 @@ float dal_pulse_us_to_cm(uint32_t pulse_us) {
 
 wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     if (dev == NULL || distance_cm == NULL) { return WINK_ERR_INVALID_ARG; }
+    if (!dev->initialized) { return WINK_ERR_NOT_INITIALIZED; }
 
     /* 1. trigger 时序旁路（真机侧为 GPIO 10us 脉冲） */
     js_sim_trigger_ultrasonic(dev->trig_pin);
@@ -37,6 +59,7 @@ wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
 /* --- 真实芯片模式 --- */
 wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     if (dev == NULL || distance_cm == NULL) { return WINK_ERR_INVALID_ARG; }
+    if (!dev->initialized) { return WINK_ERR_NOT_INITIALIZED; }
 
     pal_gpio_write(dev->trig_pin, true);
     pal_delay_us(10);

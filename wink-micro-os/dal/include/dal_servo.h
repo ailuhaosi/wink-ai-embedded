@@ -2,18 +2,44 @@
 #define DAL_SERVO_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "wink_status.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/** @brief 舵机构造期配置（dal_servo_init 输入） */
+typedef struct {
+    uint8_t pwm_channel;
+    float min_pulse_ms;
+    float max_pulse_ms;
+} dal_servo_config_t;
+
+/** @brief 舵机实例（运行期状态；POD，ADR-0004 静态分发） */
 typedef struct {
     uint8_t pwm_channel;
     float current_angle;
     float min_pulse_ms;
     float max_pulse_ms;
+    bool initialized;
 } dal_servo_t;
+
+/**
+ * @brief 初始化舵机：校验配置、一次性 PWM init（占用 PWM 通道）、置 initialized。
+ * @note config vs device 字段冗余：min/max_pulse_ms 在 config(输入) 与 device(解析后状态) 中
+ *       重复是有意的——config 是构造期输入，device 持有运行期解析值；未来 270° 舵机的
+ *       max_angle 亦应作 config 传入而非硬编码。
+ * @note API Contract:
+ *   - Preconditions: dev/cfg 非 NULL；min_pulse_ms > 0；max_pulse_ms > min_pulse_ms。
+ *   - Blocking: No（pal_pwm_init 不阻塞）。
+ *   - Thread-safe: No; ISR-safe: No.
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG(NULL/非法脉宽) / 透传 PAL 错误
+ *     （WINK_ERR_INVALID_ARG channel / WINK_ERR_IO / WINK_ERR_BUSY / WINK_ERR_RESOURCE_EXHAUSTED）。
+ *   - Postconditions: WINK_OK 时 dev->initialized=true，PWM 通道已占用。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t dal_servo_init(dal_servo_t *dev, const dal_servo_config_t *cfg);
 
 /**
  * @brief 设置舵机偏转角度
@@ -22,14 +48,13 @@ typedef struct {
  * @return wink_status_t (0=成功，负数=错误码)
  *
  * @note API Contract:
+ *   - Preconditions: dev 非 NULL；dal_servo_init() 已成功（!initialized 返回 NOT_INITIALIZED）。
  *   - Blocking: No
  *   - Thread-safe: No (多任务访问需外部互斥)
  *   - ISR-safe: No
- *   - Input-range: dev 非 NULL；min/max_pulse_ms 须有效
- *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG(dev NULL) / 透传 PAL 错误
- *     （WINK_ERR_INVALID_ARG channel / WINK_ERR_IO；Phase 2 起含 WINK_ERR_BUSY /
- *      WINK_ERR_RESOURCE_EXHAUSTED / WINK_ERR_NOT_INITIALIZED）
- *   - Postconditions: dev->current_angle 更新为钳位后的目标角度
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG(dev NULL) / WINK_ERR_NOT_INITIALIZED / 透传 PAL 错误
+ *     （WINK_ERR_INVALID_ARG channel / WINK_ERR_IO / WINK_ERR_BUSY / WINK_ERR_RESOURCE_EXHAUSTED）
+ *   - Postconditions: WINK_OK 时 dev->current_angle 更新为钳位后的目标角度
  */
 WINK_WARN_UNUSED_RESULT
 wink_status_t dal_servo_set_angle(dal_servo_t *dev, float angle);

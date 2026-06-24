@@ -13,6 +13,7 @@
  * 注：虚拟时间状态机在 pal_osal_host.c 维护（sim_* API 经 extern 访问）。
  */
 #include "pal_hal.h"
+#include "pal_resource.h"
 #include "host_test_ctrl.h"
 
 /* 虚拟时间状态（OSAL 侧推进，HAL 侧消费）—— 跨文件共享，故 extern */
@@ -30,7 +31,14 @@ extern void host_record_pwm(uint8_t channel, float duty);
  * 30ms 超时判定自然触发（模拟「echo 久不响应」）。窗口值对齐器件超时 (30000us)。 */
 #define ECHO_POLL_WINDOW_US 30000u
 
-wink_status_t pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) { (void)pin; (void)mode; return WINK_OK; }
+wink_status_t pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) {
+    /* Phase 2 Task 2-3：host 资源占用治理。owner 为 PAL 层固定标识
+     * （同 owner 重复 claim 幂等；不同 owner 冲突 → BUSY 由调用方透传）。 */
+    wink_status_t rs = pal_resource_claim(PAL_RESOURCE_GPIO_PIN, pin, "pal_hal_host");
+    if (wink_status_is_error(rs)) { return rs; }
+    (void)mode;
+    return WINK_OK;
+}
 void pal_gpio_write(uint16_t pin, bool level) { (void)pin; (void)level; }
 
 bool pal_gpio_read(uint16_t pin) {
@@ -59,7 +67,10 @@ wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t t, pal_gpi
 wink_status_t pal_gpio_disable_interrupt(uint16_t pin) { (void)pin; return WINK_OK; }
 
 wink_status_t pal_pwm_init(uint8_t channel, uint32_t freq) {
-    if (channel >= PWM_CHANNELS) return WINK_ERR_INVALID_ARG;   /* Phase 3：补 channel 校验（原恒 true） */
+    if (channel >= PWM_CHANNELS) return WINK_ERR_INVALID_ARG;   /* Phase 3：channel 校验（原恒 true） */
+    /* Phase 2 Task 2-3：PWM 通道占用治理（先校验 channel 再 claim，避免污染非法项）。 */
+    wink_status_t rs = pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, channel, "pal_hal_host");
+    if (wink_status_is_error(rs)) { return rs; }
     (void)freq;
     return WINK_OK;
 }

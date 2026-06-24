@@ -56,6 +56,9 @@ add_wink_host_test(test_runtime test_runtime.c
 
 add_wink_host_test(test_host_pal test_host_pal.c)
 
+# Phase 2 Task 2-3：host 资源占用治理直接单测（链 pal_host，含 pal_resource_host.c）
+add_wink_host_test(test_pal_resource test_pal_resource.c)
+
 set(DAL_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)

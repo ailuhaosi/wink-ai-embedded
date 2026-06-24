@@ -39,3 +39,9 @@ if(TARGET_PLATFORM STREQUAL "wasm" AND EMSCRIPTEN)
         "-s" "EXPORT_NAME='WasmSandbox'"
     )
 endif()
+
+# ---- host 单元测试（非 wasm target 时启用）----
+if(NOT TARGET_PLATFORM STREQUAL "wasm")
+    enable_testing()
+    add_subdirectory(test)
+endif()

@@ -1,0 +1,29 @@
+# wink-micro-os host unit tests (PC gcc, no ESP-IDF, no Emscripten)
+# 范式迁移自 chigo-micro/project/embedded/sim/test/CMakeLists.txt
+
+set(UNITY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/unity)
+
+# Unity 是 vendor 代码，豁免严格警告（vendor 的无害 warning 不应阻塞测试构建）
+set_source_files_properties(${UNITY_DIR}/unity.c PROPERTIES COMPILE_FLAGS "-w")
+
+# 通用 host 测试：仅链 pal(INTERFACE,仅头) + Unity。
+# Plan 3 起会在此扩展链接 targets/host；Plan 4 扩展 add_wink_test_sim。
+function(add_wink_test name src)
+    add_executable(${name}
+        ${src}
+        ${UNITY_DIR}/unity.c
+        ${ARGN})
+    target_include_directories(${name} PRIVATE
+        ${UNITY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../pal/include)
+    target_link_libraries(${name} PRIVATE pal)
+    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+add_wink_test(test_smoke test_smoke.c)
+
+add_custom_target(check
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)

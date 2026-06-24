@@ -18,6 +18,7 @@ endif()
 # 收集子组件构建
 add_subdirectory(pal)
 add_subdirectory(dal)
+add_subdirectory(trace)
 
 # 根据目标平台配置可执行程序或测试用例 (主要针对 WebAssembly / Wasm 仿真)
 if(TARGET_PLATFORM STREQUAL "wasm" AND EMSCRIPTEN)

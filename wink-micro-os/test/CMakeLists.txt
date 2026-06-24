@@ -15,13 +15,19 @@ function(add_wink_test name src)
         ${ARGN})
     target_include_directories(${name} PRIVATE
         ${UNITY_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../pal/include)
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../pal/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include)
     target_link_libraries(${name} PRIVATE pal)
     target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
 add_wink_test(test_smoke test_smoke.c)
+
+add_wink_test(test_trace test_trace.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
 
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

@@ -4,6 +4,9 @@
  */
 #include "wink_trace.h"
 
+/* INVARIANT: 仅 runtime 主循环单上下文访问。
+   新增第二调用点（ISR / 线程 / 异步回调）前，必须先在本 RMW 路径加关中断临界区
+   或 PAL lock——volatile 不提供原子性，不可替代。 */
 static uint32_t s_buffer[WINK_TRACE_CAPACITY];
 static uint32_t s_count = 0;     /* 已写入总数（含覆盖） */
 static uint32_t s_head = 0;      /* 下一个写入位置 */

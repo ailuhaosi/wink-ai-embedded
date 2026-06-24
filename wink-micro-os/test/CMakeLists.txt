@@ -29,6 +29,11 @@ add_wink_test(test_smoke test_smoke.c)
 add_wink_test(test_trace test_trace.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
 
+add_wink_test(test_runtime test_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/src/wink_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/pal_host_min_stub.c)
+
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

@@ -7,8 +7,13 @@
  *   host 无真实时间流逝，故让 pal_gpio_read 在被调用时把虚拟时间推进到下一个
  *   echo 边沿，驱动 while 循环前进。
  *
- * ⚠ 架构风险：此协作推进强耦合 ultrasonic 真机分支的 while 轮询结构。
- *   若未来驱动改中断/非阻塞，本实现须同步重构（Plan 4 sim 同源测试独立于此耦合）。
+ * ⚠ Phase 4 决策（Task 4-6，方案 B）：BAL 已迁移到非阻塞 DAL
+ *   （dal_ultrasonic_request_measurement + get_cached_distance），其 echo 时序 SSOT 是
+ *   pal_gpio_pulse_in（直接读 host_echo_high_us，不经 pal_gpio_read 协作推进）。
+ *   pal_gpio_read 的协作推进**保留**，仅供过渡期 @deprecated 的 blocking dal_ultrasonic_read
+ *   及其 host 单测驱动——二者（pulse_in vs 协作 read）服务于不同 API（新非阻塞 vs 过渡阻塞），
+ *   非冗余。BAL 完全迁移、sim 旁路下沉到 PAL capture 后，blocking read + 协作推进一并移除
+ *   （Phase 4 follow-up，不在本阶段强删）。
  *
  * 注：虚拟时间状态机在 pal_osal_host.c 维护（sim_* API 经 extern 访问）。
  */
@@ -83,4 +88,16 @@ wink_status_t pal_pwm_set_duty(uint8_t channel, float duty) {
 wink_status_t pal_i2c_transfer(uint8_t port, uint16_t addr,
                       const uint8_t *w, uint32_t wl, uint8_t *r, uint32_t rl) {
     (void)port; (void)addr; (void)w; (void)wl; (void)r; (void)rl; return WINK_OK;
+}
+
+wink_status_t pal_gpio_pulse_in(uint16_t pin, bool level, uint32_t timeout_us, uint32_t *pulse_us) {
+    /* Phase 4 Task 4-2：host 直接读 echo 脉宽（虚拟时间下同步），不经 pal_gpio_read 协作推进。
+     * 这是非阻塞 DAL 的 echo 时序 SSOT（Phase 4 Task 4-6 决策：保留协作推进仅供过渡 blocking read）。 */
+    if (pulse_us == NULL) { return WINK_ERR_INVALID_ARG; }
+    if (pin != host_echo_pin()) { return WINK_ERR_UNSUPPORTED; }   /* 无 pin 映射（直至 virtual registry 接入） */
+    uint64_t rise = host_echo_rise_us();
+    if (rise > timeout_us) { return WINK_ERR_TIMEOUT; }            /* echo 起始晚于超时 */
+    *pulse_us = (uint32_t)host_echo_high_us();
+    (void)level;   /* host echo 即高电平脉宽 */
+    return WINK_OK;
 }

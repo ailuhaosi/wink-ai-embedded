@@ -29,20 +29,38 @@ static void app_init(void) {
     (void)a;
 }
 
+/* 非阻塞测量调度（Phase 4 Task 4-4）：NEED_TRIGGER → request → WAITING；get_cached OK 后 re-arm。
+ * host 单 tick 即 ready（pal_gpio_pulse_in 同步）；真机未来异步时 WAITING 期 get_cached 返回 BUSY，
+ * 保持上一安全输出——BAL 10ms tick 不再调用 60ms+ 的 blocking dal_ultrasonic_read（P0-2）。 */
+typedef enum { RADAR_NEED_TRIGGER, RADAR_WAITING } radar_phase_t;
+static radar_phase_t s_radar_phase = RADAR_NEED_TRIGGER;
+
 static void app_loop(void) {
     float distance = 0.0f;
-    wink_status_t s = dal_ultrasonic_read(&front_radar, &distance);
-    if (wink_status_is_error(s)) {
-        /* §6.1 约束2：DAL 只返错误码，fault 捕获+trace 在 App 回调内 */
-        wink_trace_fault(FAULT_FRONT_RADAR);
-        return;
+
+    if (s_radar_phase == RADAR_NEED_TRIGGER) {
+        wink_status_t r = dal_ultrasonic_request_measurement(&front_radar);
+        if (wink_status_is_error(r) && r != WINK_ERR_BUSY) {
+            wink_trace_fault(FAULT_FRONT_RADAR);
+        }
+        s_radar_phase = RADAR_WAITING;
     }
-    if (distance > 0.0f && distance < OBSTACLE_THRESHOLD_CM) {
-        wink_status_t r = dal_servo_set_angle(&neck_servo, 180.0f);   /* 近障：扫舵机 */
-        (void)r;
+
+    wink_status_t s = dal_ultrasonic_get_cached_distance(&front_radar, &distance);
+    if (s == WINK_OK) {
+        s_radar_phase = RADAR_NEED_TRIGGER;   /* 测量完成 → 重新装填 */
+        if (distance > 0.0f && distance < OBSTACLE_THRESHOLD_CM) {
+            wink_status_t mv = dal_servo_set_angle(&neck_servo, 180.0f);   /* 近障：扫舵机 */
+            (void)mv;
+        } else {
+            wink_status_t mv = dal_servo_set_angle(&neck_servo, 90.0f);    /* 复位 */
+            (void)mv;
+        }
+    } else if (s == WINK_ERR_BUSY) {
+        /* 测量进行中：保持上一安全输出（不动作） */
     } else {
-        wink_status_t r = dal_servo_set_angle(&neck_servo, 90.0f);    /* 复位 */
-        (void)r;
+        /* §6.1 约束2：DAL 只返错误码，fault 捕获+trace 在 App 回调内 */
+        wink_trace_fault(FAULT_FRONT_RADAR);   /* ERROR：安全停止 + 故障上报 */
     }
 }
 

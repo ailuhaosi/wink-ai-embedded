@@ -62,6 +62,18 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pa
  */
 WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_disable_interrupt(uint16_t pin);
 
+/**
+ * @brief 捕获指定引脚上的脉冲宽度（过渡 capture API；最终目标 async capture/callback，Phase 4 Task 4-5）
+ * @param pin 引脚号
+ * @param level 测量的脉冲电平（true=高电平脉宽，如 HC-SR04 echo）
+ * @param timeout_us 超时阈值 μs
+ * @param pulse_us [out] 输出脉宽 μs
+ * @return WINK_OK / WINK_ERR_INVALID_ARG(pulse_us NULL) / WINK_ERR_TIMEOUT / WINK_ERR_UNSUPPORTED / WINK_ERR_IO
+ * @note Blocking: target-defined，**禁**从 BAL/runtime 10ms tick 直接调用（仅供非阻塞 DAL 过渡）。
+ *       ISR-safe: No; Thread-safe: target-defined。wasm 下同步返回（非 Asyncify 挂起点，不入 IMPORTS）。
+ */
+WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_pulse_in(uint16_t pin, bool level, uint32_t timeout_us, uint32_t *pulse_us);
+
 
 /* ========================================================================== */
 /*                                2. PWM 抽象                                 */

@@ -20,3 +20,9 @@ wink_status_t pal_pwm_set_duty(uint8_t ch, float d) { (void)ch; (void)d; return 
 wink_status_t pal_i2c_transfer(uint8_t p, uint16_t a, const uint8_t *w, uint32_t wl, uint8_t *r, uint32_t rl) {
     (void)p; (void)a; (void)w; (void)wl; (void)r; (void)rl; return WINK_ERR_UNSUPPORTED;
 }
+
+wink_status_t pal_gpio_pulse_in(uint16_t pin, bool level, uint32_t timeout_us, uint32_t *pulse_us) {
+    /* RMT / GPIO 双沿 ISR + timer 硬件捕获待 ESP-IDF 移植（Phase 4 Task 4-5 设计 note）。 */
+    (void)pin; (void)level; (void)timeout_us; (void)pulse_us;
+    return WINK_ERR_UNSUPPORTED;
+}

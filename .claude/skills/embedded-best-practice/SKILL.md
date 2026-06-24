@@ -123,6 +123,7 @@ Safety review:
 3. 堆内存 API 是否使用项目 allocator，绝不混用。
 4. 设备访问是否使用命名 API：`dal_xxx_read(&dev, ...)`。
 5. 编码风格、错误传播、测试方式如何组织。
+6. **业务事实寻路**：绝对不要猜测或硬编码具体的设备 API 与硬件配置。必须先查阅 `docs/design/07-platform-governance/01-device-model-registry.md`、具体外设的 YAML 声明或项目现有的 `.h` 头文件，获取最新、最真实的 API 签名和物理契约。本 Skill 文件及 references 目录中的任何 API/YAML 段落仅作为编写范式与格式示例，如果在分析过程中你觉得 **`docs/design/`里定义的业务事实不够完善或有问题，你需要停下来提出你的建议让我确认**。
 
 ## 驱动开发检查清单（本项目）
 

@@ -8,6 +8,8 @@
 
 ## 1. 结构化契约 Doxygen / YAML 模板
 
+> ⚠️ **注意**：以下代码块仅作为“Doxygen / YAML 注释书写规范”的**格式范例**，并非系统中真实的 API 运行定义。真实 API 细节以 active header 和 Device Model 为准。
+
 所有 DAL / PAL API 在头文件中必须包含以下格式的注释块（推荐使用 YAML Block 形式嵌入 Doxygen 中，方便 AI 提取和 Codegen 解析）：
 
 ```c
@@ -66,10 +68,12 @@ wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm);
 
 为彻底消灭 AI 在生成驱动和 JS 仿真桥接代码时的“签名冲突”，项目在 `07-platform-governance/` 中建立了设备树接口定义（IDL）元数据机制。
 
+> ⚠️ **注意**：下方展示的 YAML 结构为**定义规范的 Schema 范例**。系统真实的设备元数据请到项目对应的元数据目录或 `docs/design/07-platform-governance/01-device-model-registry.md` 中查阅。
+
 每一个外设在代码生成器中均由一个 `.yaml` 声明定义。Codegen 通过该 YAML 文件作为 **SSOT（单一事实源）**，自动生成对应的 `.h` 头文件以及 TypeScript/JavaScript Wasm 仿真接口，确保三方签名 100% 绝对一致：
 
 ```yaml
-# dal_ultrasonic.yaml 示例
+# dal_ultrasonic.yaml 范例（非系统真实配置，仅作格式参考）
 device_type: dal_ultrasonic
 description: "Ultrasonic range sensor"
 attributes:

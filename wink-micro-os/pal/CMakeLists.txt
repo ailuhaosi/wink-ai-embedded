@@ -1,11 +1,6 @@
-# PAL (Platform Abstraction Layer) Component CMake
-add_library(pal STATIC)
+# PAL (Platform Abstraction Layer) —— 纯契约 INTERFACE 库（无 .c，无符号）。
+# 实现全部下沉到 targets/<platform>/（见 03-directory-architecture.md §4/§5）。
+add_library(pal INTERFACE)
 
-# 暴露包含路径给其他组件使用
-target_include_directories(pal PUBLIC include)
-
-# 声明 PAL 层需要导出的头文件（主要为底层实现做桩）
-target_sources(pal PRIVATE
-    include/pal_hal.h
-    include/pal_osal.h
-)
+# 暴露 PAL 契约面（pal.h / pal_hal.h / pal_osal.h / wink_status.h）给所有链 pal 的组件。
+target_include_directories(pal INTERFACE include)

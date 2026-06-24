@@ -24,6 +24,11 @@ extern uint16_t host_echo_pin(void);
 extern void host_record_pwm(uint8_t channel, float duty);
 
 #define PWM_CHANNELS 8
+/* 协作式 echo 轮询窗口：真机驱动用 while(!read(echo)){ 超时判定 } 空等 echo。
+ * host 无真实时间流逝，故 pal_gpio_read 在被调用时把虚拟时间向 echo 边沿推进，
+ * 但每次最多推进本窗口——若 echo 在窗口外（远超 30ms 才变高），驱动循环自身的
+ * 30ms 超时判定自然触发（模拟「echo 久不响应」）。窗口值对齐器件超时 (30000us)。 */
+#define ECHO_POLL_WINDOW_US 30000u
 
 bool pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) { (void)pin; (void)mode; return true; }
 void pal_gpio_write(uint16_t pin, bool level) { (void)pin; (void)level; }
@@ -33,9 +38,13 @@ bool pal_gpio_read(uint16_t pin) {
     uint64_t t = host_sim_time_us();
     uint64_t rise = host_echo_rise_us();
     uint64_t high = host_echo_high_us();
+    /* 向下一个 echo 边沿推进，但单次最多推进 ECHO_POLL_WINDOW_US，
+     * 使驱动 polling 循环的 30ms 超时判定可达（远期 rise 不会被瞬间跳过）。 */
     if (t < rise) {
-        host_sim_advance_to(rise);
-        return true;                          /* 推进到变高时刻，echo 为高 */
+        uint64_t target = rise;
+        if (rise - t > ECHO_POLL_WINDOW_US) target = t + ECHO_POLL_WINDOW_US;
+        host_sim_advance_to(target);
+        return target >= rise;                /* 推进到变高时刻返回高；窗口内未达返回低 */
     }
     if (t < rise + high) {
         host_sim_advance_to(rise + high);

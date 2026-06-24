@@ -40,5 +40,6 @@ endif()
 # ---- host 单元测试（非 wasm target 时启用）----
 if(NOT TARGET_PLATFORM STREQUAL "wasm")
     enable_testing()
+    add_subdirectory(targets/host)      # host 一等 target，供 test 链接
     add_subdirectory(test)
 endif()

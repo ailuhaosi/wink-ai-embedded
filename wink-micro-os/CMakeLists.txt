@@ -41,5 +41,13 @@ endif()
 if(NOT TARGET_PLATFORM STREQUAL "wasm")
     enable_testing()
     add_subdirectory(targets/host)      # host 一等 target，供 test 链接
+
+    # §6.1 约束3：标准 App 注入接口。未指定则默认 samples/avoidance_car。
+    if(NOT DEFINED WINK_APP_DIR)
+        set(WINK_APP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/samples/avoidance_car)
+    endif()
+    message(STATUS "WINK_APP_DIR = ${WINK_APP_DIR}")
+    add_subdirectory(${WINK_APP_DIR} ${CMAKE_BINARY_DIR}/app_build)
+
     add_subdirectory(test)
 endif()

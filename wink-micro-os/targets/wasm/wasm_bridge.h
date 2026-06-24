@@ -26,6 +26,15 @@ extern void js_pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent);
 extern bool js_pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
                                 const uint8_t *write_buf, uint32_t write_len,
                                 uint8_t *read_buf, uint32_t read_len);
+/* ---- 中断回调索引边界（Phase 6 Task 6-3 / P2-4）----
+ * callback_index 是**不透明 JS function table 索引**，不是 C 函数指针。
+ *   - 禁在单一 wasm adapter 边界（pal_hal_wasm.c enable_interrupt ↔ wasm_entry.c
+ *     trigger_wasm_interrupt）之外把任意非零整数 cast 成 pal_gpio_isr_t。
+ *   - wasm64 下裸 (uint32_t)(uintptr_t) cast 会截断（索引 > 2^32 时丢高位）。
+ *   - 分发前须校验 index 在已注册范围内——isr != NULL 不能防错误非零索引。
+ *   - 长期：用 Emscripten addFunction / function table registry 替代裸 cast。
+ * 中断桥安全分两维：索引安全（本约束）＋ 时序安全（Asyncify sleeping 窗口禁重入
+ * _trigger_wasm_interrupt，见 docs/04 01-wasm-sandbox-lifecycle.md §4.4 / Phase 1 Task 1-5）。 */
 extern void js_pal_register_interrupt(uint16_t pin, uint32_t callback_index, void *arg);
 extern void js_pal_deregister_interrupt(uint16_t pin);
 

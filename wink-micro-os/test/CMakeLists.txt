@@ -64,6 +64,10 @@ set(DAL_SRCS
 add_wink_host_test(test_dal_servo test_dal_servo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)
 
+# Task 4 期间临时只编 dal_ultrasonic.c（同上两阶段注册策略）。
+add_wink_host_test(test_dal_ultrasonic test_dal_ultrasonic.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c)
+
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

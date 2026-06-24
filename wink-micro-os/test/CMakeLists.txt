@@ -42,6 +42,7 @@ function(add_wink_host_test name src)
         ${UNITY_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/../pal/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dal/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include)
     target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
@@ -53,6 +54,15 @@ add_wink_host_test(test_runtime test_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
 
 add_wink_host_test(test_host_pal test_host_pal.c)
+
+set(DAL_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)
+
+# Task 3 期间临时只编 dal_servo.c（dal_ultrasonic.c 签名尚未对齐）；
+# Task 5 完成后改回 ${DAL_SRCS}（见 Task 6 Step 4 注）。
+add_wink_host_test(test_dal_servo test_dal_servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)
 
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

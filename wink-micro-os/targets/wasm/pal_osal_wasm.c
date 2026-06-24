@@ -19,6 +19,13 @@ uint64_t pal_get_us(void) { return js_pal_get_us(); }
 
 /* 单线程 Wasm Worker 沙箱通常无锁竞争，互斥锁退化为无竞争实现 */
 pal_mutex_t pal_mutex_create(void) { return (pal_mutex_t)1; }
-bool pal_mutex_lock(pal_mutex_t mutex, uint32_t timeout_ms) { (void)mutex; (void)timeout_ms; return true; }
-bool pal_mutex_unlock(pal_mutex_t mutex) { (void)mutex; return true; }
+wink_status_t pal_mutex_lock(pal_mutex_t mutex, uint32_t timeout_ms) {
+    if (mutex == NULL) return WINK_ERR_INVALID_ARG;
+    (void)timeout_ms;
+    return WINK_OK;
+}
+wink_status_t pal_mutex_unlock(pal_mutex_t mutex) {
+    if (mutex == NULL) return WINK_ERR_INVALID_ARG;
+    return WINK_OK;
+}
 void pal_mutex_destroy(pal_mutex_t mutex) { (void)mutex; }

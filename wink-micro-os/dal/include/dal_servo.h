@@ -26,7 +26,9 @@ typedef struct {
  *   - Thread-safe: No (多任务访问需外部互斥)
  *   - ISR-safe: No
  *   - Input-range: dev 非 NULL；min/max_pulse_ms 须有效
- *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG(dev NULL) / WINK_ERR_IO(PAL 失败)
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG(dev NULL) / 透传 PAL 错误
+ *     （WINK_ERR_INVALID_ARG channel / WINK_ERR_IO；Phase 2 起含 WINK_ERR_BUSY /
+ *      WINK_ERR_RESOURCE_EXHAUSTED / WINK_ERR_NOT_INITIALIZED）
  *   - Postconditions: dev->current_angle 更新为钳位后的目标角度
  */
 WINK_WARN_UNUSED_RESULT

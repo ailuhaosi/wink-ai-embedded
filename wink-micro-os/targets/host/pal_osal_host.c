@@ -44,6 +44,13 @@ uint64_t pal_get_ms(void) { return s_time_us / 1000u; }
 uint64_t pal_get_us(void) { return s_time_us; }
 
 pal_mutex_t pal_mutex_create(void) { return (pal_mutex_t)1; }
-bool pal_mutex_lock(pal_mutex_t m, uint32_t to) { (void)m; (void)to; return true; }
-bool pal_mutex_unlock(pal_mutex_t m) { (void)m; return true; }
+wink_status_t pal_mutex_lock(pal_mutex_t m, uint32_t to) {
+    if (m == NULL) return WINK_ERR_INVALID_ARG;
+    (void)to;
+    return WINK_OK;
+}
+wink_status_t pal_mutex_unlock(pal_mutex_t m) {
+    if (m == NULL) return WINK_ERR_INVALID_ARG;
+    return WINK_OK;
+}
 void pal_mutex_destroy(pal_mutex_t m) { (void)m; }

@@ -30,7 +30,7 @@ extern void host_record_pwm(uint8_t channel, float duty);
  * 30ms 超时判定自然触发（模拟「echo 久不响应」）。窗口值对齐器件超时 (30000us)。 */
 #define ECHO_POLL_WINDOW_US 30000u
 
-bool pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) { (void)pin; (void)mode; return true; }
+wink_status_t pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) { (void)pin; (void)mode; return WINK_OK; }
 void pal_gpio_write(uint16_t pin, bool level) { (void)pin; (void)level; }
 
 bool pal_gpio_read(uint16_t pin) {
@@ -53,19 +53,23 @@ bool pal_gpio_read(uint16_t pin) {
     return false;
 }
 
-bool pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t t, pal_gpio_isr_t cb, void *a) {
-    (void)pin; (void)t; (void)cb; (void)a; return true;
+wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t t, pal_gpio_isr_t cb, void *a) {
+    (void)pin; (void)t; (void)cb; (void)a; return WINK_OK;
 }
-bool pal_gpio_disable_interrupt(uint16_t pin) { (void)pin; return true; }
+wink_status_t pal_gpio_disable_interrupt(uint16_t pin) { (void)pin; return WINK_OK; }
 
-bool pal_pwm_init(uint8_t channel, uint32_t freq) { (void)channel; (void)freq; return true; }
-bool pal_pwm_set_duty(uint8_t channel, float duty) {
-    if (channel >= PWM_CHANNELS) return false;
+wink_status_t pal_pwm_init(uint8_t channel, uint32_t freq) {
+    if (channel >= PWM_CHANNELS) return WINK_ERR_INVALID_ARG;   /* Phase 3：补 channel 校验（原恒 true） */
+    (void)freq;
+    return WINK_OK;
+}
+wink_status_t pal_pwm_set_duty(uint8_t channel, float duty) {
+    if (channel >= PWM_CHANNELS) return WINK_ERR_INVALID_ARG;
     host_record_pwm(channel, duty);
-    return true;
+    return WINK_OK;
 }
 
-bool pal_i2c_transfer(uint8_t port, uint16_t addr,
+wink_status_t pal_i2c_transfer(uint8_t port, uint16_t addr,
                       const uint8_t *w, uint32_t wl, uint8_t *r, uint32_t rl) {
-    (void)port; (void)addr; (void)w; (void)wl; (void)r; (void)rl; return true;
+    (void)port; (void)addr; (void)w; (void)wl; (void)r; (void)rl; return WINK_OK;
 }

@@ -6,9 +6,9 @@
 #include "pal_hal.h"
 #include "wasm_bridge.h"
 
-bool pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) {
+wink_status_t pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) {
     (void)pin; (void)mode;            /* 仿真下无需硬件配置 */
-    return true;
+    return WINK_OK;
 }
 
 void pal_gpio_write(uint16_t pin, bool level) {
@@ -19,30 +19,32 @@ bool pal_gpio_read(uint16_t pin) {
     return js_pal_gpio_read(pin);
 }
 
-bool pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type, pal_gpio_isr_t callback, void *arg) {
+wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type, pal_gpio_isr_t callback, void *arg) {
     (void)intr_type;
     uint32_t callback_index = (uint32_t)(uintptr_t)callback;   /* C 函数指针转 Table 索引 */
     js_pal_register_interrupt(pin, callback_index, arg);
-    return true;
+    return WINK_OK;
 }
 
-bool pal_gpio_disable_interrupt(uint16_t pin) {
+wink_status_t pal_gpio_disable_interrupt(uint16_t pin) {
     js_pal_deregister_interrupt(pin);
-    return true;
+    return WINK_OK;
 }
 
-bool pal_pwm_init(uint8_t channel, uint32_t frequency_hz) {
+wink_status_t pal_pwm_init(uint8_t channel, uint32_t frequency_hz) {
     (void)channel; (void)frequency_hz;
-    return true;
+    return WINK_OK;
 }
 
-bool pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent) {
+wink_status_t pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent) {
     js_pal_pwm_set_duty(channel, duty_cycle_percent);
-    return true;
+    return WINK_OK;
 }
 
-bool pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
+wink_status_t pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
                       const uint8_t *write_buf, uint32_t write_len,
                       uint8_t *read_buf, uint32_t read_len) {
-    return js_pal_i2c_transfer(port, dev_addr, write_buf, write_len, read_buf, read_len);
+    /* JS 侧同步零拷贝 transfer：false → WINK_ERR_IO */
+    return js_pal_i2c_transfer(port, dev_addr, write_buf, write_len, read_buf, read_len)
+           ? WINK_OK : WINK_ERR_IO;
 }

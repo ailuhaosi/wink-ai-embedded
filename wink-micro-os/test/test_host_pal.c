@@ -13,10 +13,19 @@ void test_delay_advances_virtual_time(void) {
 }
 
 void test_pwm_duty_recorded(void) {
-    /* pal_pwm_set_duty 在 targets/host 提供；经声明直接调 */
-    extern bool pal_pwm_set_duty(uint8_t channel, float duty);
-    pal_pwm_set_duty(2, 7.5f);
+    /* pal_pwm_set_duty 在 targets/host 提供；经声明直接调（Phase 3 起 status 化） */
+    extern wink_status_t pal_pwm_set_duty(uint8_t channel, float duty);
+    wink_status_t st = pal_pwm_set_duty(2, 7.5f);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, st);
     TEST_ASSERT_EQUAL_FLOAT(7.5f, sim_last_pwm_duty(2));
+}
+
+void test_pwm_set_duty_rejects_invalid_channel(void) {
+    /* Phase 3：host pal_pwm_init/set_duty 补 channel 校验（PWM_CHANNELS=8），非法 channel → INVALID_ARG */
+    extern wink_status_t pal_pwm_set_duty(uint8_t channel, float duty);
+    extern wink_status_t pal_pwm_init(uint8_t channel, uint32_t frequency_hz);
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG, pal_pwm_set_duty(8, 7.5f));
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG, pal_pwm_init(8, 50));
 }
 
 void test_echo_timing_stored(void) {
@@ -31,6 +40,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_delay_advances_virtual_time);
     RUN_TEST(test_pwm_duty_recorded);
+    RUN_TEST(test_pwm_set_duty_rejects_invalid_channel);
     RUN_TEST(test_echo_timing_stored);
     return UNITY_END();
 }

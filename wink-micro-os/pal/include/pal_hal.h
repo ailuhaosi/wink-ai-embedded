@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "wink_status.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,28 +37,30 @@ typedef void (*pal_gpio_isr_t)(void *arg);
 
 /**
  * @brief 初始化 GPIO 引脚配置
+ * @note 失败型：返回 wink_status_t。资源占用治理（host）见 Phase 2 resource guard。
+ *       读取型 pal_gpio_write(void) / pal_gpio_read(bool) 无失败语义，保持现状。
  */
-bool pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode);
+WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode);
 
 /**
- * @brief 写入 GPIO 引脚输出电平
+ * @brief 写入 GPIO 引脚输出电平（不可失败，保持 void）
  */
 void pal_gpio_write(uint16_t pin, bool level);
 
 /**
- * @brief 读取 GPIO 引脚输入电平
+ * @brief 读取 GPIO 引脚输入电平（不可失败，保持 bool）
  */
 bool pal_gpio_read(uint16_t pin);
 
 /**
  * @brief 配置并启用 GPIO 引脚中断
  */
-bool pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type, pal_gpio_isr_t callback, void *arg);
+WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type, pal_gpio_isr_t callback, void *arg);
 
 /**
  * @brief 禁用 GPIO 引脚中断
  */
-bool pal_gpio_disable_interrupt(uint16_t pin);
+WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_disable_interrupt(uint16_t pin);
 
 
 /* ========================================================================== */
@@ -68,15 +71,17 @@ bool pal_gpio_disable_interrupt(uint16_t pin);
  * @brief 初始化指定通道的 PWM 发生器
  * @param channel 逻辑 PWM 通道号
  * @param frequency_hz PWM 频率 (单位: Hz)
+ * @note 失败型：非法 channel（host: >= PWM_CHANNELS）返回 WINK_ERR_INVALID_ARG；
+ *       Phase 2 起资源占用返回 WINK_ERR_BUSY / WINK_ERR_RESOURCE_EXHAUSTED。
  */
-bool pal_pwm_init(uint8_t channel, uint32_t frequency_hz);
+WINK_WARN_UNUSED_RESULT wink_status_t pal_pwm_init(uint8_t channel, uint32_t frequency_hz);
 
 /**
  * @brief 设置指定通道的 PWM 占空比
  * @param channel 逻辑 PWM 通道号
  * @param duty_cycle_percent 占空比浮点百分比 (0.0f 到 100.0f)
  */
-bool pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent);
+WINK_WARN_UNUSED_RESULT wink_status_t pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent);
 
 
 /* ========================================================================== */
@@ -92,7 +97,7 @@ bool pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent);
  * @param read_buf 待读取数据缓冲区，为 NULL 则不读取
  * @param read_len 待读取数据长度，为 0 则不读取
  */
-bool pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
+WINK_WARN_UNUSED_RESULT wink_status_t pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
                       const uint8_t *write_buf, uint32_t write_len,
                       uint8_t *read_buf, uint32_t read_len);
 

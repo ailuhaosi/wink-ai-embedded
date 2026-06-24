@@ -10,6 +10,6 @@ void pal_delay_us(uint32_t us) { (void)us; }
 uint64_t pal_get_ms(void) { return 0; }
 uint64_t pal_get_us(void) { return 0; }
 pal_mutex_t pal_mutex_create(void) { return (pal_mutex_t)0; }
-bool pal_mutex_lock(pal_mutex_t m, uint32_t to) { (void)m; (void)to; return false; }
-bool pal_mutex_unlock(pal_mutex_t m) { (void)m; return false; }
+wink_status_t pal_mutex_lock(pal_mutex_t m, uint32_t to) { (void)m; (void)to; return WINK_ERR_UNSUPPORTED; }
+wink_status_t pal_mutex_unlock(pal_mutex_t m) { (void)m; return WINK_ERR_UNSUPPORTED; }
 void pal_mutex_destroy(pal_mutex_t m) { (void)m; }

@@ -59,6 +59,21 @@ wink_status_t dal_servo_init(dal_servo_t *dev, const dal_servo_config_t *cfg);
 WINK_WARN_UNUSED_RESULT
 wink_status_t dal_servo_set_angle(dal_servo_t *dev, float angle);
 
+/**
+ * @brief 舵机安全关断（duty=0 → 失保持力 limp = 安全）。
+ * @note API Contract:
+ *   - Preconditions: dev 非 NULL；dal_servo_init() 已成功。
+ *   - Blocking: No（不 sleep）; Thread-safe: No; ISR-safe: No.
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG(dev NULL) / WINK_ERR_NOT_INITIALIZED / 透传 PAL 错误。
+ *   - Postconditions: WINK_OK 时该通道 duty=0。
+ * ⚠ safe-off 语义边界（架构师红线）：duty=0 对**舵机** = 失去保持力（limp）= 安全（无意外运动）。
+ *    但对**未来 DC 电机 DAL**，duty=0 可能是 coast（滑行）而非 brake（制动）——并非通用安全态。
+ *    本函数仅适用舵机；其它执行器类型须注册各自语义正确的关断（见 wink_actuator_registry.h），
+ *    不得外推为通用执行器关断范式。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t dal_servo_safe_off(dal_servo_t *dev);
+
 #ifdef __cplusplus
 }
 #endif

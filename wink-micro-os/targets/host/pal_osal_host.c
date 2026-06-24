@@ -12,6 +12,7 @@ static uint64_t s_echo_rise_us = 0;
 static uint64_t s_echo_high_us = 0;
 static uint16_t s_echo_pin = 0xFFFF;
 static float s_pwm_duty[8];
+static pal_reset_reason_t s_reset_reason = PAL_RESET_REASON_POWER_ON;   /* Phase 5：可配置复位原因（测试注入） */
 
 /* ---- HAL 侧 extern 的访问器 ---- */
 uint64_t host_sim_time_us(void) { return s_time_us; }
@@ -27,6 +28,7 @@ void host_record_pwm(uint8_t channel, float duty) {
 void sim_reset_time(void) {
     s_time_us = 0; s_echo_rise_us = 0; s_echo_high_us = 0; s_echo_pin = 0xFFFF;
     memset(s_pwm_duty, 0, sizeof(s_pwm_duty));
+    s_reset_reason = PAL_RESET_REASON_POWER_ON;
 }
 void sim_set_echo_pin(uint16_t pin) { s_echo_pin = pin; }
 void sim_set_echo_timing(uint64_t rise_us, uint64_t high_duration_us) {
@@ -36,6 +38,7 @@ float sim_last_pwm_duty(uint8_t channel) {
     if (channel >= 8) return -1.0f;
     return s_pwm_duty[channel];
 }
+void sim_set_reset_reason(pal_reset_reason_t reason) { s_reset_reason = reason; }
 
 /* ---- PAL OSAL ---- */
 void pal_delay_ms(uint32_t ms) { s_time_us += (uint64_t)ms * 1000u; }
@@ -54,3 +57,8 @@ wink_status_t pal_mutex_unlock(pal_mutex_t m) {
     return WINK_OK;
 }
 void pal_mutex_destroy(pal_mutex_t m) { (void)m; }
+
+/* ---- Phase 5 Task 5-4: WDT / reset reason（host：WDT 为无操作 stub；reset reason 可配置供测试） ---- */
+pal_reset_reason_t pal_get_reset_reason(void) { return s_reset_reason; }
+WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_init(uint32_t timeout_ms) { (void)timeout_ms; return WINK_OK; }
+WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_feed(void) { return WINK_OK; }

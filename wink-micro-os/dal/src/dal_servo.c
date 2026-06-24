@@ -40,3 +40,10 @@ wink_status_t dal_servo_set_angle(dal_servo_t *dev, float angle) {
     if (wink_status_is_error(status)) { return status; }
     return WINK_OK;
 }
+
+wink_status_t dal_servo_safe_off(dal_servo_t *dev) {
+    if (dev == NULL) { return WINK_ERR_INVALID_ARG; }
+    if (!dev->initialized) { return WINK_ERR_NOT_INITIALIZED; }
+    /* duty=0 → 舵机失保持力（limp）= 安全；不 sleep。仅适用舵机（见头文件语义边界注）。 */
+    return pal_pwm_set_duty(dev->pwm_channel, 0.0f);
+}

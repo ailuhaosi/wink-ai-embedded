@@ -6,12 +6,19 @@
 #include "device_tree.h"
 #include "wink_app.h"
 #include "wink_trace.h"
+#include "wink_actuator_registry.h"
 #include "wink_status.h"
 
 #define OBSTACLE_THRESHOLD_CM 20.0f
 #define FAULT_FRONT_RADAR     7001u
 #define FAULT_SERVO_INIT      7002u
 #define FAULT_RADAR_INIT      7003u
+
+/* Phase 5：舵机 safe-off 适配 thunk（wink_actuator_safe_off_fn 是 void* ctx；
+ * dal_servo_safe_off 是强类型 dal_servo_t*，经此 thunk 适配注册进 registry）。 */
+static wink_status_t servo_safe_off_thunk(void *ctx) {
+    return dal_servo_safe_off((dal_servo_t *)ctx);
+}
 
 static void app_init(void) {
     /* Phase 2 Task 2-4：显式 init 生命周期（一次性硬件配置 + initialized）。
@@ -24,6 +31,10 @@ static void app_init(void) {
 
     wink_status_t u = dal_ultrasonic_init(&front_radar, 4, 5);
     if (wink_status_is_error(u)) { wink_trace_fault(FAULT_RADAR_INIT); }
+
+    /* Phase 5：注册舵机 safe-off，使 fault / boot-lock 路径可统一关断执行器（P0-4）。 */
+    wink_status_t ar = wink_actuator_register(servo_safe_off_thunk, &neck_servo);
+    if (wink_status_is_error(ar)) { wink_trace_fault(FAULT_SERVO_INIT); }
 
     wink_status_t a = dal_servo_set_angle(&neck_servo, 90.0f);   /* 初始安全位 */
     (void)a;

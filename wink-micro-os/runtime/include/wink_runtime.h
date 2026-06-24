@@ -29,6 +29,25 @@ extern "C" {
 WINK_WARN_UNUSED_RESULT
 wink_status_t wink_runtime_run(const wink_app_callbacks_t *callbacks, uint32_t max_ticks);
 
+/** @brief runtime 内部故障码：boot 时检测到 WDT/PANIC 复位（Phase 5 Task 5-5） */
+#define WINK_FAULT_BOOT_AFTER_RESET 8001u
+
+/**
+ * @brief 显式故障路径（Phase 5 Task 5-3）。
+ * @note 顺序：wink_trace_fault → wink_actuator_safe_off_all → callbacks->on_fault。
+ *       先关断所有执行器，再通知 App。fail-safe 回调不得阻塞。
+ *       当前 void 回调无法自动捕获 App 错误，故暴露显式 fault API（App/驱动在检测到不可恢复
+ *       状态时主动调用）；回调返回值迁移到 status 为 follow-up。真挂死/CPU 卡死靠硬件 WDT 兜底。
+ */
+void wink_runtime_fault(const wink_app_callbacks_t *callbacks, uint32_t fault_code);
+
+/*
+ * Phase 5 Task 6（预留，Future Work）：分频调度 / 优先级时间轮（Task Prescaling）。
+ * 打破单一 app_loop 10ms 强制同步轮询：允许组件注册不同频率的 tick 回调（如 1ms 电机 PID、
+ * 20ms 超声波状态机、500ms 日志心跳）。本阶段仅预留模型——后续在 wink_app_callbacks_t 扩展
+ * 或设计文档中定义 multi-rate 回调接口，并铺垫 CPU 负载隔离（保障 fail-safe 监控实时性）。
+ */
+
 #ifdef __cplusplus
 }
 #endif

@@ -55,6 +55,26 @@ void test_init_then_set_angle_clamps_overflow(void) {
     TEST_ASSERT_EQUAL_FLOAT(12.5f, sim_last_pwm_duty(1));
 }
 
+/* ---- safe-off（Phase 5 Task 5-2）---- */
+void test_safe_off_null_returns_invalid_arg(void) {
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG, dal_servo_safe_off(NULL));
+}
+
+void test_safe_off_before_init_returns_not_initialized(void) {
+    dal_servo_t dev = { .pwm_channel = 0, .min_pulse_ms = 0.5f, .max_pulse_ms = 2.5f };  /* !initialized */
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_NOT_INITIALIZED, dal_servo_safe_off(&dev));
+}
+
+void test_safe_off_after_init_sets_zero_duty(void) {
+    dal_servo_t s = {0};
+    dal_servo_config_t cfg = { .pwm_channel = 2, .min_pulse_ms = 0.5f, .max_pulse_ms = 2.5f };
+    TEST_ASSERT_EQUAL_INT(WINK_OK, dal_servo_init(&s, &cfg));
+    wink_status_t sa = dal_servo_set_angle(&s, 90.0f);   /* 先设非零占空比 */
+    (void)sa;
+    TEST_ASSERT_EQUAL_INT(WINK_OK, dal_servo_safe_off(&s));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, sim_last_pwm_duty(2));   /* duty 归零 = 舵机 limp = 安全 */
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_init_null_returns_invalid_arg);
@@ -63,5 +83,8 @@ int main(void) {
     RUN_TEST(test_set_angle_null_returns_invalid_arg);
     RUN_TEST(test_init_then_set_angle_updates_duty);
     RUN_TEST(test_init_then_set_angle_clamps_overflow);
+    RUN_TEST(test_safe_off_null_returns_invalid_arg);
+    RUN_TEST(test_safe_off_before_init_returns_not_initialized);
+    RUN_TEST(test_safe_off_after_init_sets_zero_duty);
     return UNITY_END();
 }

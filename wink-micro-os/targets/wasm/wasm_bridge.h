@@ -35,7 +35,11 @@ extern void js_pal_delay_us(uint32_t us);
 extern uint64_t js_pal_get_ms(void);
 extern uint64_t js_pal_get_us(void);
 
-/* ---- DAL bypass 侧 JS 导入（js_sim_*）—— Plan 4 填充 ---- */
+/* ---- DAL bypass 侧 JS 导入（js_sim_*）—— 签名抄 Device Registry (01-device-model-registry.md) ----
+ * 仅在 #ifdef SIMULATION 下被 DAL 引用；真机分支不编译本段。
+ * ADR-0003 决策2：只旁路最底层物理量来源（trigger 时序 + echo 脉宽），换算/超时两端同源。 */
+extern void     js_sim_trigger_ultrasonic(uint16_t trig_pin);
+extern uint32_t js_sim_measure_echo_pulse_us(uint16_t trig_pin);
 
 #ifdef __cplusplus
 }

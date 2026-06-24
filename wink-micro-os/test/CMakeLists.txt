@@ -59,14 +59,34 @@ set(DAL_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)
 
-# Task 3 期间临时只编 dal_servo.c（dal_ultrasonic.c 签名尚未对齐）；
-# Task 5 完成后改回 ${DAL_SRCS}（见 Task 6 Step 4 注）。
-add_wink_host_test(test_dal_servo test_dal_servo.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)
+add_wink_host_test(test_dal_servo test_dal_servo.c ${DAL_SRCS})
 
-# Task 4 期间临时只编 dal_ultrasonic.c（同上两阶段注册策略）。
-add_wink_host_test(test_dal_ultrasonic test_dal_ultrasonic.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c)
+add_wink_host_test(test_dal_ultrasonic test_dal_ultrasonic.c ${DAL_SRCS})
+
+# 仿真分支（-DSIMULATION）测试：验证 ADR-0003 决策2 两端同源在仿真侧确被走到。
+function(add_wink_test_sim name src)
+    add_executable(${name}
+        ${src}
+        ${UNITY_DIR}/unity.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/stubs/js_sim_host_stub.c
+        ${HOST_PAL_OBJECT}
+        ${DAL_SRCS}
+        ${ARGN})
+    target_include_directories(${name} PRIVATE
+        ${UNITY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/stubs
+        ${CMAKE_CURRENT_SOURCE_DIR}/../pal/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dal/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../targets/wasm     # wasm_bridge.h（dal SIMULATION 分支引用）
+        ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include)
+    target_compile_definitions(${name} PRIVATE SIMULATION=1)
+    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+add_wink_test_sim(test_dal_ultrasonic_sim test_dal_ultrasonic_sim.c)
 
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

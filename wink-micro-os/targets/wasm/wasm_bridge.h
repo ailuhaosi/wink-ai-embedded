@@ -26,17 +26,31 @@ extern void js_pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent);
 extern bool js_pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
                                 const uint8_t *write_buf, uint32_t write_len,
                                 uint8_t *read_buf, uint32_t read_len);
-/* ---- 中断回调索引边界（Phase 6 Task 6-3 / P2-4）----
- * callback_index 是**不透明 JS function table 索引**，不是 C 函数指针。
- *   - 禁在单一 wasm adapter 边界（pal_hal_wasm.c enable_interrupt ↔ wasm_entry.c
- *     trigger_wasm_interrupt）之外把任意非零整数 cast 成 pal_gpio_isr_t。
- *   - wasm64 下裸 (uint32_t)(uintptr_t) cast 会截断（索引 > 2^32 时丢高位）。
- *   - 分发前须校验 index 在已注册范围内——isr != NULL 不能防错误非零索引。
- *   - 长期：用 Emscripten addFunction / function table registry 替代裸 cast。
- * 中断桥安全分两维：索引安全（本约束）＋ 时序安全（Asyncify sleeping 窗口禁重入
- * _trigger_wasm_interrupt，见 docs/04 01-wasm-sandbox-lifecycle.md §4.4 / Phase 1 Task 1-5）。 */
-extern void js_pal_register_interrupt(uint16_t pin, uint32_t callback_index, void *arg);
+/* ---- 中断桥 Poll 接口（方案 C：Wasm 主动拉取，取代旧 Push 模型 _trigger_wasm_interrupt）----
+ *
+ * 架构变更（ADR-0002 方案 C 落地，见 docs/04 01-wasm-sandbox-lifecycle.md §4）：
+ *   旧 Push 模型：JS 随时调用 Wasm 导出 _trigger_wasm_interrupt
+ *                → Asyncify sleeping 窗口重入崩溃（D1，确定性崩溃路径）。
+ *   新 Poll 模型：JS 侧只写 pending 队列；Wasm tick 边界主动调用 js_pal_poll_interrupt 拉取。
+ *                → 重入面彻底消除，无需 Asyncify state 守卫。
+ *
+ * js_pal_register_interrupt：C 注册 ISR 时告知 JS 侧「pin → (callback_index, arg_ptr) 映射」。
+ *   arg_ptr 为 Wasm 线性内存偏移（uint32_t，wasm32 安全；wasm64 迁移见 Phase 6 Task 6-3）。
+ *   JS 侧在 GPIO 事件到来时只写 pending 队列，不回调 Wasm。
+ * js_pal_deregister_interrupt：注销 pin 的映射。
+ * js_pal_poll_interrupt：每个 tick 边界由 C 主动调用，从 JS 侧 FIFO 队列拉取一个 pending 中断。
+ *   out_callback_index / out_arg_ptr：有 pending 中断时写出，返回 true；队列空返回 false。
+ *   多个 pending 须多次调用直到返回 false（JS 侧维护 FIFO，容量见 pal_wasm_internal.h）。
+ *
+ * 索引安全约束（Phase 6 Task 6-3 / P2-4，与旧模型相同）：
+ *   - callback_index 是不透明 Wasm Table 索引，禁在此边界外做裸 cast。
+ *   - JS 侧须校验 index 在已注册范围内（长期用 Emscripten addFunction 替代裸 cast）。
+ *   - wasm64 下裸 (uint32_t)(uintptr_t) cast 对 >2^32 索引截断，须迁移至 addFunction。
+ */
+extern void js_pal_register_interrupt(uint16_t pin, uint32_t callback_index, uint32_t arg_ptr);
 extern void js_pal_deregister_interrupt(uint16_t pin);
+extern bool js_pal_poll_interrupt(uint32_t *out_callback_index, uint32_t *out_arg_ptr);
+
 
 /* ---- PAL OSAL 侧 JS 导入 ---- */
 extern void js_pal_delay_ms(uint32_t ms);

@@ -26,6 +26,7 @@ if(TARGET_PLATFORM STREQUAL "wasm" AND EMSCRIPTEN)
     add_executable(wink_simulator
         targets/wasm/pal_hal_wasm.c
         targets/wasm/pal_osal_wasm.c
+        targets/wasm/pal_resource_wasm.c
         targets/wasm/wasm_entry.c)
     target_link_libraries(wink_simulator PRIVATE pal dal)
     target_link_options(wink_simulator PRIVATE
@@ -51,6 +52,10 @@ if(NOT TARGET_PLATFORM STREQUAL "wasm")
     endif()
     message(STATUS "WINK_APP_DIR = ${WINK_APP_DIR}")
     add_subdirectory(${WINK_APP_DIR} ${CMAKE_BINARY_DIR}/app_build)
+
+    # Phase 2：OLED Dashboard 示例（额外 e2e target，不改默认 App）
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/samples/oled_dashboard
+                     ${CMAKE_BINARY_DIR}/oled_dashboard_build)
 
     add_subdirectory(test)
 endif()

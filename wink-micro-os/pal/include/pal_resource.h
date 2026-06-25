@@ -27,7 +27,18 @@ typedef enum {
     PAL_RESOURCE_GPIO_PIN    = 1,
     PAL_RESOURCE_PWM_CHANNEL = 2,
     PAL_RESOURCE_I2C_PORT    = 3,
+    PAL_RESOURCE_I2C_ADDR    = 4,   /* Phase 2：(port,7位地址) 粒度，见 pal_resource_i2c_id */
 } pal_resource_type_t;
+
+/**
+ * @brief 把 I2C (port, 地址) 编码为 PAL_RESOURCE_I2C_ADDR 的资源 id。
+ * @note 粒度语义（Device Model Registry §5「同一 I2C port 可共享地址，不可地址冲突」）：
+ *       同 port 不同地址 → 不同 id → 不冲突（合法共享总线）；同 (port,addr) 不同 owner →
+ *       WINK_ERR_BUSY（地址冲突）。port 占高 16 位、addr 占低 16 位（7/10 位地址均可容纳）。
+ */
+static inline uint32_t pal_resource_i2c_id(uint8_t port, uint16_t addr) {
+    return ((uint32_t)port << 16) | (uint32_t)addr;
+}
 
 /** @brief 静态占用表容量（可按平台 -D 调整） */
 #ifndef PAL_RESOURCE_MAX_CLAIMS

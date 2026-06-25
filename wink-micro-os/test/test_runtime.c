@@ -92,6 +92,28 @@ void test_boot_no_safe_lock_on_power_on_reset(void) {
     TEST_ASSERT_EQUAL_INT(0, s_safe_off_calls);   /* 非 WDT/PANIC → 不 safe_off */
 }
 
+static void mock_loop_wcet_exceeded(void) {
+    pal_delay_us(6000);   /* 6000us = 6ms, 超过了 10ms tick 的一半 (5ms) */
+}
+
+void test_wcet_exceeded_logs_warning_in_trace(void) {
+    wink_app_callbacks_t cb = { NULL, mock_loop_wcet_exceeded, NULL };
+    wink_status_t s = wink_runtime_run(&cb, 1);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, s);
+    TEST_ASSERT_EQUAL_UINT32(WINK_WARN_WCET_EXCEEDED, wink_trace_last());
+}
+
+static void mock_loop_wcet_normal(void) {
+    pal_delay_us(2000);   /* 2000us = 2ms, 低于限额 */
+}
+
+void test_wcet_normal_does_not_log_warning_in_trace(void) {
+    wink_app_callbacks_t cb = { NULL, mock_loop_wcet_normal, NULL };
+    wink_status_t s = wink_runtime_run(&cb, 1);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, s);
+    TEST_ASSERT_EQUAL_UINT32(0u, wink_trace_last());
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_run_calls_init_once_then_loops_n_times);
@@ -100,5 +122,7 @@ int main(void) {
     RUN_TEST(test_fault_path_safe_off_before_on_fault);
     RUN_TEST(test_boot_safe_lock_on_watchdog_reset);
     RUN_TEST(test_boot_no_safe_lock_on_power_on_reset);
+    RUN_TEST(test_wcet_exceeded_logs_warning_in_trace);
+    RUN_TEST(test_wcet_normal_does_not_log_warning_in_trace);
     return UNITY_END();
 }

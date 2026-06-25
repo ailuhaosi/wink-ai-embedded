@@ -14,7 +14,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **L0** | **纯 Mock 仿真 (Mock API)** | 仅保证 API 可链接，返回固定伪数据（如温度永远返回 25℃） | 引导编译、框架冒烟测试 | 极低 |
 | **L1** | **行为物理仿真 (Behavioral)** | 结合网页前端 3D 渲染器（如 Three.js Raycaster）返回合理的仿真数据 | Web 网页端用户可视化交互、小车避障路线演练 | 低（按采样周期触发） |
-| **L2** | **时序近似仿真 (Timing-approx)** | 模拟真实的物理测量延迟（例如超声波 Trig 后忙等 10ms 读数） | 验证 BAL 层是否因耗时操作发生看门狗复位或实时调度冲突 | 中等 |
+| **L2** | **时序近似仿真 (Timing-approx)** | 模拟真实的物理测量时序（如超声波 trigger→echo 脉宽往返，含 30ms 超时保护） | 验证 BAL 层是否因耗时操作发生看门狗复位或实时调度冲突 | 中等 |
 | **L3** | **错误注入测试 (Error Injection)** | **[核心]** 支持在仿真侧动态注入物理总线错误、超时、随机丢包 | **自动化 CI/CD 测试**，验证 AI 代码的异常恢复和安全机制 | 低 |
 | **L4** | **HIL 对齐仿真 (HIL Alignment)** | 使用真实物理设备的数据记录（Data Replay）作为仿真源输入 | 精密控制算法参数校准、物理极限数据测试 | 较低 |
 
@@ -25,31 +25,46 @@
 传统电平级仿真（在 Wasm 沙箱中高频翻转虚拟 GPIO 引脚）会由于高昂的 JS-Wasm 跨界 IPC 调用导致网页卡死。项目采用 **DAL 语义直通旁路**（L1级物理仿真）：
 
 *   **真机路径**：编译时走真实驱动，控制 GPIO 脉冲时序。
-*   **仿真路径**：编译时引入宏 `#ifdef SIMULATION`，直接通过 JS 导入函数（JS Import）向前端 Three.js 获取经过计算的**真实物理量（如距离厘米）**。
+*   **仿真路径**：编译时引入宏 `#ifdef SIMULATION`，在**最低物理信号层**旁路——通过 JS 导入函数（JS Import）向前端 Three.js 索取超声波的 **trigger 时序与 echo 脉宽（μs）**；其上的脉宽换算、超时判定、错误处理与真机分支**同源**（ADR-0003 决策2 / c-code.md §2）。旁路的只是物理信号**来源**，不是测距语义。
 
 ### 双模直通实现模板：
 
 ```c
 /* dal_ultrasonic.c */
 #include "dal_ultrasonic.h"
+#include "pal_osal.h"
+
+/* 两端共享：超时阈值 + 脉宽换算（换算/超时不属旁路之列，与真机同源） */
+#define ULTRASONIC_TIMEOUT_US 30000u
+float dal_pulse_us_to_cm(uint32_t pulse_us);
 
 #ifdef SIMULATION
-// JS 侧导入的直通仿真 API：绕过 GPIO 电平，直接索取物理量与状态
-extern wink_status_t js_sim_get_ultrasonic_distance(uint16_t trig_pin, float *distance_cm);
+// JS 侧导入的直通仿真 API：仅旁路 trigger 时序与 echo 脉宽（最低物理信号层），
+// 其上的脉宽换算 / 超时 / 错误处理与真机分支同源 (ADR-0003 决策2 / c-code.md §2)。
+// extern 签名抄自 wasm_bridge.h（SSOT 闭合）。
+#include "wasm_bridge.h"
+extern void     js_sim_trigger_ultrasonic(uint16_t trig_pin);     /* 触发，无返回量 */
+extern uint32_t js_sim_measure_echo_pulse_us(uint16_t trig_pin);  /* 返回 echo 脉宽 μs */
 
 wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     if (dev == NULL || distance_cm == NULL) return WINK_ERR_INVALID_ARG;
-    
-    // 直通调用，返回仿真电路线路的物理厘米值
-    wink_status_t status = js_sim_get_ultrasonic_distance(dev->trig_pin, distance_cm);
-    if (status == WINK_OK) {
-        dev->last_distance = *distance_cm;  /* 现状扁平字段；目标 config/state 分离见 lifecycle.md §2 */
-    }
-    return status;
+
+    /* 1. trigger 时序旁路（真机侧为 GPIO 10us 脉冲） */
+    js_sim_trigger_ultrasonic(dev->trig_pin);
+
+    /* 2. echo 脉宽测量旁路（真机侧为 while 循环测高电平） */
+    uint32_t pulse_us = js_sim_measure_echo_pulse_us(dev->trig_pin);
+    if (pulse_us >= ULTRASONIC_TIMEOUT_US) return WINK_ERR_TIMEOUT;
+
+    /* 3. 换算：与真机分支同源 */
+    dev->last_distance = dal_pulse_us_to_cm(pulse_us);
+    *distance_cm = dev->last_distance;
+    return WINK_OK;
 }
 #else
 wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
-    // 真机物理 GPIO 读写脉冲逻辑 (略) ...
+    /* 真机：trigger 10us → 等 echo 上升沿 → 测高电平脉宽。
+       超时判定、脉宽换算、错误处理与上方 SIMULATION 分支逐行同源（仅物理信号来源不同）。 */
 }
 #endif
 ```
@@ -63,35 +78,40 @@ wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
 ### 3.1 注入实现机制
 1.  在 JS 仿真管理器中维护一个“错误注入寄存器”（例如 `window.simMockErrors`）。
 2.  在 CI 脚本中，可以通过 JS 执行 `simSetDeviceError("front_radar", WINK_ERR_TIMEOUT)`。
-3.  当 Wasm 执行到 `js_sim_get_ultrasonic_distance` 时，JS 端拦截并直接返回对应的负数错误码（如 `WINK_ERR_TIMEOUT`，即 `-2`），不再去计算 3D 碰撞射线。
+3.  当 Wasm 执行到 `js_sim_measure_echo_pulse_us` 时，JS 端拦截：注入**超阈值脉宽**（≥ `ULTRASONIC_TIMEOUT_US`，30ms）或直接注入超时语义，使 C 侧在换算前即返回 `WINK_ERR_TIMEOUT`（`-2`），不再去计算 3D 碰撞射线。
 4.  C 代码接收到非 `WINK_OK` 错误码后，开始执行错误恢复。
 
 ### 3.2 错误注入 JS 桩模板：
 
 ```typescript
-// 仿真管理器 JS 侧实现
-const simMockErrors: Record<string, number> = {};
+// 仿真管理器 JS 侧实现（trigger/echo 两段式旁路 —— 与 dal_ultrasonic.c 同源）
+const ULTRASONIC_TIMEOUT_US = 30000;              // 30ms 超时（与 C 侧 ULTRASONIC_TIMEOUT_US 同源）
+const simMockErrors: Record<string, number> = {}; // 错误注入寄存器：注入超阈值脉宽
 
-// CI 测试通过该 API 注入物理故障
-function inject_device_error(deviceName: string, errorCode: number) {
-    simMockErrors[deviceName] = errorCode;
+// CI 通过该 API 注入物理故障：注入「超阈值脉宽」→ C 侧换算前即判 WINK_ERR_TIMEOUT
+function inject_device_error(deviceName: string) {
+    simMockErrors[deviceName] = ULTRASONIC_TIMEOUT_US; // 注入 ≥ 超时阈值的脉宽
 }
 
-// 供 Wasm 同步调用的 JS Import 实现
-function js_sim_get_ultrasonic_distance(trigPin: number, distancePtr: number): number {
-    const deviceName = findDeviceNameByPin(trigPin); // 查映射表
-    
-    // --- 1. 检查是否存在错误注入 ---
-    if (simMockErrors[deviceName] !== undefined && simMockErrors[deviceName] < 0) {
-        const err = simMockErrors[deviceName];
-        console.warn(`[Sim-Error-Injection] Injecting error ${err} to ${deviceName}`);
-        return err; // 返回错误码给 Wasm (例如 WINK_ERR_TIMEOUT)
+// JS Import 1：触发超声波（对应 C 侧 js_sim_trigger_ultrasonic，无返回量）
+function js_sim_trigger_ultrasonic(trigPin: number): void {
+    // 前端 3D 渲染器据 trigPin 发射射线、准备 echo 回波
+}
+
+// JS Import 2：测 echo 脉宽 μs（对应 C 侧 js_sim_measure_echo_pulse_us）
+function js_sim_measure_echo_pulse_us(trigPin: number): number {
+    const deviceName = findDeviceNameByPin(trigPin);
+
+    // --- 1. 检查是否存在错误注入（注入超阈值脉宽 → C 侧换算前即 WINK_ERR_TIMEOUT） ---
+    if (simMockErrors[deviceName] !== undefined) {
+        const injectedPulse = simMockErrors[deviceName];
+        console.warn(`[Sim-Error-Injection] Injecting pulse ${injectedPulse}us (>= timeout) to ${deviceName}`);
+        return injectedPulse;   // 返回 ≥ 超时阈值的脉宽，由 C 侧统一判超时
     }
-    
-    // --- 2. 正常无错误注入时的物理逻辑计算 ---
-    const simDistance = calculate3DRaycastDistance(deviceName);
-    writeWasmFloat32(distancePtr, simDistance); // 将距离写入 Wasm 内存
-    return 0; // WINK_OK
+
+    // --- 2. 正常无错误注入：由 3D 碰撞射线换算 echo 脉宽（往返时间） ---
+    const distanceCm = calculate3DRaycastDistance(deviceName);
+    return cmToEchoPulseUs(distanceCm);   // 返回脉宽 μs，换算仍由 C 侧 dal_pulse_us_to_cm 同源完成
 }
 ```
 

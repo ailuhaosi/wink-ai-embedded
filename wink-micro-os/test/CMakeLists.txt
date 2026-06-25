@@ -52,9 +52,18 @@ endfunction()
 
 add_wink_host_test(test_runtime test_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/src/wink_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/src/wink_actuator_registry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
 
 add_wink_host_test(test_host_pal test_host_pal.c)
+
+# Phase 5 Task 5-1：执行器关断注册表直接单测（链 registry + wink_trace）
+add_wink_host_test(test_actuator_registry test_actuator_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/src/wink_actuator_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
+
+# Phase 2 Task 2-3：host 资源占用治理直接单测（链 pal_host，含 pal_resource_host.c）
+add_wink_host_test(test_pal_resource test_pal_resource.c)
 
 set(DAL_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c

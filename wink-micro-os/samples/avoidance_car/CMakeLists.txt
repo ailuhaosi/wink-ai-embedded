@@ -8,6 +8,7 @@ set(APP_SOURCES
 add_executable(app_avoidance_car_e2e
     ${APP_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/src/wink_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/src/wink_actuator_registry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../trace/src/wink_trace.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../dal/src/dal_ultrasonic.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../dal/src/dal_servo.c

@@ -1,6 +1,7 @@
-# runtime (OS 运行时) —— STATIC 库，回调注入主循环。
+# runtime (OS 运行时) —— STATIC 库，回调注入主循环 + 执行器关断注册表（Phase 5）。
 add_library(wink_runtime STATIC
-    src/wink_runtime.c)
+    src/wink_runtime.c
+    src/wink_actuator_registry.c)
 
 target_include_directories(wink_runtime PUBLIC include)
 target_link_libraries(wink_runtime PUBLIC pal wink_trace)   # pal: OSAL; wink_trace: fault 上报

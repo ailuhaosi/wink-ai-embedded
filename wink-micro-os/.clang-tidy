@@ -1,0 +1,5 @@
+# 最小门禁：强制 if/for/while/do-while 体使用大括号（review P1-2）
+# 配合 Phase 0 Task 0-1 的手动补齐，防止后续 AI-CodeGen 重新生成无大括号单行控制语句。
+# 仅启用一条规则，其余全部关闭（-*），降低接入门槛；后续可按需扩展（见 review P1-2 整改跟踪）。
+Checks: 'readability-braces-around-statements,-*'
+WarningsAsErrors: '*'

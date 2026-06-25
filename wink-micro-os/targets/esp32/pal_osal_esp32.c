@@ -19,3 +19,30 @@ void pal_mutex_destroy(pal_mutex_t m) { (void)m; }
 pal_reset_reason_t pal_get_reset_reason(void) { return PAL_RESET_REASON_UNKNOWN; }
 WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_init(uint32_t timeout_ms) { (void)timeout_ms; return WINK_ERR_UNSUPPORTED; }
 WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_feed(void) { return WINK_ERR_UNSUPPORTED; }
+
+#if defined(ESP_PLATFORM) || defined(CONFIG_IDF_TARGET) || defined(INC_FREERTOS_H)
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+static portMUX_TYPE s_global_mux = portMUX_INITIALIZER_UNLOCKED;
+
+uint32_t pal_critical_enter(void) {
+    portENTER_CRITICAL(&s_global_mux);
+    return 0;
+}
+
+void pal_critical_exit(uint32_t key) {
+    (void)key;
+    portEXIT_CRITICAL(&s_global_mux);
+}
+#else
+uint32_t pal_critical_enter(void) {
+    uint32_t key;
+    __asm__ __volatile__("rsil %0, 15" : "=r"(key));
+    return key;
+}
+
+void pal_critical_exit(uint32_t key) {
+    __asm__ __volatile__("wsr %0, ps; rsync" :: "r"(key));
+}
+#endif

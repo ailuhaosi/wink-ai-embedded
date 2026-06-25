@@ -89,3 +89,11 @@ void pal_mutex_destroy(pal_mutex_t m) { (void)m; }
 pal_reset_reason_t pal_get_reset_reason(void) { return s_reset_reason; }
 WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_init(uint32_t timeout_ms) { (void)timeout_ms; return WINK_OK; }
 WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_feed(void) { return WINK_OK; }
+
+uint32_t pal_critical_enter(void) {
+    return 0;
+}
+
+void pal_critical_exit(uint32_t key) {
+    (void)key;
+}

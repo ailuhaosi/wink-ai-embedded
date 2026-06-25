@@ -98,6 +98,25 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_init(uint32_t timeout_ms);
 /** @brief 喂狗（周期调用防止复位）。target 规则同 pal_watchdog_init。 */
 WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_feed(void);
 
+
+/* ========================================================================== */
+/*                           4. 全局临界区与并发安全支撑                        */
+/* ========================================================================== */
+
+/**
+ * @brief 进入全局临界区 (屏蔽中断/多核自旋锁)
+ * @return 恢复临界区所需的原始状态键值
+ * @note 仅用于极短时间的原子操作保护（如环形队列读写、状态标记更新），严禁在临界区内调用阻塞/延时 API。
+ */
+uint32_t pal_critical_enter(void);
+
+/**
+ * @brief 退出全局临界区并恢复之前的状态
+ * @param key 进入临界区时返回的状态键值
+ */
+void pal_critical_exit(uint32_t key);
+
+
 #ifdef __cplusplus
 }
 #endif

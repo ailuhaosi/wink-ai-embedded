@@ -14,6 +14,12 @@ static uint16_t s_echo_pin = 0xFFFF;
 static float s_pwm_duty[8];
 static pal_reset_reason_t s_reset_reason = PAL_RESET_REASON_POWER_ON;   /* Phase 5：可配置复位原因（测试注入） */
 
+/* Phase 2：host I2C 事务捕获状态 */
+static uint8_t  s_last_i2c_port = 0;
+static uint16_t s_last_i2c_addr = 0;
+static uint32_t s_last_i2c_write_len = 0;
+static uint32_t s_i2c_transfer_count = 0;
+
 /* ---- HAL 侧 extern 的访问器 ---- */
 uint64_t host_sim_time_us(void) { return s_time_us; }
 void host_sim_advance_to(uint64_t us) { if (us > s_time_us) s_time_us = us; }
@@ -24,11 +30,32 @@ void host_record_pwm(uint8_t channel, float duty) {
     if (channel < 8) s_pwm_duty[channel] = duty;
 }
 
+/* ---- Phase 2：I2C 事务捕获（供 host HAL + test ctrl） ---- */
+void host_record_i2c(uint8_t port, uint16_t addr, uint32_t write_len) {
+    s_last_i2c_port       = port;
+    s_last_i2c_addr       = addr;
+    s_last_i2c_write_len  = write_len;
+    s_i2c_transfer_count++;
+}
+
+uint8_t  host_last_i2c_port(void)      { return s_last_i2c_port; }
+uint16_t host_last_i2c_addr(void)      { return s_last_i2c_addr; }
+uint32_t host_last_i2c_write_len(void) { return s_last_i2c_write_len; }
+uint32_t host_i2c_transfer_count(void) { return s_i2c_transfer_count; }
+
+/* host_test_ctrl.h 命名包装（与 sim_last_pwm_duty 同范式） */
+uint8_t  sim_last_i2c_port(void)      { return host_last_i2c_port(); }
+uint16_t sim_last_i2c_addr(void)      { return host_last_i2c_addr(); }
+uint32_t sim_last_i2c_write_len(void) { return host_last_i2c_write_len(); }
+uint32_t sim_i2c_transfer_count(void) { return host_i2c_transfer_count(); }
+
 /* ---- host_test_ctrl 实现 ---- */
 void sim_reset_time(void) {
     s_time_us = 0; s_echo_rise_us = 0; s_echo_high_us = 0; s_echo_pin = 0xFFFF;
     memset(s_pwm_duty, 0, sizeof(s_pwm_duty));
     s_reset_reason = PAL_RESET_REASON_POWER_ON;
+    s_last_i2c_port = 0; s_last_i2c_addr = 0;
+    s_last_i2c_write_len = 0; s_i2c_transfer_count = 0;
 }
 void sim_set_echo_pin(uint16_t pin) { s_echo_pin = pin; }
 void sim_set_echo_timing(uint64_t rise_us, uint64_t high_duration_us) {

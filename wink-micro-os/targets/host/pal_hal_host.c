@@ -85,9 +85,14 @@ wink_status_t pal_pwm_set_duty(uint8_t channel, float duty) {
     return WINK_OK;
 }
 
+/* Phase 2：host I2C 事务捕获（供 ssd1306 单测验证 flush 发出正确事务） */
+extern void host_record_i2c(uint8_t port, uint16_t addr, uint32_t write_len);
+
 wink_status_t pal_i2c_transfer(uint8_t port, uint16_t addr,
                       const uint8_t *w, uint32_t wl, uint8_t *r, uint32_t rl) {
-    (void)port; (void)addr; (void)w; (void)wl; (void)r; (void)rl; return WINK_OK;
+    (void)w; (void)r; (void)rl;
+    host_record_i2c(port, addr, wl);
+    return WINK_OK;
 }
 
 wink_status_t pal_gpio_pulse_in(uint16_t pin, bool level, uint32_t timeout_us, uint32_t *pulse_us) {

@@ -15,4 +15,10 @@ void sim_set_echo_timing(uint64_t rise_us, uint64_t high_duration_us);
 float sim_last_pwm_duty(uint8_t channel);
 void sim_set_reset_reason(pal_reset_reason_t reason);   /* Phase 5：注入复位原因供 boot safe-lock 测试 */
 
+/* Phase 2：host I2C 事务捕获注入/读取 */
+uint8_t  sim_last_i2c_port(void);
+uint16_t sim_last_i2c_addr(void);
+uint32_t sim_last_i2c_write_len(void);
+uint32_t sim_i2c_transfer_count(void);
+
 #endif /* HOST_TEST_CTRL_H */

@@ -1,0 +1,97 @@
+#ifndef DAL_SSD1306_H
+#define DAL_SSD1306_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "wink_status.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief SSD1306 最大帧缓冲（128×64 / 8 = 1024 字节） */
+#define SSD1306_FB_SIZE 1024
+
+/** @brief 紧凑字体宽度（5 像素宽 + 1 像素间距 = 6 像素有效宽度） */
+#define SSD1306_FONT_WIDTH  6
+#define SSD1306_FONT_GLYPH_W 5
+
+/**
+ * @brief SSD1306 构造期配置（dal_ssd1306_init 输入）
+ */
+typedef struct {
+    uint8_t  i2c_port;      /* 逻辑 I2C 端口号 */
+    uint16_t i2c_addr;      /* 7 位 I2C 地址（常见 0x3C 或 0x3D） */
+    uint16_t width;         /* 屏幕宽度像素（常见 128） */
+    uint16_t height;        /* 屏幕高度像素（常见 64） */
+    const char *owner;      /* 资源占用 owner 静态字符串（device_tree 实例名） */
+} dal_ssd1306_config_t;
+
+/**
+ * @brief SSD1306 实例（运行期状态；POD，零动态分配）
+ *
+ * 帧缓冲内嵌在结构体内（128×64/8 = 1024 B），避免堆分配。
+ * 成员按对齐需求降序排列（c-code.md §4）。
+ */
+typedef struct {
+    uint8_t  framebuffer[SSD1306_FB_SIZE]; /* 帧缓冲（页式：每页 8 行 × 128 列） */
+    uint16_t i2c_addr;
+    uint16_t width;
+    uint16_t height;
+    uint8_t  i2c_port;
+    uint8_t  pages;        /* height / 8 */
+    bool     initialized;
+} dal_ssd1306_t;
+
+/**
+ * @brief 初始化 SSD1306：I2C 地址冲突治理、下发 init 命令序列。
+ * @note API Contract:
+ *   - Preconditions: dev/cfg 非 NULL；cfg->owner 非 NULL（静态存储）。
+ *   - Blocking: No（pal_i2c_transfer 不阻塞）。
+ *   - Thread-safe: No; ISR-safe: No.
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG / WINK_ERR_BUSY(地址冲突) /
+ *     透传 PAL 错误（WINK_ERR_IO 等）。
+ *   - Postconditions: WINK_OK 时 dev->initialized=true；帧缓冲已清零；显示已开启。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t dal_ssd1306_init(dal_ssd1306_t *dev, const dal_ssd1306_config_t *cfg);
+
+/**
+ * @brief 清空帧缓冲（纯内存操作，无 I2C）。
+ * @note API Contract:
+ *   - Preconditions: dev 非 NULL；initialized。
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG / WINK_ERR_NOT_INITIALIZED。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t dal_ssd1306_clear(dal_ssd1306_t *dev);
+
+/**
+ * @brief 在帧缓冲中绘制文本（不触发 I2C；渲染后须 dal_ssd1306_flush 刷到屏幕）。
+ * @param col 起始列（0 ~ width-1）
+ * @param page 起始页（0 ~ pages-1；每页 8 像素高）
+ * @param str 以 null 结尾的 ASCII 字符串；不支持的字符渲染为空格。
+ * @note API Contract:
+ *   - Preconditions: dev/str 非 NULL；initialized。
+ *   - Blocking: No。
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG / WINK_ERR_NOT_INITIALIZED。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t dal_ssd1306_draw_text(dal_ssd1306_t *dev, uint16_t col, uint8_t page,
+                                    const char *str);
+
+/**
+ * @brief 将帧缓冲刷到 SSD1306（按页经 pal_i2c_transfer 写出）。
+ * @note 每页使用 ≤129 B 栈缓冲（1 控制字节 + 128 数据字节）；无 VLA，无 malloc。
+ * @note API Contract:
+ *   - Preconditions: dev 非 NULL；initialized。
+ *   - Blocking: No。
+ *   - Error-codes: WINK_OK / WINK_ERR_INVALID_ARG / WINK_ERR_NOT_INITIALIZED / 透传 PAL 错误。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t dal_ssd1306_flush(dal_ssd1306_t *dev);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* DAL_SSD1306_H */

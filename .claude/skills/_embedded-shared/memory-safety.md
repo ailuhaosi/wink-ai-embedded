@@ -74,6 +74,41 @@ fail_b:
 - 合理的调用链深度。
 - FreeRTOS 任务栈按「最深调用链 + 余量」配置；用 `uxTaskGetStackHighWaterMark` 监控。
 
+### 栈用量静态分析（强制）
+
+构建系统必须启用栈用量分析并设置阈值：
+
+```makefile
+# GCC/Clang 启用栈用量输出
+CFLAGS += -fstack-usage
+
+# 每个函数的 .su 文件生成后，用脚本检查阈值：
+# - 普通函数：栈使用 < 256 字节
+# - 中断服务程序：栈使用 < 128 字节
+# - 热路径（PID 回调）：栈使用 < 64 字节
+```
+
+> 超过阈值的函数必须重构：拆分子函数、将大型局部变量改为静态或堆分配。
+
+### 环形缓冲内存屏障（ESP32 多核强制）
+
+多核环境下，环形缓冲读写指针更新前必须加内存屏障：
+
+```c
+void ringbuf_write(ringbuf_t *self, uint8_t data)
+{
+    uint32_t next = (self->write_idx + 1) % self->size;
+    
+    /* 确保数据写入完成后再更新写指针 */
+    __sync_synchronize();  /* 全内存屏障 */
+    
+    self->buf[self->write_idx] = data;
+    self->write_idx = next;
+}
+```
+
+> ESP32 Xtensa 是宽松内存模型，CPU 可能乱序执行。内存屏障确保可见性和执行顺序。
+
 > 缓冲区 / 栈的运行时校验也出现在 [safety-checklist.md](./safety-checklist.md) 阶段 3、6。
 
 ---
@@ -119,6 +154,35 @@ typedef struct {
     double    temperature;     /* 8B */
 } sensor_data_bad_t;
 ```
+
+### 配置区与状态区分离（强制 DAL 器件结构）
+
+所有 DAL 器件结构体必须明确分离 `const` 配置区和可变状态区：
+
+```c
+/* ✅ 标准模板：配置区 + 状态区 显式分离 */
+typedef struct {
+    /* --- 配置区：codegen 初始化后永不修改 --- */
+    const uint8_t  pwm_channel;
+    const float    min_pulse_ms;
+    const float    max_pulse_ms;
+    const uint32_t init_timeout_us;
+    
+    /* --- 状态区：运行时可变 --- */
+    struct {
+        float      current_angle;
+        bool       is_enabled;
+        uint32_t   last_update_us;
+        uint8_t    retry_count;
+    } state;
+} dal_servo_t;
+```
+
+> 理由：
+> 1. `const` 配置区编译器放入 Flash，节省 RAM
+> 2. 意外修改配置区会触发编译错误（写入 const）
+> 3. 状态区集中管理，序列化时只需持久化这部分
+> 4. 便于 codegen 静态初始化配置区
 
 ### 分离 Wire/Flash 结构体
 

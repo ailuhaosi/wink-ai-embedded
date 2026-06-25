@@ -45,6 +45,29 @@ timeout = DEFAULT_TIMEOUT_MS;
 - 大型无符号常量使用 `UL` 或 `ULL` 后缀
 - 相关宏使用统一前缀分组
 
+### 枚举固定宽度（强制）
+
+枚举存储类型必须显式指定，禁止依赖编译器默认（int）：
+
+```c
+/* ❌ 错误：依赖编译器默认 int */
+typedef enum {
+    DEV_STATE_IDLE,
+    DEV_STATE_ACTIVE,
+    DEV_STATE_COUNT
+} dev_state_t;
+
+/* ✅ 正确：显式固定宽度 */
+typedef uint8_t dev_state_t;
+enum {
+    DEV_STATE_IDLE = 0,
+    DEV_STATE_ACTIVE,
+    DEV_STATE_COUNT
+};
+```
+
+> 理由：嵌入式 RAM 宝贵，8 位足够的枚举不应占 32 位。且跨平台/序列化时宽度一致。
+
 ---
 
 ## 命名约定（以本项目为准）
@@ -61,10 +84,58 @@ timeout = DEFAULT_TIMEOUT_MS;
 | 枚举值 | `UPPER_CASE` 或 `前缀_名称` | `MOTOR_MODE_IDLE`、`CMD_TYPE_TRAJECTORY` |
 | 文件级 static 变量 | `s_` 前缀 | `static int s_pending_count;` |
 | 全局变量 | `g_` 前缀 | `g_motor_driver`、`g_state_mutex` |
+| 函数指针 typedef | `*_fn` 后缀 | `cmd_handler_fn`、`event_callback_fn` |
 
 **命名即文档**：作用域越大，名字越长越完整。循环计数器可短（`i`、`n`）；公共函数必须
 带完整上下文（`motor_driver_check_overcurrent`，不是 `check`）。布尔用 `is_`/`has_`/
 `can_`/`should_` 前缀。
+
+---
+
+## static inline 与 restrict 优化（硬规）
+
+### static inline 使用规范
+
+访问器函数和小函数必须使用 `static inline` 以获得最佳性能：
+
+```c
+/* ✅ 正确：访问器用 static inline */
+static inline __attribute__((always_inline))
+float dal_servo_get_angle(const dal_servo_t *self)
+{
+    return self->state.current_angle;
+}
+
+/* ✅ 正确：小于 5 行的热路径函数 */
+static inline __attribute__((always_inline))
+bool pid_is_within_deadband(float error, float deadband)
+{
+    return (error >= -deadband) && (error <= deadband);
+}
+```
+
+> 规则：
+> 1. 所有 getter/setter 访问器必须 `static inline`
+> 2. 小于 5 行的热路径函数必须 `static inline`
+> 3. 头文件中定义的 `static inline` 必须加 `__attribute__((always_inline))` 防止降级
+> 4. 超过 20 行的函数不要 inline，避免代码膨胀
+
+### restrict 关键字
+
+指针参数无别名时必须使用 `restrict` 优化：
+
+```c
+/* ✅ 正确：源和目标无别名，用 restrict */
+void buffer_copy(uint8_t *restrict dst,
+                 const uint8_t *restrict src,
+                 size_t len)
+{
+    /* ... */
+}
+```
+
+> restrict 告诉编译器指针不会别名，允许更激进的优化（如向量化、重排加载）。
+> memcpy/memmove 的目标指针必须 restrict。
 
 ---
 

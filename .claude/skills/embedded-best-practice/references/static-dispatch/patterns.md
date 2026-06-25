@@ -96,6 +96,52 @@ void dev_sm_handle_event(dev_sm_t *self, dev_evt_t evt)
 - 零运行期开销：数组索引直接跳转
 - 类型安全：编译期检查数组越界
 
+### 进阶：层次状态机（HSM）
+
+复杂业务逻辑（如多阶段校准流程）需要状态嵌套，用静态分发实现 HSM：
+
+```c
+/* 层次状态表：每个状态有父状态 */
+typedef struct {
+    state_handler_fn  handler;
+    state_id_t        parent;  /* 0 = 顶层根状态 */
+} hsm_state_entry_t;
+
+static const hsm_state_entry_t s_hsm_table[] = {
+    [STATE_ROOT]       = { root_handler,       0 },
+    [STATE_ACTIVE]     = { active_handler,     STATE_ROOT },
+    [STATE_ACTIVE_MOV] = { active_mov_handler, STATE_ACTIVE },
+    [STATE_ACTIVE_IDLE] = { active_idle_handler, STATE_ACTIVE },
+    [STATE_ERROR]      = { error_handler,      STATE_ROOT },
+};
+
+/* 事件分发：先交当前状态处理，不处理则冒泡到父状态 */
+void dev_hsm_handle_event(dev_hsm_t *self, dev_evt_t evt)
+{
+    state_id_t curr = self->current_state;
+    
+    while (curr != 0) {  /* 冒泡直到顶层或被处理 */
+        dev_state_t next = s_hsm_table[curr].handler(self, evt);
+        
+        if (next == curr) {  /* 被当前状态处理了 */
+            return;
+        }
+        
+        if (next != STATE_UNHANDLED) {  /* 状态转移 */
+            dev_hsm_transition(self, next);
+            return;
+        }
+        
+        curr = s_hsm_table[curr].parent;  /* 冒泡到父状态 */
+    }
+}
+```
+
+> HSM 优势：
+> - 公共逻辑（如错误处理）放在父状态，子状态自动继承
+> - 状态层次与业务逻辑自然对应
+> - 完全静态分发，无虚表开销
+
 ---
 
 ## 模式二：表驱动分发（Table-Driven Dispatch）
@@ -373,6 +419,95 @@ static wink_status_t adapted_read(void *self, float *value)
 typedef wink_status_t (*sensor_read_fn)(void *self, float *value);
 
 static const sensor_read_fn s_legacy_adapter = adapted_read;
+```
+
+---
+
+## 模式七：X-Macros 批量代码生成（高级）
+
+### 适用场景
+
+- 寄存器映射表（数百个寄存器）
+- 命令/协议分发表（数十个命令）
+- 状态转换矩阵
+- 任何需要「单一事实源，多处生成代码」的场景
+
+### 核心思想
+
+**一份数据定义，多份代码生成。** 修改一处，所有使用点自动同步更新。
+
+### 实现方式（标准模板）
+
+```c
+/* ========================================
+   单一事实源：X-Macro 列表（可放在单独的 .def 文件）
+   ======================================== */
+#define CMD_TABLE(X) \
+    X(CMD_READ_STATUS,  handle_read_status,  "read_status",  0x01) \
+    X(CMD_SET_CONFIG,   handle_set_config,   "set_config",   0x02) \
+    X(CMD_START_MOVE,   handle_start_move,   "start_move",   0x03) \
+    X(CMD_STOP,         handle_stop,         "stop",         0x04)
+
+/* ========================================
+   生成 1：命令枚举
+   ======================================== */
+typedef enum {
+    #define GEN_ENUM(name, handler, str, id) name = id,
+    CMD_TABLE(GEN_ENUM)
+    CMD_COUNT
+} cmd_id_t;
+
+/* ========================================
+   生成 2：处理函数表
+   ======================================== */
+static const cmd_handler_t s_cmd_handlers[] = {
+    #define GEN_HANDLER(name, handler, str, id) [name] = handler,
+    CMD_TABLE(GEN_HANDLER)
+};
+
+/* ========================================
+   生成 3：命令字符串表（调试用）
+   ======================================== */
+static const char* const s_cmd_names[] = {
+    #define GEN_NAME(name, handler, str, id) [name] = str,
+    CMD_TABLE(GEN_NAME)
+};
+
+/* ========================================
+   生成 4：编译期校验表大小
+   ======================================== */
+_Static_assert(sizeof(s_cmd_handlers) / sizeof(s_cmd_handlers[0]) == CMD_COUNT,
+               "Command table size mismatch!");
+```
+
+### 为什么这样做
+
+- **单一事实源**：增删命令只需改 `CMD_TABLE` 一行
+- **零不一致**：所有生成点自动同步，杜绝遗漏更新
+- **编译期常量**：所有表放在 Flash，不占 RAM
+- **可维护性**：100 个命令也只需维护一个列表
+
+### 高级用法：寄存器映射
+
+```c
+#define REG_TABLE(X) \
+    X(PID_CTRL,       0x00, 32, RW) \
+    X(PID_KP,         0x04, 32, RW) \
+    X(PID_KI,         0x08, 32, RW) \
+    X(PID_KD,         0x0C, 32, RW) \
+    X(PID_OUTPUT,     0x10, 32, RO)
+
+/* 生成寄存器地址枚举 */
+enum {
+    #define GEN_ADDR(name, offset, width, access) REG_##name##_ADDR = offset,
+    REG_TABLE(GEN_ADDR)
+};
+
+/* 生成寄存器位宽断言 */
+#define GEN_WIDTH(name, offset, width, access) \
+    _Static_assert(width == 8 || width == 16 || width == 32, \
+                   #name " invalid width!");
+REG_TABLE(GEN_WIDTH)
 ```
 
 ---

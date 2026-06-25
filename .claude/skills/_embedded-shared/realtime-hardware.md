@@ -16,6 +16,30 @@
 
 > chigo-micro 的 PID 跑在 `esp_timer` 1kHz 回调里，就是 RTC 思想的快路径体现：回调必须运行至完成、不阻塞。
 
+### 最坏执行时间（WCET）预算（强制 RTC 路径）
+
+每个 RTC 事件处理器必须有明确的 WCET 预算，超过预算断言失败：
+
+```c
+/* ✅ 正确：WCET 检查 */
+void pid_timer_callback(void *arg)
+{
+    uint32_t start = get_cycle_count();
+    
+    pid_calculate(&g_pid);  /* 核心逻辑 */
+    
+    /* WCET 预算：500us */
+    uint32_t elapsed = get_cycle_count() - start;
+    ASSERT_MSG(elapsed < (CPU_FREQ_HZ / 2000), 
+               "PID WCET exceeded: %lu cycles", elapsed);
+}
+```
+
+> 预算表：
+> - 1kHz PID 回调：< 500us
+> - 100Hz 安全任务：< 5ms
+> - 普通事件处理器：< 10ms
+
 ---
 
 ## 非阻塞驱动模式：工作线程 + 消息队列 + 回调
@@ -79,6 +103,82 @@
 
 > 这是 [safety-checklist.md](./safety-checklist.md) 阶段 9「所有路径喂看门狗」的设计化落地。
 
+### 窗口看门狗（WWDG）使用规范
+
+WWDG 不仅监控超时，还监控执行过快：
+
+```c
+/* ✅ 正确：窗口看门狗配置 */
+#define WWDG_WINDOW_US     (900)   /* 喂狗不能早于 900us
+#define WWDG_TIMEOUT_US    (1000)  /* 喂狗不能晚于 1000us
+
+void safety_task(void *arg)
+{
+    uint32_t last_feed = get_time_us();
+    
+    while (1) {
+        check_safety();
+        
+        uint32_t now = get_time_us();
+        uint32_t elapsed = now - last_feed;
+        
+        /* 窗口检查：既不能太快也不能太慢 */
+        ASSERT(elapsed >= WWDG_WINDOW_US, "Task running too fast!");
+        ASSERT(elapsed <= WWDG_TIMEOUT_US, "Task timeout!");
+        
+        wdt_feed();
+        last_feed = now;
+        
+        task_delay_ms(1);
+    }
+}
+```
+
+> 窗口看门狗能检测：
+> 1. 任务卡死（超时未喂狗）
+> 2. 任务异常快执行（可能被错误优先级抢占）
+> 3. 任务周期抖动过大
+
+---
+
+## 中断延迟测量机制（Debug 构建启用）
+
+关键中断路径必须内置延迟测量：
+
+```c
+/* ✅ 中断延迟测量 */
+void uart_isr(void)
+{
+    /* 记录中断触发时间
+    uint32_t irq_time = get_cycle_count();
+    
+    /* 释放信号量，唤醒工作线程 */
+    semaphore_release_from_isr(&g_uart_sem);
+    
+    /* 记录中断结束时间 */
+    g_uart_isr_duration = get_cycle_count() - irq_time;
+    
+    /* ISR 自身预算：< 5us */
+    ASSERT(g_uart_isr_duration < (CPU_FREQ_HZ / 200000);
+}
+
+void uart_worker_task(void)
+{
+    while (1) {
+        semaphore_wait(&g_uart_sem);
+        
+        /* 测量调度延迟：中断触发到任务被唤醒的时间 */
+        uint32_t wake_time = get_cycle_count();
+        g_sched_latency = wake_time - g_last_irq_time;
+        
+        /* 调度延迟预算：< 100us */
+        ASSERT(g_sched_latency < (CPU_FREQ_HZ / 10000);
+        
+        process_uart_data();
+    }
+}
+```
+
 ---
 
 ## 持久配置 / NVS 加载校验
@@ -89,6 +189,44 @@
 - 字段逐一**范围 / 类型校验**（属外部输入，见 [clean-code.md](./clean-code.md) 防御式编程）。
 - 关键安全阈值（过流 / 过温）若 NVS 损坏，落到**最保守**安全值，而非「读不到就用 0」。
 - 配置结构跨 target 持久化时用显式 marshal，禁位域（见所在 skill 的模板文档）。
+
+### NVS 磨损均衡设计（频繁更新的配置）
+
+频繁更新的配置（如用户偏好、校准值）必须实现磨损均衡：
+
+```c
+/* ✅ 磨损均衡：多槽位循环写入 */
+#define NVS_CONFIG_SLOTS     (4)   /* 4 个槽位，写入负载分摊 */
+#define NVS_MAGIC            (0x5A5A)
+
+typedef struct {
+    uint16_t magic;
+    uint16_t version;
+    uint16_t sequence;       /* 序列号，最大的是最新有效 */
+    uint16_t crc16;
+    /* 配置数据... */
+} nvs_config_slot_t;
+
+nvs_config_slot_t g_config_slots[NVS_CONFIG_SLOTS];
+
+/* 写入时：找序列号最大的，写入下一个槽位 */
+void nvs_write_config(const nvs_config_slot_t *config)
+{
+    /* 1. 找到当前最大序列号的槽位 */
+    uint16_t max_seq = find_max_sequence();
+    
+    /* 2. 写入下一个槽位（循环）
+    uint8_t next_slot = (find_latest_slot() + 1) % NVS_CONFIG_SLOTS;
+    
+    g_config_slots[next_slot].sequence = max_seq + 1;
+    g_config_slots[next_slot].crc16 = calculate_crc16(/*...*/);
+    
+    /* 3. 真正写入 Flash */
+    flash_write(&g_config_slots[next_slot]);
+}
+```
+
+> Flash 擦写次数有限（ESP32 约 10 万次），磨损均衡可将写入寿命提升 N 倍（N=槽位数）。
 
 ---
 

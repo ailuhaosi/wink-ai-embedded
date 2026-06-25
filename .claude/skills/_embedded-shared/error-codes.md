@@ -91,5 +91,117 @@ WINK_WARN_UNUSED_RESULT wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev,
 > 禁止裸写 `__attribute__((warn_unused_result))`；统一 `WINK_WARN_UNUSED_RESULT`。`wink_status.h` 尚未落地是已知技术债，创建时须含此宏（连同 ADR-0001 方案 C + ADR-0005 `-50s` 段）。
 
 ---
+
+## 错误码字符串映射（强制）
+
+每个模块必须提供 `module_err_to_string()` 表驱动函数，将错误码转换为可读字符串。禁止硬编码 `printf("error %d"`，不利于日志必须转字符串。
+
+```c
+/* 模板 ✅
+const char* dal_err_to_string(wink_status_t err)
+{
+    switch (err) {
+    case WINK_OK:                      return "OK";
+    case WINK_ERR_TIMEOUT:              return "Timeout";
+    case WINK_ERR_INVALID_ARG:          return "Invalid argument";
+    case WINK_ERR_CONFIG_CORRUPT_DEGRADED: return "Config corrupt (degraded)";
+    default:                            return "Unknown error";
+    }
+}
+```
+
+---
+
+## 错误码模块来源标记（推荐）
+
+对于多模块系统，错误码可携带模块来源信息，便于定位故障：
+
+```c
+/* 模块 ID 定义
+#define MODULE_ID_DAL      (1 << 24)
+#define MODULE_ID_PAL      (2 << 24)
+#define MODULE_ID_BAL      (3 << 24)
+
+/* 构造带模块标记的错误码
+#define MAKE_ERR(module, err)  ((wink_status_t)((module) | ((err) & 0xFFFFFF))
+
+/* 提取模块 ID 和原始错误码
+#define ERR_MODULE(err)     ((uint32_t)(err) >> 24)
+#define ERR_CODE(err)      ((wink_status_t)((err) & 0xFFFFFF))
+```
+
+> 注意：此机制不改变错误码的正负语义，`if (status < 0)` 检查依然有效。
+
+---
+
+## 成功语义扩展
+
+错误码设计预留正数段（预留，非强制）
+
+正数不用于 warning（ADR-0005 已明确降级也用负数），但可用于「成功但有附加信息」的场景：
+
+```c
+/* 预留正数语义段
+#define WINK_OK_PARTIAL      1   /* 部分成功（如只写入部分数据）*/
+#define WINK_OK_DEGRADED     2   /* 降级运行但功能正常 */
+
+/* if (status >= 0) 依然能判断成功
+/* 具体成功细节用 if (status == WINK_OK) 判断完全成功 */
+```
+
+> 此为预留设计，非强制。仅在确实需要区分成功等级的场景使用。
+
+---
+
+## wink_status.h 完整模板（待创建）
+
+```c
+#ifndef WINK_STATUS_H
+#define WINK_STATUS_H
+
+#include <stdint.h>
+
+/* 便携宏：返回值不可忽略 */
+#if defined(__GNUC__) || defined(__clang__)
+    #define WINK_WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#else
+    #define WINK_WARN_UNUSED_RESULT
+#endif
+
+/* 错误码类型 */
+typedef int32_t wink_status_t;
+
+/* 成功码 */
+#define WINK_OK                    (0)
+
+/* 通用可恢复错误 -1..-11 */
+#define WINK_ERR_GENERAL          (-1)
+#define WINK_ERR_TIMEOUT          (-2)
+#define WINK_ERR_INVALID_ARG      (-3)
+#define WINK_ERR_NOT_SUPPORTED    (-4)
+#define WINK_ERR_NO_MEMORY        (-5)
+#define WINK_ERR_BUFFER_FULL      (-6)
+#define WINK_ERR_NOT_FOUND        (-7)
+#define WINK_ERR_ALREADY_INIT     (-8)
+
+/* 功能安全可恢复 -20..-29 */
+#define WINK_ERR_OVERCURRENT      (-20)
+#define WINK_ERR_OVERHEAT         (-21)
+#define WINK_ERR_STALL            (-22)
+#define WINK_ERR_COLLISION        (-23)
+
+/* 致命错误 -30..-49 */
+#define WINK_ERR_WATCHDOG        (-30)
+#define WINK_ERR_HARD_FAULT      (-31)
+#define WINK_ERR_PANIC            (-99)
+
+/* 可恢复降级 -50..-59 */
+#define WINK_ERR_CONFIG_CORRUPT_DEGRADED  (-50)
+#define WINK_ERR_FAILED_INIT                (-51)
+
+#endif /* WINK_STATUS_H */
+```
+
+---
 > **源出（溯源）**：ADR-0001（`docs/design/decisions/0001-error-code-sign-convention.md`）、
 > zhaoming `clean-code.md` 错误处理策略、chigo-micro `.claude/rules/c-embedded.md`。

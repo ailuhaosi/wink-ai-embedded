@@ -26,6 +26,74 @@
 3. **绝不分配内存**。
 4. **文档说明**为什么需要这个临界区。
 
+### Mutex 持有时间预算（强制）
+
+持有 mutex 的代码路径必须有明确的最坏执行时间预算：
+
+```c
+/* ✅ 正确：持有 mutex 路径 < 1ms */
+void motor_set_target(motor_t *self, float target)
+{
+    mutex_lock(self->state_mutex);  /* 开始计时 */
+    self->target_angle = target;    /* 简单赋值，< 1us */
+    mutex_unlock(self->state_mutex);
+}
+
+/* ❌ 错误：持有 mutex 时做重计算 */
+void motor_update_pid(...) {
+    mutex_lock(self->state_mutex);
+    pid_calculate(&self->pid);  /* 复杂浮点计算 > 10ms
+    mutex_unlock(self->state_mutex);
+}
+```
+
+> 规则：
+> 1. 普通 mutex：持有时间 < 1ms
+> 2. 高优先级路径使用的 mutex：持有时间 < 100us
+> 3. 超过预算的代码必须重构：先拷贝数据后释放锁，再在无锁状态下计算
+
+---
+
+## 单核 vs 多核差异对照表
+
+| 场景 | 单核（Cortex-M） | 多核（ESP32 Xtensa） |
+|------|------------------|----------------------|
+| 线程间共享 | mutex（优先级继承 | mutex |
+| ISR ↔ 线程 | 关中断 / 临界区 | portMUX_TYPE spinlock + 内存屏障 |
+| 标志位（单写多读） | volatile 通常足够 | `_Atomic` C11 必须 |
+| RMW 操作（计数器） | volatile + 关中断 | `_Atomic` + acquire/release 内存序 |
+
+> ESP32 Xtensa 是宽松内存模型，多核环境下必须格外小心。
+
+---
+
+## 死锁检测（Debug 构建启用）
+
+Debug 构建中必须启用死锁检测机制：
+
+```c
+/* Debug 构建：记录 mutex 持有者和持有时间
+void mutex_lock_debug(mutex_t *mutex)
+{
+    uint32_t start = get_time_us();
+    platform_mutex_lock(mutex->handle);
+    
+    /* 记录持有者 */
+    mutex->holder_task = current_task_id();
+    mutex->hold_start = get_time_us();
+    
+    /* 持有时间超时报警 */
+    if (mutex->hold_start - start > 1000) {
+        ASSERT_MSG("Mutex held too long!");
+    }
+}
+```
+
+> 检测规则：
+1. 同一任务按固定顺序获取锁（避免循环等待）
+2. 嵌套锁层级检查：任务不能持有 A 等 B，同时持有 B 等 A
+3. 超时检测：持有超过 10ms 断言失败
+
 ---
 
 ## 可重入性

@@ -67,9 +67,18 @@ add_wink_host_test(test_pal_resource test_pal_resource.c)
 
 set(DAL_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_led.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_button.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ssd1306.c)
 
 add_wink_host_test(test_dal_servo test_dal_servo.c ${DAL_SRCS})
+
+add_wink_host_test(test_dal_led test_dal_led.c ${DAL_SRCS})
+
+add_wink_host_test(test_dal_button test_dal_button.c ${DAL_SRCS})
+
+add_wink_host_test(test_dal_ssd1306 test_dal_ssd1306.c ${DAL_SRCS})
 
 add_wink_host_test(test_dal_ultrasonic test_dal_ultrasonic.c ${DAL_SRCS})
 

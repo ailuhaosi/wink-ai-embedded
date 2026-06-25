@@ -6,38 +6,51 @@ paths:
 
 # C Coding Standards & API Conventions
 
-Guidelines and constraints for writing or refactoring C code (`.c` and `.h` files) in WinkMicroOS.
+> ⚠️ **本文件已迁移至 Skill 文档体系**。以下是索引，所有详细规则请查看对应 Skill 文档。
 
-## 1. Error Handling (`wink_status_t`)
+---
 
-All functions that can fail must return a status of type `wink_status_t` and follow the convention defined in [ADR-0001](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0001-error-code-sign-convention.md).
-- **0 = Success (`WINK_OK`)**
-- **Negative values = Errors** (e.g. `WINK_ERR_INVALID_ARG = -1`, `WINK_ERR_TIMEOUT = -2`)
-- **Checking Returns**: Always use `if (status < 0)` or `if (status != WINK_OK)` to check for errors. Avoid writing `if (status)` to check for errors, as negative values evaluate to true in C.
-- **Error Code Layout**:
-  - `-1` to `-11`: Common recoverable errors.
-  - `-20` to `-29`: Functional safety recoverable errors (e.g., `WINK_ERR_OVERCURRENT = -20`).
-  - `-30` to `-49`: Fatal errors (e.g., `WINK_ERR_WATCHDOG = -30`).
-  - `-99`: Non-recoverable panic (`WINK_ERR_PANIC`).
+## 规则索引
 
-## 2. Device Abstraction Layer (DAL) Design Paradigm
+| 主题 | Skill 文档位置 |
+|------|---------------|
+| **错误码约定** (`wink_status_t`) | `_embedded-shared/error-codes.md` |
+| **Clean Code 与代码风格** | `_embedded-shared/clean-code.md` |
+| **内存安全与 Struct 布局** | `_embedded-shared/memory-safety.md` |
+| **并发与线程安全** | `_embedded-shared/concurrency.md` |
+| **实时与硬件相关规则** | `_embedded-shared/realtime-hardware.md` |
+| **静态分发架构与设计模式** | `embedded-best-practice/references/static-dispatch/patterns.md` |
+| **DAL/PAL 分层架构** | `embedded-best-practice/references/static-dispatch/architecture.md` |
 
-WinkMicroOS intentionally deviates from traditional OOP dynamic dispatch (virtual tables, `container_of` macros) to ensure AI codegen friendliness and Wasm simulator execution performance, as decided in [ADR-0004](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md).
-- **Compile-Time Static Dispatch**: Use compile-time static dispatch and named APIs (e.g., `dal_ultrasonic_read()`). Do NOT define or use `struct device_ops` or dynamic function pointers.
-- **POD Structures**: Outer/device instances must be Plain Old Data (POD) structures representing state only. Do not nest function pointers.
-- **Lowest-Layer Bypass**: Keep `#ifdef SIMULATION` logic as narrow as possible. Only bypass the lowest physical signal layers, keeping protocol parsing and error detection code shared across simulation and real target compilations.
+---
 
-## 3. Double-Target Compilation
+## 为什么迁移
 
-Ensure C code compiles cleanly under two distinct target toolchains without changes, as described in [ADR-0002](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0002-dual-target-compilation.md):
-- **Wasm Target**: Emscripten toolchain (`emcc` targeting `wasm32`). Ensure compatibility with Asyncify semantics (e.g. cooperative multitasking via OSAL delays).
-- **Physical Target**: ESP-IDF/xtensa compiler targeting ESP32. Avoid clang-specific features or compiler/stdlib behaviors that would break GCC xtensa builds.
+原 `c-code.md` 的内容已全部整合进更系统化的 Skill 文档体系，优势：
 
-## 4. Struct Layout & Serialization (review P1-5, Phase 6 Task 6-1)
+1. **单一事实来源 (SSOT)**：避免文档漂移
+2. **范式分离**：清晰区分「范式无关的工程纪律」与「本项目静态分发专用规则」
+3. **更完整覆盖**：补充了状态机、表驱动等设计模式指南
+4. **跨项目复用**：`_embedded-shared/` 下的规则可同时用于 wink-micro-os 和 chigo-micro
 
-Runtime/DAL structs are **in-memory state**, not wire/flash layouts. Never blur the two.
+---
 
-- **Natural alignment, no `packed`**: DAL/runtime POD structs MUST be naturally aligned — **禁止** `__attribute__((packed))` / `#pragma pack`. On ARM/Xtensa, packed/unaligned access degrades performance and can raise an Alignment Fault / HardFault. Let the compiler pad.
-- **Member ordering**: order members by alignment requirement **descending** (`uint64_t`/`double` → `uint32_t`/`float`/pointer → `uint16_t` → `uint8_t`/`bool` last) to minimize tail padding and keep the layout legible.
-- **Separate wire/flash structs**: structs crossing a process/target boundary (network frame, persistent record) must be **independently named and defined** — `xxx_wire_t` / `xxx_flash_record_t` — with explicit `version`, `endianness`, and `CRC` fields. Do NOT reuse a runtime POD as a wire layout.
-- **No raw `memcpy` of runtime structs to wire/flash**: conversion MUST go through explicit `serialize`/`deserialize` functions that validate `version` / `endianness` / `CRC`. Treat a runtime struct's byte image as target/compiler-specific — never persist or transmit it verbatim.
+## 本项目核心范式
+
+wink-micro-os 采用 **编译期静态分发**：
+
+- ✅ POD 结构体 + 命名式 API（如 `dal_servo_set_angle(&dev, angle)`）
+- ❌ 不使用 `struct device_ops` 运行期虚表
+- ❌ 不使用 `container_of` 向下转型
+
+详细说明见：
+- [ADR-0004](../docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md)
+- `embedded-best-practice/references/static-dispatch/README.md`
+
+---
+
+## 快速链接
+
+- ✅ Skill 入口：`.claude/skills/embedded-best-practice/`
+- ✅ 范式无关工程纪律：`.claude/skills/_embedded-shared/`
+- ✅ 架构决策记录：`docs/design/decisions/`

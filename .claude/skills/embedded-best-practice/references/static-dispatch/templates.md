@@ -52,8 +52,15 @@ wink_status_t dal_xxx_read(dal_xxx_t *dev, float *out_value)
 }
 ```
 
-> 对照 wink-micro-os 实际代码：`dal_ultrasonic_t` / `dal_servo_t` 已是这个形态，只是返回
-> 类型还在用 `bool`/`float`（待迁移，见 [evolution.md](./evolution.md)）。
+> ⚠ **目标形态 vs 现状偏差提示**：
+> > 模板展示的是 ADR 目标形态：`wink_status_t` 返回值 + 扁平 POD。
+> > wink-micro-os 实际代码：
+> > - ✅ POD 结构已到位（无 ops / 无虚表）
+> > - ⏳ 返回类型迁移中：部分 API 仍用 `bool`/`float`（见 [evolution.md](./evolution.md) §1）
+> > - ⏳ 字段布局待迁移：现状 `dev->last_distance`（扁平），目标 `dev->state.last_distance`
+> >   （const 配置区 + state 可变区分离，见 [evolution.md](./evolution.md) §1.4）
+> >
+> > 写新代码请用目标形态；改旧代码请按 evolution.md 渐进迁移。
 
 ---
 

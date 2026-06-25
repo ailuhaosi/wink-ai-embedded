@@ -18,6 +18,35 @@
 
 ---
 
+## 魔法数字（硬规）
+
+所有数字字面量（除 `0`、`1` 和明显的布尔类值外）**必须定义为宏**：
+
+```c
+/* ❌ 反面示例 */
+if (retry_count > 3) { ... }
+uint8_t buffer[256];
+timeout = 5000;
+
+/* ✅ 正面示例 */
+#define MAX_RETRY_COUNT      (3U)
+#define RX_BUFFER_SIZE       (256U)
+#define DEFAULT_TIMEOUT_MS   (5000U)
+
+if (retry_count > MAX_RETRY_COUNT) { ... }
+uint8_t buffer[RX_BUFFER_SIZE];
+timeout = DEFAULT_TIMEOUT_MS;
+```
+
+### 宏定义风格
+
+- 值用括号包裹：`#define FOO (42U)`
+- 无符号常量使用 `U` 后缀
+- 大型无符号常量使用 `UL` 或 `ULL` 后缀
+- 相关宏使用统一前缀分组
+
+---
+
 ## 命名约定（以本项目为准）
 
 > ⚠ **本项目用纯 snake_case**。zhaoming 参考基线用 `PascalCase_t` 类型 + `Module_Action`
@@ -36,6 +65,93 @@
 **命名即文档**：作用域越大，名字越长越完整。循环计数器可短（`i`、`n`）；公共函数必须
 带完整上下文（`motor_driver_check_overcurrent`，不是 `check`）。布尔用 `is_`/`has_`/
 `can_`/`should_` 前缀。
+
+---
+
+## 头文件规范（硬规）
+
+### 头文件保护
+
+每个头文件必须有头文件保护宏，格式为 `MODULE_NAME_H`：
+
+```c
+#ifndef DAL_ULTRASONIC_H
+#define DAL_ULTRASONIC_H
+
+/* ... 内容 ... */
+
+#endif /* DAL_ULTRASONIC_H */
+```
+
+### 自包含头文件
+
+每个头文件必须能**独立编译**。包含它所引用的所有类型——不要依赖引用者来提供。
+
+### 路径约定
+
+在添加 `#include` 之前，搜索项目中其他文件是如何包含同一头文件的。使用完全相同的路径格式：
+
+```c
+/* 如果项目中其他文件这样写： */
+#include "drivers/uart_driver.h"
+
+/* 那么你也必须这样写： */
+#include "drivers/uart_driver.h"
+
+/* ❌ 不要写成： */
+#include "uart_driver.h"
+#include "../drivers/uart_driver.h"
+```
+
+### 包含顺序
+
+遵循项目现有的包含顺序。本项目约定：
+
+```c
+/* 1. 对应头文件（用于 .c 文件） */
+#include "my_module.h"
+
+/* 2. 平台/RTOS 头文件 */
+#include "FreeRTOS.h"
+#include "task.h"
+
+/* 3. PAL / DAL 头文件 */
+#include "pal/hal/pal_hal_gpio.h"
+#include "dal/dal_servo.h"
+
+/* 4. 项目模块头文件 */
+#include "app/protocol.h"
+
+/* 5. 标准库（如使用） */
+#include <string.h>
+#include <stdint.h>
+```
+
+---
+
+## 函数文档注释
+
+公共函数必须有文档注释，使用 Doxygen 兼容格式：
+
+```c
+/**
+ * @brief   读取超声波传感器距离。
+ * @param   self      传感器实例指针（不能为 NULL）
+ * @param   distance_cm  输出距离（厘米），失败时不修改
+ * @return  WINK_OK = 成功；WINK_ERR_TIMEOUT = 回声超时；
+ *          WINK_ERR_INVALID_ARG = 参数无效
+ * @note    非阻塞，调用后需等待测量完成。
+ *          线程安全：可从任何任务上下文调用，不可在 ISR 中调用。
+ */
+wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *self, float *distance_cm);
+```
+
+### 注释质量规则
+
+1. 注释解释**为什么**，而非「是什么」（代码自己能说明做什么）
+2. 注释必须与代码一致——修改代码时同步更新注释
+3. 删除被注释掉的代码；使用版本控制来保存历史
+4. 不写重复代码内容的冗余注释（如 `i++; /* i 加 1 */`）
 
 ---
 

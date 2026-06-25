@@ -56,7 +56,7 @@
 |----------------------|------|----------|
 | `if\s*\(\s*\w*[sS]tatus\s*\)` | `if(status)`：负数 truthy，把失败当成功（[error-codes.md](./error-codes.md) 头号雷） | 无——一律 `if(status < 0)` |
 | `\bcontainer_of\b` | 运行期多态向下转型，违反 ADR-0004 | 仅运行期多态参考基线（对照阅读） |
-| `struct\s+\w+_ops\b` / `\w+_ops_t` 类型名、`->ops->` / `.ops->` 调用点 | 器件抽象 ops 虚表（类型名 **+ ops 字段 + 调用点**） | 仅策略层 + **行级 `/* lint-allow: strategy-vtable */`** 标注，否则 fail |
+| `struct\s+\w+_ops\b` / `\w+_ops_t` 类型名、`->ops->` / `.ops->` 调用点 | 器件抽象 ops 虚表（**三重匹配**：类型名 + ops 字段 + 调用点）| 仅策略层 + **行级 `/* lint-allow: strategy-vtable */`** 标注，否则 fail。**白名单无默认路径**——任何 `ops` 相关模式必须显式标注豁免 |
 | `\b(strcpy\|sprintf\|strncpy\|gets\|alloca\)\s*\(` | 无界写入 / 栈分配 | 无（见 [memory-safety.md](./memory-safety.md)） |
 | `\b(malloc\|free\|calloc\|realloc\)\s*\(` | 实时路径动态分配 | 非实时路径 + 配对释放 + 文档化所有权 |
 | `#pragma\s+pack` | 跨 target 强制对齐，破坏 wasm/xtensa 一致性 | 无（ADR-0002） |

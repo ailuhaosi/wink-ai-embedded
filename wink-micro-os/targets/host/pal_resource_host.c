@@ -5,6 +5,7 @@
  */
 #include "pal_resource.h"
 #include <stddef.h>
+#include <string.h>
 
 typedef struct {
     pal_resource_type_t type;
@@ -24,7 +25,7 @@ wink_status_t pal_resource_claim(pal_resource_type_t type, uint32_t id, const ch
     /* 幂等 / 冲突判定：同 (type,id) 同 owner → OK；不同 owner → BUSY */
     for (uint32_t i = 0; i < s_count; i++) {
         if (s_claims[i].type == type && s_claims[i].id == id) {
-            if (s_claims[i].owner == owner) {
+            if (strcmp(s_claims[i].owner, owner) == 0) {
                 return WINK_OK;        /* 同 owner：幂等 */
             }
             return WINK_ERR_BUSY;      /* 不同 owner：冲突 */

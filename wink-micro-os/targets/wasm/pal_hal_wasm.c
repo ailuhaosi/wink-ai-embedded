@@ -2,9 +2,15 @@
  * @file pal_hal_wasm.c
  * @brief Wasm 仿真端 PAL HAL 适配（GPIO/PWM/I2C/中断）。
  *        仅 HAL；OSAL 见 pal_osal_wasm.c；entry 见 wasm_entry.c；JS 契约见 wasm_bridge.h。
+ *
+ * 中断桥（方案 C：Poll 模型）：
+ *   pal_gpio_enable_interrupt → js_pal_register_interrupt（仅写 JS 侧 pending 表映射）
+ *   pal_wasm_dispatch_pending_interrupts → 由 wink_runtime.c tick 边界调用，drain JS pending 队列
+ *   旧 _trigger_wasm_interrupt 导出已移除（wasm_entry.c），彻底消除 Asyncify sleeping 窗口重入面。
  */
 #include "pal_hal.h"
 #include "wasm_bridge.h"
+#include "pal_wasm_internal.h"
 
 wink_status_t pal_gpio_init(uint16_t pin, pal_gpio_mode_t mode) {
     (void)pin; (void)mode;            /* 仿真下无需硬件配置 */
@@ -19,16 +25,41 @@ bool pal_gpio_read(uint16_t pin) {
     return js_pal_gpio_read(pin);
 }
 
-wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type, pal_gpio_isr_t callback, void *arg) {
+wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type,
+                                         pal_gpio_isr_t callback, void *arg) {
     (void)intr_type;
-    uint32_t callback_index = (uint32_t)(uintptr_t)callback;   /* C 函数指针转 Table 索引 */
-    js_pal_register_interrupt(pin, callback_index, arg);
+    /* C 函数指针转 Wasm Table 索引（wasm32 安全；wasm64 迁移见 Phase 6 Task 6-3）*/
+    uint32_t callback_index = (uint32_t)(uintptr_t)callback;
+    uint32_t arg_ptr        = (uint32_t)(uintptr_t)arg;
+    /* 告知 JS 侧 pin → (index, arg_ptr) 映射；JS 在事件到来时只写 pending 队列，不回调 Wasm */
+    js_pal_register_interrupt(pin, callback_index, arg_ptr);
     return WINK_OK;
 }
 
 wink_status_t pal_gpio_disable_interrupt(uint16_t pin) {
     js_pal_deregister_interrupt(pin);
     return WINK_OK;
+}
+
+/**
+ * @brief 分发 JS pending 中断（方案 C：tick 边界主动拉取）。
+ *
+ * 循环调用 js_pal_poll_interrupt 直到队列为空（FIFO 顺序），对每个 pending 条目
+ * 将 callback_index 还原为函数指针并调用 ISR。
+ *
+ * 调用方：wink_runtime.c 在 #ifdef SIMULATION 下、wink_app_delay_ms() 之前调用本函数。
+ * 此时 Wasm 处于正常运行态（非 Asyncify sleeping），ISR 执行安全，无重入风险。
+ */
+void pal_wasm_dispatch_pending_interrupts(void) {
+    uint32_t callback_index;
+    uint32_t arg_ptr;
+    /* drain 所有 pending 中断（FIFO）直到队列空 */
+    while (js_pal_poll_interrupt(&callback_index, &arg_ptr)) {
+        pal_gpio_isr_t isr = (pal_gpio_isr_t)(uintptr_t)callback_index;
+        if (isr != NULL) {
+            isr((void *)(uintptr_t)arg_ptr);
+        }
+    }
 }
 
 wink_status_t pal_pwm_init(uint8_t channel, uint32_t frequency_hz) {

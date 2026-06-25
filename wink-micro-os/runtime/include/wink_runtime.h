@@ -31,6 +31,8 @@ wink_status_t wink_runtime_run(const wink_app_callbacks_t *callbacks, uint32_t m
 
 /** @brief runtime 内部故障码：boot 时检测到 WDT/PANIC 复位（Phase 5 Task 5-5） */
 #define WINK_FAULT_BOOT_AFTER_RESET 8001u
+/** @brief runtime 内部故障码：单次 loop 执行时间超过限制 (WCET 超限警告) */
+#define WINK_WARN_WCET_EXCEEDED     8002u
 
 /**
  * @brief 显式故障路径（Phase 5 Task 5-3）。

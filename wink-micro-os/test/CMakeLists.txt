@@ -22,14 +22,16 @@ function(add_wink_test name src)
         ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include)
     target_link_libraries(${name} PRIVATE pal)
-    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+    if(MSVC)
+        target_compile_options(${name} PRIVATE /W4)
+    else()
+        target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter
+            -Wno-error=stack-usage=)  # P-stack：host 测试栈充裕，只警告不阻塞
+    endif()
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
 add_wink_test(test_smoke test_smoke.c)
-
-add_wink_test(test_trace test_trace.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
 
 # 链接 targets/host（完整 PAL）的测试
 function(add_wink_host_test name src)
@@ -46,9 +48,17 @@ function(add_wink_host_test name src)
         ${CMAKE_CURRENT_SOURCE_DIR}/../dal/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include)
-    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+    if(MSVC)
+        target_compile_options(${name} PRIVATE /W4)
+    else()
+        target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter
+            -Wno-error=stack-usage=)  # P-stack：host 测试栈充裕，只警告不阻塞
+    endif()
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+add_wink_host_test(test_trace test_trace.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../trace/src/wink_trace.c)
 
 add_wink_host_test(test_runtime test_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/src/wink_runtime.c
@@ -101,7 +111,12 @@ function(add_wink_test_sim name src)
         ${CMAKE_CURRENT_SOURCE_DIR}/../trace/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include)
     target_compile_definitions(${name} PRIVATE SIMULATION=1)
-    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+    if(MSVC)
+        target_compile_options(${name} PRIVATE /W4)
+    else()
+        target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter
+            -Wno-error=stack-usage=)  # P-stack：host 测试栈充裕，只警告不阻塞
+    endif()
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 

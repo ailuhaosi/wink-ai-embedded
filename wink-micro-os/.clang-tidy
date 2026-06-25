@@ -1,5 +1,17 @@
-# 最小门禁：强制 if/for/while/do-while 体使用大括号（review P1-2）
-# 配合 Phase 0 Task 0-1 的手动补齐，防止后续 AI-CodeGen 重新生成无大括号单行控制语句。
-# 仅启用一条规则，其余全部关闭（-*），降低接入门槛；后续可按需扩展（见 review P1-2 整改跟踪）。
-Checks: 'readability-braces-around-statements,-*'
+# 门禁规则集（分阶段扩展，见 review P1-2 和 P-stack 整改跟踪）
+# ─────────────────────────────────────────────────────────────────
+# 1. readability-braces-around-statements：大括号门禁（review P1-2）
+#    配合 Phase 0 Task 0-1 的手动补齐，防止 AI-CodeGen 重新生成无大括号控制语句。
+# 2. misc-no-recursion：静态检测递归调用链（P-stack 栈安全门禁）
+#    对应 03-ai-dsl-and-codegen-pipeline.md §12 "禁止递归" 规则的自动化执行。
+#    可检测直接递归和互递归（A→B→A）。需要 clang-tidy ≥ 12。
+# 3. clang-analyzer-security.insecureAPI.alloca：禁止 alloca / VLA（P-stack 栈安全）
+#    变长栈分配在嵌入式上极度危险，无法静态推导栈深度。
+# 4. bugprone-no-escape：检测 block 指针逃逸
+Checks: >
+    -*,
+    readability-braces-around-statements,
+    misc-no-recursion,
+    clang-analyzer-security.insecureAPI.alloca,
+    bugprone-no-escape
 WarningsAsErrors: '*'

@@ -15,6 +15,20 @@ if(TARGET_PLATFORM STREQUAL "wasm")
     add_compile_definitions(SIMULATION=1)
 endif()
 
+# ── 栈深度静态门禁（P-stack：AI Codegen 栈安全）──────────────────
+# AI Codegen 可能生成深调用链。使用 -Wstack-usage 在编译期硬性拦截。
+# 阈值说明：
+#   - ESP32 FreeRTOS task 栈常为 4KB，App 回调需留 50% 余量 → ~1536 字节
+#   - Wasm Asyncify unwind 栈 64KB，但统一收紧以保证双 target 可移植
+#   - 该值仅限制单个函数的栈帧，不包含调用链累加（GCC 静态分析局限性）
+#   - 配合 .clang-tidy misc-no-recursion 禁止递归，可有效约束总栈消耗
+set(WINK_STACK_USAGE_LIMIT 1536 CACHE STRING
+    "Per-function stack usage hard limit in bytes (-Wstack-usage)")
+add_compile_options(-Wstack-usage=${WINK_STACK_USAGE_LIMIT})
+# 注：GCC 参数化警告 -Wstack-usage= 不支持 -Werror=stack-usage= 精确升级。
+# 云端构建服务（Docker worker）在 BAL App 编译阶段使用全局 -Werror 将其升级为硬错误。
+# 本地开发环境仅产出 warning，不阻塞迭代（生产部署由 build service 门禁拦截）。
+
 # 收集子组件构建
 add_subdirectory(pal)
 add_subdirectory(dal)
@@ -32,7 +46,7 @@ if(TARGET_PLATFORM STREQUAL "wasm" AND EMSCRIPTEN)
     target_link_options(wink_simulator PRIVATE
         "-s" "ASYNCIFY=1"
         "-s" "ASYNCIFY_IMPORTS=['js_pal_delay_ms','js_pal_delay_us']"
-        "-s" "EXPORTED_FUNCTIONS=['_main','_trigger_wasm_interrupt']"
+        "-s" "EXPORTED_FUNCTIONS=['_main']"                  # _trigger_wasm_interrupt 已移除（方案 C：Poll 模型消除 Push 导出，见 wasm_entry.c）
         "-s" "EXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
         "-s" "MODULARIZE=1"
         "-s" "EXPORT_NAME='WasmSandbox'"

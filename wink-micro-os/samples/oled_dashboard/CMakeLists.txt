@@ -24,5 +24,9 @@ target_include_directories(app_oled_dashboard_e2e PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../test
     ${CMAKE_CURRENT_SOURCE_DIR}/../../test/stubs)
 
-target_compile_options(app_oled_dashboard_e2e PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+if(MSVC)
+    target_compile_options(app_oled_dashboard_e2e PRIVATE /W4)
+else()
+    target_compile_options(app_oled_dashboard_e2e PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
+endif()
 add_test(NAME app_oled_dashboard_e2e COMMAND app_oled_dashboard_e2e)

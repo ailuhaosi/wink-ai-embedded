@@ -12,7 +12,7 @@
  */
 #include "pal_osal.h"
 
-#if defined(ESP_PLATFORM) || defined(ESP32)
+#if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -92,7 +92,7 @@ wink_status_t pal_mutex_unlock(pal_mutex_t mutex) {
     if (mutex == NULL) { return WINK_ERR_INVALID_ARG; }
 #if defined(ESP_PLATFORM)
     BaseType_t ok = xSemaphoreGive((SemaphoreHandle_t)mutex);
-    return ok == pdPASS ? WINK_OK : WINK_ERR_UNKNOWN;
+    return ok == pdPASS ? WINK_OK : WINK_ERR_HARDWARE;
 #else
     return WINK_OK;
 #endif
@@ -122,7 +122,7 @@ pal_reset_reason_t pal_get_reset_reason(void) {
         case ESP_RST_TASK_WDT:    return PAL_RESET_REASON_WATCHDOG;
         case ESP_RST_WDT:         return PAL_RESET_REASON_WATCHDOG;
         case ESP_RST_BROWNOUT:    return PAL_RESET_REASON_BROWNOUT;
-        case ESP_RST_PANIC:       return PAL_RESET_REASON_EXCEPTION;
+        case ESP_RST_PANIC:       return PAL_RESET_REASON_PANIC;   /* 触发 boot safe-lock */
         default:                  return PAL_RESET_REASON_UNKNOWN;
     }
 #else

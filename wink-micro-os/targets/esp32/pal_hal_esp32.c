@@ -2,15 +2,20 @@
  * @file pal_hal_esp32.c
  * @brief ESP32 真机 PAL HAL 实现（ESP-IDF v5.x）。
  *
+ * ⚠️ @verified: NO —— 本文件真机函数体（`#if defined(ESP_PLATFORM)` 内）**未经 `idf.py` 编译，
+ *    亦未经硬件验证**。host 构建只编译 `#else` stub 分支，不覆盖真机代码。已知契约层符号
+ *    （WINK_ERR_HARDWARE 等）已补齐、平台宏已统一为 ESP_PLATFORM；真机行为须在 Wave B 硬件
+ *    验证计划中经 `idf.py build` + 上电测试后才算可用。
+ *
  * MVP 阶段说明：
- * - GPIO/PWM/I2C 已实现真实硬件驱动
- * - 超声波脉冲捕获暂用 busy-wait（后续 Phase 4 迁移至 RMT 硬件捕获）
- * - 引脚映射为固定默认值，后续接入 peripheral registry 动态配置
+ * - GPIO/PWM/I2C 已实现真实硬件驱动（待真机验证）
+ * - 超声波脉冲捕获：pal_gpio_pulse_in 仍为 busy-wait 降级路径；RMT 硬件捕获见 pal_hal_esp32_rmt.c
+ * - 引脚映射为固定默认值（FIXME），后续接入 device_tree 真实路由（评审 P1-3，独立后续工作）
  */
 #include "pal_hal.h"
 #include "pal_resource.h"
 
-#if defined(ESP_PLATFORM) || defined(ESP32)
+#if defined(ESP_PLATFORM)
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/i2c.h"

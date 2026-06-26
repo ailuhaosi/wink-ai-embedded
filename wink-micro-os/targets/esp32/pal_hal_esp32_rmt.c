@@ -159,8 +159,15 @@ wink_status_t pal_rmt_ultrasonic_measure(uint32_t timeout_us, uint32_t *pulse_us
     /* 等待 RMT 捕获完成（阻塞但不消耗 CPU，由 FreeRTOS 调度） */
     BaseType_t ok = xSemaphoreTake(s_rx_done_sem, pdMS_TO_TICKS((timeout_us + 999) / 1000 + 1));
     if (ok != pdPASS) {
-        /* 超时：停止接收，返回 TIMEOUT */
-        rmt_receive(s_rmt_rx_chan, NULL, 0, NULL);
+        /* 超时恢复：disable → enable 复位 RMT RX 状态机。
+         * 信号量残留：超时后 s_rx_done_sem 可能有残留 Give，但下一次 measure 入口的
+         * xSemaphoreTake(s_rx_done_sem, 0) 会清空，故此处不必额外 Take。
+         * 旧实现误用 rmt_receive(NULL,...) 取消——违反 v5.x RX 契约，改为状态机复位。*/
+        rmt_disable(s_rmt_rx_chan);
+        esp_err_t start_err = rmt_enable(s_rmt_rx_chan);
+        if (start_err != ESP_OK) {
+            return WINK_ERR_HARDWARE;
+        }
         return WINK_ERR_TIMEOUT;
     }
 

@@ -93,7 +93,7 @@ extern const uint16_t pal_pwm_pin_map[PAL_PWM_CHANNELS];
  * @brief 初始化指定通道的 PWM 发生器
  * @param channel 逻辑 PWM 通道号
  * @param frequency_hz PWM 频率 (单位: Hz)
- * @note 失败型：非法 channel（host: >= PWM_CHANNELS）返回 WINK_ERR_INVALID_ARG；
+ * @note 失败型：非法 channel（host: >= PAL_PWM_CHANNELS）返回 WINK_ERR_INVALID_ARG；
  *       Phase 2 起资源占用返回 WINK_ERR_BUSY / WINK_ERR_RESOURCE_EXHAUSTED。
  */
 WINK_WARN_UNUSED_RESULT wink_status_t pal_pwm_init(uint8_t channel, uint32_t frequency_hz);

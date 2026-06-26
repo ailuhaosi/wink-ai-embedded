@@ -1,0 +1,30 @@
+name: Clang-Tidy Code Quality
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Clang-Tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy-17
+          sudo ln -sf /usr/bin/clang-tidy-17 /usr/bin/clang-tidy
+
+      - name: Run Clang-Tidy
+        working-directory: wink-micro-os
+        run: |
+          # Check all C files, exclude third-party
+          find . -name "*.c" -not -path "./third-party/*" | xargs clang-tidy 2>&1 | tee clang-tidy-report.txt
+          
+          # Fail if any errors
+          if grep -q "error:" clang-tidy-report.txt; then
+            echo "::error::Clang-Tidy found errors, see report above"
+            exit 1
+          fi

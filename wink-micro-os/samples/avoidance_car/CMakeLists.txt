@@ -2,7 +2,7 @@
 # 默认 App（WINK_APP_DIR 未指定时）。
 set(APP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/device_tree.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/app_main.c)
+    ${CMAKE_CURRENT_SOURCE_DIR}/app_callbacks.c)
 
 # host 端到端测试可执行：runtime + trace + dal + targets/host + app
 add_executable(app_avoidance_car_e2e

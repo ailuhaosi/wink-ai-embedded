@@ -8,7 +8,7 @@
  * MVP 阶段说明：
  * - GPIO/PWM/I2C 已实现真实硬件驱动（待真机验证）
  * - 超声波脉冲捕获：pal_gpio_pulse_in 仍为 busy-wait 降级路径；RMT 硬件捕获见 pal_hal_esp32_rmt.c
- * - 引脚映射为固定默认值（FIXME），后续接入 device_tree 真实路由（评审 P1-3，独立后续工作）
+ * - PWM 引脚路由经 board_config.c（pal_pwm_pin_map 强定义；本 TU 提供弱默认）；I2C SDA/SCL 仍为固定默认（FIXME）
  */
 #include "pal_hal.h"
 #include "pal_osal.h"       /* pal_get_us() (used in pal_gpio_pulse_in busy-wait) */
@@ -165,6 +165,12 @@ wink_status_t pal_gpio_disable_interrupt(uint16_t pin) {
  * PWM (LEDC) 实现
  * ───────────────────────────────────────────────────────── */
 
+#if defined(ESP_PLATFORM)
+/* 板级路由弱默认：无 board_config.c 覆盖时使用，避免链接缺符号。
+ * 强定义由 samples/<app>/board_config.c 提供。*/
+__attribute__((weak)) const uint16_t pal_pwm_pin_map[PAL_PWM_CHANNELS] = {2, 4, 5, 18, 19, 21, 22, 23};
+#endif
+
 /* owner 字符串常量：claim/release 必须逐字一致，否则 release 静默 no-op。*/
 static const char *const PWM_OWNER = "pal_hal_esp32";
 
@@ -197,13 +203,9 @@ wink_status_t pal_pwm_init(uint8_t channel, uint32_t freq_hz) {
         return WINK_ERR_HARDWARE;
     }
 
-    /* FIXME: MVP 阶段固定映射，后续接入 peripheral registry 动态配置（Task 5 替换为 pal_pwm_pin_map）
-     * channel 0 -> GPIO 2 (板载 LED), 1 -> GPIO 4, 2 -> GPIO 5, 3 -> GPIO 18
-     * channel 4 -> GPIO 19, 5 -> GPIO 21, 6 -> GPIO 22, 7 -> GPIO 23 */
-    static const int pwm_gpio_map[PAL_PWM_CHANNELS] = {2, 4, 5, 18, 19, 21, 22, 23};
-
+    /* 物理路由来自 board_config.c 的强定义（无覆盖时回落至本 TU 弱默认 pal_pwm_pin_map）。*/
     ledc_channel_config_t ch_cfg = {
-        .gpio_num = pwm_gpio_map[channel],   /* Task 5 swaps to pal_pwm_pin_map[channel] */
+        .gpio_num = pal_pwm_pin_map[channel],
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = (ledc_channel_t)channel,
         .intr_type = LEDC_INTR_DISABLE,

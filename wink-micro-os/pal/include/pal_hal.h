@@ -83,6 +83,13 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_pulse_in(uint16_t pin, bool level
 #define PAL_PWM_CHANNELS 8
 
 /**
+ * @brief 板级 PWM 通道→GPIO 路由表。
+ * @note 物理 target 由 board_config.c 提供强定义；esp32 target 提供弱默认。
+ *       host/wasm 不引用本符号（不路由物理 GPIO）。
+ */
+extern const uint16_t pal_pwm_pin_map[PAL_PWM_CHANNELS];
+
+/**
  * @brief 初始化指定通道的 PWM 发生器
  * @param channel 逻辑 PWM 通道号
  * @param frequency_hz PWM 频率 (单位: Hz)

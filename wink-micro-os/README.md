@@ -80,7 +80,14 @@ emmake make
 ```bash
 idf.py build
 ```
-> esp32 目前为骨架（ROADMAP），完整 ESP-IDF 移植待后续。
+> ⚠️ **ESP32 真机代码状态（2026-06）**：GPIO/PWM/I2C/OSAL/WDT/资源治理/RMT 超声波捕获均有实现，
+> **但尚未经 `idf.py` 编译验证，亦未经硬件验证**——本仓 host 测试矩阵（§3.3）不编译 `targets/esp32`，
+> 故 ESP32 真机函数体（`#if defined(ESP_PLATFORM)` 内）未被任何 CI/本地构建覆盖。
+> 已完成：PAL 契约符号（`WINK_ERR_HARDWARE` / `WINK_MUTEX_WAIT_FOREVER` / `PAL_RESET_REASON_*`）补齐、
+> 平台判定宏统一为 `ESP_PLATFORM`、RMT 接收缓冲按 ESP-IDF v5.x 契约重写、host 端契约编译探针
+> （`test_pal_contract`）守卫符号完整性。**仍待**：`idf.py build` 编译通过 + Wave B 硬件验证
+> （示波器测 RMT 中断延迟 < 10us、HC-SR04 测距精度）后，方可声称真机可用。
+> 完整 ESP-IDF 移植（含 device_tree 物理引脚路由 P1-3、LEDC timer 分组 P2-2）见后续 Phase 3 / Wave B。
 
 ### 3.3 在本机（host）构建并运行测试
 

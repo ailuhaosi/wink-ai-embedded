@@ -7,34 +7,39 @@ if(NOT WINK_MICRO_OS_ROOT)
 endif()
 include(${WINK_MICRO_OS_ROOT}/core_sources.cmake)
 
-if(TARGET_PLATFORM STREQUAL "esp32")
-    if(ESP_PLATFORM)
-        # ESP-IDF 环境：注册为 IDF 组件
-        idf_component_register(
-            SRCS
-                # ESP32 PAL 实现
-                pal_hal_esp32.c
-                pal_osal_esp32.c
-                pal_resource_esp32.c
-                pal_hal_esp32_rmt.c
-                # 核心共享源文件（来自 core_sources.cmake）
-                ${WINK_CORE_SOURCES}
-            INCLUDE_DIRS
-                ${WINK_CORE_INCLUDE_DIRS}
-            REQUIRES
-                driver
-        )
-        # 输出组件库目标
-        set(ESP32_PAL_LIB ${COMPONENT_LIB} CACHE INTERNAL "")
-    else()
-        # 非 ESP-IDF 环境：仅声明源文件（供静态分析）
-        set(ESP32_PAL_SOURCES
+# IDF 组件上下文判定：ESP_PLATFORM 由 ESP-IDF 在组件处理时定义，是"当前正作为 IDF 组件被构建"
+# 的可靠信号。原门控 if(TARGET_PLATFORM STREQUAL "esp32") 依赖调用方在根 CMakeLists 设置
+# TARGET_PLATFORM，但 IDF 组件在独立作用域内处理，未必继承该 cache 变量，导致组件静默不注册
+# （现象：组件不出现在 Components 列表、app_main 找不到 wink 头文件）。改用 ESP_PLATFORM 判定。
+if(ESP_PLATFORM)
+    # ESP-IDF 环境：注册为 IDF 组件
+    idf_component_register(
+        SRCS
+            # ESP32 PAL 实现
             pal_hal_esp32.c
             pal_osal_esp32.c
             pal_resource_esp32.c
             pal_hal_esp32_rmt.c
+            # 核心共享源文件（来自 core_sources.cmake）
             ${WINK_CORE_SOURCES}
-        )
-    endif()
-    message(STATUS "esp32 target configured (ESP-IDF integration)")
+        INCLUDE_DIRS
+            ${WINK_CORE_INCLUDE_DIRS}
+        REQUIRES
+            driver
+            esp_timer
+            esp_system
+    )
+    # 输出组件库目标
+    set(ESP32_PAL_LIB ${COMPONENT_LIB} CACHE INTERNAL "")
+    message(STATUS "wink esp32 target registered as IDF component")
+elseif(TARGET_PLATFORM STREQUAL "esp32")
+    # 非 ESP-IDF 环境：仅声明源文件（供静态分析）
+    set(ESP32_PAL_SOURCES
+        pal_hal_esp32.c
+        pal_osal_esp32.c
+        pal_resource_esp32.c
+        pal_hal_esp32_rmt.c
+        ${WINK_CORE_SOURCES}
+    )
+    message(STATUS "wink esp32 target configured (static analysis)")
 endif()

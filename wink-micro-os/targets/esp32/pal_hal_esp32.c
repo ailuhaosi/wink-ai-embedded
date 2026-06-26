@@ -2,10 +2,8 @@
  * @file pal_hal_esp32.c
  * @brief ESP32 真机 PAL HAL 实现（ESP-IDF v5.x）。
  *
- * ⚠️ @verified: NO —— 本文件真机函数体（`#if defined(ESP_PLATFORM)` 内）**未经 `idf.py` 编译，
- *    亦未经硬件验证**。host 构建只编译 `#else` stub 分支，不覆盖真机代码。已知契约层符号
- *    （WINK_ERR_HARDWARE 等）已补齐、平台宏已统一为 ESP_PLATFORM；真机行为须在 Wave B 硬件
- *    验证计划中经 `idf.py build` + 上电测试后才算可用。
+ * ⚠️ @verified: SOURCE-EDITED -- ISR uintptr_t round-trip fix applied; idf.py compile verification
+ *    DEFERRED (no ESP-IDF in this session). Hardware behavior remains pending Wave B board validation.
  *
  * MVP 阶段说明：
  * - GPIO/PWM/I2C 已实现真实硬件驱动（待真机验证）
@@ -99,7 +97,7 @@ static pal_gpio_isr_t s_gpio_isr[GPIO_NUM_MAX];
 static void *s_gpio_isr_arg[GPIO_NUM_MAX];
 
 static void IRAM_ATTR gpio_isr_wrapper(void *arg) {
-    uint32_t pin = (uint32_t)arg;
+    uint32_t pin = (uint32_t)(uintptr_t)arg;
     if (pin < GPIO_NUM_MAX && s_gpio_isr[pin] != NULL) {
         s_gpio_isr[pin](s_gpio_isr_arg[pin]);
     }

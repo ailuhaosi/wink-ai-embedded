@@ -2,11 +2,8 @@
  * @file pal_hal_esp32_rmt.c
  * @brief ESP32 RMT 硬件脉冲捕获（超声波专用）。
  *
- * ⚠️ @verified: NO —— 本实现按 ESP-IDF v5.x `rmt_rx` 新驱动 API 契约编写（用户拥有接收缓冲、
- *    回调里 edata->received_symbols 指向该缓冲），但**未经 `idf.py` 编译，亦未经 HC-SR04 硬件
- *    验证**。在通过 Wave B 硬件验证（示波器测中断延迟 < 10us、测距精度达标）前，不得声称可用。
- *    评审 P0-2：旧实现误把 `rmt_rx_done_event_data_t.received_symbols`（const 指针）当用户缓冲、
- *    `sizeof(指针)` 当长度，逻辑不可工作——本次按契约重写。
+ * ⚠️ @verified: SOURCE-EDITED -- RMT timeout disable/enable reset applied; idf.py compile verification
+ *    DEFERRED (no ESP-IDF in this session). Hardware validation still required: oscilloscope ISR latency < 10us and HC-SR04 accuracy.
  *
  * 使用 RMT (Remote Control) 外设实现超声波脉冲测量，替换 pal_hal_esp32.c 中的 busy-wait。
  *

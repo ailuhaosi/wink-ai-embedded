@@ -2,8 +2,13 @@
  * @file pal_hal_esp32_rmt.c
  * @brief ESP32 RMT 硬件脉冲捕获（超声波专用）。
  *
- * 使用 RMT (Remote Control) 外设实现非阻塞超声波脉冲测量，
- * 完全替换 pal_hal_esp32.c 中的 busy-wait 实现，不阻塞 tick。
+ * ⚠️ @verified: NO —— 本实现按 ESP-IDF v5.x `rmt_rx` 新驱动 API 契约编写（用户拥有接收缓冲、
+ *    回调里 edata->received_symbols 指向该缓冲），但**未经 `idf.py` 编译，亦未经 HC-SR04 硬件
+ *    验证**。在通过 Wave B 硬件验证（示波器测中断延迟 < 10us、测距精度达标）前，不得声称可用。
+ *    评审 P0-2：旧实现误把 `rmt_rx_done_event_data_t.received_symbols`（const 指针）当用户缓冲、
+ *    `sizeof(指针)` 当长度，逻辑不可工作——本次按契约重写。
+ *
+ * 使用 RMT (Remote Control) 外设实现超声波脉冲测量，替换 pal_hal_esp32.c 中的 busy-wait。
  *
  * 设计要点：
  * - RMT 时钟 80MHz，分频因子 80 → 1MHz 分辨率 (1us/ tick)
@@ -39,9 +44,14 @@
 #define MIN_VALID_PULSE_US      100     /* 略小于理论最小值，留余量 */
 #define MAX_VALID_PULSE_US      25000   /* 略大于理论最大值，留余量 */
 
-/* 全局状态（单实例超声波，MVP 阶段暂不支持多路） */
+/* 全局状态（单实例超声波，MVP 阶段暂不支持多路）。
+ * s_rx_buf 是【用户拥有】的接收缓冲：rmt_receive 把捕获的符号直接写入其中，完成回调经
+ * s_rx_num_symbols 报告数量（回调入参 edata->received_symbols 即指向 s_rx_buf，ESP-IDF v5.x 契约）。
+ * 评审 P0-2：不再用 rmt_rx_done_event_data_t 的 const 指针字段当可写缓冲。 */
+#define RMT_RX_SYMBOLS 64                       /* 与 mem_block_symbols 对齐，单次接收上限 */
 static rmt_channel_handle_t   s_rmt_rx_chan = NULL;
-static rmt_rx_done_event_data_t s_rx_done_data;
+static rmt_symbol_word_t      s_rx_buf[RMT_RX_SYMBOLS];
+static volatile size_t        s_rx_num_symbols = 0;
 static SemaphoreHandle_t      s_rx_done_sem = NULL;
 static uint16_t               s_echo_pin = 0xFFFF;
 
@@ -53,7 +63,8 @@ static bool IRAM_ATTR rmt_rx_done_callback(rmt_channel_handle_t channel,
                                             const rmt_rx_done_event_data_t *edata,
                                             void *user_data) {
     BaseType_t high_task_wakeup = pdFALSE;
-    s_rx_done_data = *edata;  /* 浅拷贝 received symbols */
+    /* 符号已由 rmt_receive 写入 s_rx_buf（edata->received_symbols 指向它）；仅记录数量即可 */
+    s_rx_num_symbols = edata->num_symbols;
     xSemaphoreGiveFromISR(s_rx_done_sem, &high_task_wakeup);
     return high_task_wakeup == pdTRUE;
 }
@@ -134,13 +145,13 @@ wink_status_t pal_rmt_ultrasonic_measure(uint32_t timeout_us, uint32_t *pulse_us
     /* 清空信号量 */
     xSemaphoreTake(s_rx_done_sem, 0);
 
-    /* 启动 RMT 接收（等待第一个上升沿开始捕获） */
+    /* 启动 RMT 接收：符号写入【用户拥有的】s_rx_buf（ESP-IDF v5.x rmt_receive 契约——
+     * 第二参数须为调用方持有的可写缓冲，第三参数为其字节数，缓冲须保持有效至 done 事件）。 */
     rmt_receive_config_t recv_cfg = {
         .signal_range_min_ns = 1000,     /* 1us, 过滤毛刺 */
         .signal_range_max_ns = (uint32_t)((uint64_t)timeout_us * 1000),  /* 超时对应最大脉宽 */
     };
-    esp_err_t err = rmt_receive(s_rmt_rx_chan, s_rx_done_data.received_symbols,
-                                 sizeof(s_rx_done_data.received_symbols), &recv_cfg);
+    esp_err_t err = rmt_receive(s_rmt_rx_chan, s_rx_buf, sizeof(s_rx_buf), &recv_cfg);
     if (err != ESP_OK) {
         return WINK_ERR_HARDWARE;
     }
@@ -164,14 +175,16 @@ wink_status_t pal_rmt_ultrasonic_measure(uint32_t timeout_us, uint32_t *pulse_us
      *   symbol[N].level0=0, duration0=低电平等待时间
      *   symbol[N].level1=1, duration1=ECHO 脉冲宽度（有效值）
      */
-    if (s_rx_done_data.num_symbols >= 1) {
+    /* 解析 s_rx_buf 中的符号 → 超声波脉宽（捕获数量先读入局部，避免反复读 volatile + 限定上界） */
+    size_t num = s_rx_num_symbols;
+    if (num >= 1 && num <= RMT_RX_SYMBOLS) {
         uint32_t max_high_duration = 0;
 
-        /* 搜索所有符号，找最长的高电平脉冲 */
-        for (int i = 0; i < s_rx_done_data.num_symbols; i++) {
-            const rmt_symbol_word_t *sym = &s_rx_done_data.received_symbols[i];
+        /* 搜索所有符号，找最长的高电平脉冲（抗串扰噪声、边沿抖动） */
+        for (size_t i = 0; i < num; i++) {
+            const rmt_symbol_word_t *sym = &s_rx_buf[i];
 
-            /* 检查该符号的高电平时长（每个符号包含 level0 + level1 两段） */
+            /* 每个符号含 level0 + level1 两段，取高电平（==1）时长最大值 */
             if (sym->level0 == 1 && sym->duration0 > max_high_duration) {
                 max_high_duration = sym->duration0;
             }

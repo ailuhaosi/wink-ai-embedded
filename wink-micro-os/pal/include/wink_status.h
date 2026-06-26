@@ -38,6 +38,7 @@ typedef enum {
     WINK_ERR_PERMISSION         = -9,
     WINK_ERR_RESOURCE_EXHAUSTED = -10,
     WINK_ERR_NOT_INITIALIZED    = -11,
+    WINK_ERR_HARDWARE           = -12,   /* 硬件/驱动返回非 OK（如 ESP-IDF esp_err_t） */
 
     /* 功能安全相关（区分可恢复 / 致命） */
     WINK_ERR_OVERCURRENT        = -20,   /* 过流（可恢复：限流重试） */

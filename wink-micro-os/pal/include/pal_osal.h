@@ -45,6 +45,9 @@ uint64_t pal_get_us(void);
 
 typedef void* pal_mutex_t;
 
+/** @brief 「永久等待」超时哨兵值（pal_mutex_lock 的 timeout_ms 传入此值代表无限等待）。 */
+#define WINK_MUTEX_WAIT_FOREVER 0xFFFFFFFFu
+
 /**
  * @brief 创建一个互斥锁句柄
  */
@@ -53,7 +56,7 @@ pal_mutex_t pal_mutex_create(void);
 /**
  * @brief 获取互斥锁 (锁定)
  * @param mutex 锁句柄
- * @param timeout_ms 阻塞超时时间，传入 0xFFFFFFFF 代表无限等待
+ * @param timeout_ms 阻塞超时时间，传入 WINK_MUTEX_WAIT_FOREVER 代表无限等待
  * @note 失败型：NULL mutex → WINK_ERR_INVALID_ARG；timeout → WINK_ERR_TIMEOUT；
  *       不支持 target → WINK_ERR_UNSUPPORTED。
  */
@@ -78,13 +81,16 @@ void pal_mutex_destroy(pal_mutex_t mutex);
 typedef enum {
     PAL_RESET_REASON_UNKNOWN  = 0,
     PAL_RESET_REASON_POWER_ON = 1,
-    PAL_RESET_REASON_WATCHDOG = 2,
-    PAL_RESET_REASON_PANIC    = 3,
+    PAL_RESET_REASON_WATCHDOG = 2,   /* boot safe-lock 触发（wink_runtime.c WATCHDOG|PANIC 判定） */
+    PAL_RESET_REASON_PANIC    = 3,   /* boot safe-lock 触发 */
+    PAL_RESET_REASON_SOFTWARE = 4,   /* 软件主动复位（如 esp_reset/ESP_RST_SW），不触发 safe-lock */
+    PAL_RESET_REASON_BROWNOUT = 5,   /* 掉电复位，信息性记录 */
 } pal_reset_reason_t;
 
 /**
  * @brief 读取上次复位原因（boot safe-lock 判定用，Phase 5 Task 5-5）。
  * @note host 返回可配置值（供测试）；wasm 返回 UNKNOWN；esp32 映射 esp_reset_reason()（随 P2-6）。
+ *       WATCHDOG/PANIC 触发 wink_runtime 的 boot safe-lock（先关断执行器再 init）；其余仅信息性。
  */
 pal_reset_reason_t pal_get_reset_reason(void);
 

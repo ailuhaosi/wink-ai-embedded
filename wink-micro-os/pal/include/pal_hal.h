@@ -79,6 +79,9 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_gpio_pulse_in(uint16_t pin, bool level
 /*                                2. PWM 抽象                                 */
 /* ========================================================================== */
 
+/** @brief 平台无关 PWM 逻辑通道上限（各 target 与 router 统一引用）。*/
+#define PAL_PWM_CHANNELS 8
+
 /**
  * @brief 初始化指定通道的 PWM 发生器
  * @param channel 逻辑 PWM 通道号
@@ -94,6 +97,12 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_pwm_init(uint8_t channel, uint32_t fre
  * @param duty_cycle_percent 占空比浮点百分比 (0.0f 到 100.0f)
  */
 WINK_WARN_UNUSED_RESULT wink_status_t pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent);
+
+/**
+ * @brief 释放指定 PWM 通道（清零占空比、释放通道占用、递减 timer 引用计数）。
+ * @note void 返回：deinit 为 best-effort，不应失败；未初始化 channel 调用为 no-op。
+ */
+void pal_pwm_deinit(uint8_t channel);
 
 
 /* ========================================================================== */

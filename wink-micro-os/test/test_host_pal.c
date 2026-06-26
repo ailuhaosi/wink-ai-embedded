@@ -1,8 +1,14 @@
 #include "unity.h"
 #include "pal_osal.h"
+#include "pal_pwm_router.h"
+#include "pal_resource.h"
 #include "host_test_ctrl.h"
 
-void setUp(void) { sim_reset_time(); }
+void setUp(void) {
+    sim_reset_time();
+    pal_pwm_router_reset();
+    pal_resource_reset();
+}
 void tearDown(void) {}
 
 void test_delay_advances_virtual_time(void) {
@@ -14,7 +20,9 @@ void test_delay_advances_virtual_time(void) {
 
 void test_pwm_duty_recorded(void) {
     /* pal_pwm_set_duty 在 targets/host 提供；经声明直接调（Phase 3 起 status 化） */
-    extern wink_status_t pal_pwm_set_duty(uint8_t channel, float duty);
+    extern wink_status_t pal_pwm_init(uint8_t, uint32_t);
+    extern wink_status_t pal_pwm_set_duty(uint8_t, float);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_pwm_init(2, 50));
     wink_status_t st = pal_pwm_set_duty(2, 7.5f);
     TEST_ASSERT_EQUAL_INT(WINK_OK, st);
     TEST_ASSERT_EQUAL_FLOAT(7.5f, sim_last_pwm_duty(2));
@@ -56,6 +64,31 @@ void test_echo_timing_stored(void) {
     TEST_ASSERT_TRUE(pal_gpio_read(5));   /* 首次读推进到 rise，返回高 */
 }
 
+void test_pwm_deinit_then_reinit(void) {
+    extern wink_status_t pal_pwm_init(uint8_t, uint32_t);
+    extern wink_status_t pal_pwm_set_duty(uint8_t, float);
+    extern void pal_pwm_deinit(uint8_t);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_pwm_init(3, 1000));
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_pwm_set_duty(3, 50.0f));
+    pal_pwm_deinit(3);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_pwm_init(3, 2000));   /* different freq OK after deinit */
+    pal_pwm_deinit(3);
+}
+
+void test_pwm_reinit_different_freq_returns_busy(void) {
+    extern wink_status_t pal_pwm_init(uint8_t, uint32_t);
+    extern void pal_pwm_deinit(uint8_t);
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_pwm_init(0, 50));
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_BUSY, pal_pwm_init(0, 1000));  /* not deinit'd → BUSY */
+    pal_pwm_deinit(0);
+}
+
+void test_pwm_deinit_uninit_is_noop(void) {
+    extern void pal_pwm_deinit(uint8_t);
+    pal_pwm_deinit(5);   /* uninitialized: must not crash */
+    TEST_PASS();
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_delay_advances_virtual_time);
@@ -64,5 +97,8 @@ int main(void) {
     RUN_TEST(test_pulse_in_reads_echo_width);
     RUN_TEST(test_pulse_in_timeout_when_echo_late);
     RUN_TEST(test_echo_timing_stored);
+    RUN_TEST(test_pwm_deinit_then_reinit);
+    RUN_TEST(test_pwm_reinit_different_freq_returns_busy);
+    RUN_TEST(test_pwm_deinit_uninit_is_noop);
     return UNITY_END();
 }

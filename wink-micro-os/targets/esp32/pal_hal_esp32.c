@@ -13,6 +13,7 @@
 #include "pal_hal.h"
 #include "pal_osal.h"       /* pal_get_us() (used in pal_gpio_pulse_in busy-wait) */
 #include "pal_resource.h"
+#include "pal_pwm_router.h"
 
 #if defined(ESP_PLATFORM)
 #include "driver/gpio.h"
@@ -164,55 +165,68 @@ wink_status_t pal_gpio_disable_interrupt(uint16_t pin) {
  * PWM (LEDC) 实现
  * ───────────────────────────────────────────────────────── */
 
-#define PWM_CHANNELS  8
-
-static bool s_pwm_initialized[PWM_CHANNELS] = {false};
+/* owner 字符串常量：claim/release 必须逐字一致，否则 release 静默 no-op。*/
+static const char *const PWM_OWNER = "pal_hal_esp32";
 
 wink_status_t pal_pwm_init(uint8_t channel, uint32_t freq_hz) {
-    if (channel >= PWM_CHANNELS) { return WINK_ERR_INVALID_ARG; }
-
-    wink_status_t rs = pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, channel, "pal_hal_esp32");
+    uint8_t timer_num = 0;
+    wink_status_t rs = pal_pwm_router_acquire(channel, freq_hz, &timer_num);
     if (wink_status_is_error(rs)) { return rs; }
 
-#if defined(ESP_PLATFORM)
-    /* FIXME: MVP 阶段固定映射，后续接入 peripheral registry 动态配置
-     * channel 0 -> GPIO 2 (板载 LED), 1 -> GPIO 4, 2 -> GPIO 5, 3 -> GPIO 18
-     * channel 4 -> GPIO 19, 5 -> GPIO 21, 6 -> GPIO 22, 7 -> GPIO 23 */
-    static const int pwm_gpio_map[PWM_CHANNELS] = {2, 4, 5, 18, 19, 21, 22, 23};
+    rs = pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, channel, PWM_OWNER);
+    if (wink_status_is_error(rs)) {
+        pal_pwm_router_release(channel);
+        return rs;
+    }
 
+#if defined(ESP_PLATFORM)
+    /* router 分配 timer，不再写死 LEDC_TIMER_0：同频复用、异频隔离。*/
     ledc_timer_config_t timer_cfg = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .duty_resolution = LEDC_TIMER_13_BIT,
-        .timer_num = LEDC_TIMER_0,
+        .timer_num = (ledc_timer_t)timer_num,
         .freq_hz = freq_hz,
         .clk_cfg = LEDC_AUTO_CLK,
     };
     esp_err_t err = ledc_timer_config(&timer_cfg);
-    if (err != ESP_OK) { return WINK_ERR_HARDWARE; }
+    if (err != ESP_OK) {
+        pal_pwm_router_release(channel);
+        /* gcc16/xtensa-gcc 不因 (void) 抑制 warn_unused_result：先赋值再丢弃，best-effort 释放。*/
+        wink_status_t _rel = pal_resource_release(PAL_RESOURCE_PWM_CHANNEL, channel, PWM_OWNER);
+        (void)_rel;
+        return WINK_ERR_HARDWARE;
+    }
+
+    /* FIXME: MVP 阶段固定映射，后续接入 peripheral registry 动态配置（Task 5 替换为 pal_pwm_pin_map）
+     * channel 0 -> GPIO 2 (板载 LED), 1 -> GPIO 4, 2 -> GPIO 5, 3 -> GPIO 18
+     * channel 4 -> GPIO 19, 5 -> GPIO 21, 6 -> GPIO 22, 7 -> GPIO 23 */
+    static const int pwm_gpio_map[PAL_PWM_CHANNELS] = {2, 4, 5, 18, 19, 21, 22, 23};
 
     ledc_channel_config_t ch_cfg = {
-        .gpio_num = pwm_gpio_map[channel],
+        .gpio_num = pwm_gpio_map[channel],   /* Task 5 swaps to pal_pwm_pin_map[channel] */
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = (ledc_channel_t)channel,
         .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = LEDC_TIMER_0,
+        .timer_sel = (ledc_timer_t)timer_num,
         .duty = 0,
         .hpoint = 0,
     };
     err = ledc_channel_config(&ch_cfg);
-    if (err != ESP_OK) { return WINK_ERR_HARDWARE; }
+    if (err != ESP_OK) {
+        pal_pwm_router_release(channel);
+        /* gcc16/xtensa-gcc 不因 (void) 抑制 warn_unused_result：先赋值再丢弃，best-effort 释放。*/
+        wink_status_t _rel = pal_resource_release(PAL_RESOURCE_PWM_CHANNEL, channel, PWM_OWNER);
+        (void)_rel;
+        return WINK_ERR_HARDWARE;
+    }
 #else
     (void)freq_hz;
 #endif
-
-    s_pwm_initialized[channel] = true;
     return WINK_OK;
 }
 
 wink_status_t pal_pwm_set_duty(uint8_t channel, float duty_percent) {
-    if (channel >= PWM_CHANNELS || !s_pwm_initialized[channel]) {
-        return WINK_ERR_INVALID_ARG;
-    }
+    if (!pal_pwm_router_channel_ready(channel)) { return WINK_ERR_INVALID_ARG; }
     if (duty_percent < 0.0f) { duty_percent = 0.0f; }
     if (duty_percent > 100.0f) { duty_percent = 100.0f; }
 
@@ -226,6 +240,18 @@ wink_status_t pal_pwm_set_duty(uint8_t channel, float duty_percent) {
     (void)duty_percent;
 #endif
     return WINK_OK;
+}
+
+void pal_pwm_deinit(uint8_t channel) {
+    if (!pal_pwm_router_channel_ready(channel)) { return; }   /* no-op if uninitialized */
+#if defined(ESP_PLATFORM)
+    (void)ledc_set_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)channel, 0);
+    (void)ledc_update_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)channel);
+#endif
+    /* gcc16/xtensa-gcc 不因 (void) 抑制 warn_unused_result：先赋值再丢弃，best-effort 释放/deinit 不失败。*/
+    wink_status_t _rel = pal_resource_release(PAL_RESOURCE_PWM_CHANNEL, channel, PWM_OWNER);
+    (void)_rel;
+    pal_pwm_router_release(channel);
 }
 
 /* ─────────────────────────────────────────────────────────

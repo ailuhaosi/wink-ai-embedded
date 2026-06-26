@@ -9,6 +9,7 @@
  *   旧 _trigger_wasm_interrupt 导出已移除（wasm_entry.c），彻底消除 Asyncify sleeping 窗口重入面。
  */
 #include "pal_hal.h"
+#include "pal_pwm_router.h"
 #include "wasm_bridge.h"
 #include "pal_wasm_internal.h"
 
@@ -63,13 +64,19 @@ void pal_wasm_dispatch_pending_interrupts(void) {
 }
 
 wink_status_t pal_pwm_init(uint8_t channel, uint32_t frequency_hz) {
-    (void)channel; (void)frequency_hz;
-    return WINK_OK;
+    uint8_t timer_num = 0;
+    /* wasm 无资源表/硬件，但 router 提供通道/频率校验与槽位记账，保持与 host/esp32 一致。*/
+    return pal_pwm_router_acquire(channel, frequency_hz, &timer_num);
 }
 
 wink_status_t pal_pwm_set_duty(uint8_t channel, float duty_cycle_percent) {
+    if (!pal_pwm_router_channel_ready(channel)) { return WINK_ERR_INVALID_ARG; }
     js_pal_pwm_set_duty(channel, duty_cycle_percent);
     return WINK_OK;
+}
+
+void pal_pwm_deinit(uint8_t channel) {
+    pal_pwm_router_release(channel);   /* no-op if uninitialized */
 }
 
 wink_status_t pal_i2c_transfer(uint8_t port, uint16_t dev_addr,

@@ -20,6 +20,7 @@ if(ESP_PLATFORM)
             pal_osal_esp32.c
             pal_resource_esp32.c
             pal_hal_esp32_rmt.c
+            ${WINK_MICRO_OS_ROOT}/pal/src/pal_pwm_router.c
             # 核心共享源文件（来自 core_sources.cmake）
             ${WINK_CORE_SOURCES}
         INCLUDE_DIRS
@@ -39,6 +40,7 @@ elseif(TARGET_PLATFORM STREQUAL "esp32")
         pal_osal_esp32.c
         pal_resource_esp32.c
         pal_hal_esp32_rmt.c
+        ${WINK_MICRO_OS_ROOT}/pal/src/pal_pwm_router.c
         ${WINK_CORE_SOURCES}
     )
     message(STATUS "wink esp32 target configured (static analysis)")

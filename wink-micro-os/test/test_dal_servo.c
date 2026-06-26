@@ -1,9 +1,13 @@
 #include "unity.h"
 #include "wink_status.h"
 #include "dal_servo.h"
+#include "pal_pwm_router.h"
 #include "host_test_ctrl.h"
 
-void setUp(void) { sim_reset_time(); }
+void setUp(void) {
+    sim_reset_time();
+    pal_pwm_router_reset();
+}
 void tearDown(void) {}
 
 /* ---- init 契约（Phase 2 Task 2-1）---- */

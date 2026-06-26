@@ -19,6 +19,7 @@
  */
 #include "pal_hal.h"
 #include "pal_resource.h"
+#include "pal_pwm_router.h"
 #include "host_test_ctrl.h"
 
 /* 虚拟时间状态（OSAL 侧推进，HAL 侧消费）—— 跨文件共享，故 extern */
@@ -29,7 +30,6 @@ extern uint64_t host_echo_high_us(void);
 extern uint16_t host_echo_pin(void);
 extern void host_record_pwm(uint8_t channel, float duty);
 
-#define PWM_CHANNELS 8
 /* 协作式 echo 轮询窗口：真机驱动用 while(!read(echo)){ 超时判定 } 空等 echo。
  * host 无真实时间流逝，故 pal_gpio_read 在被调用时把虚拟时间向 echo 边沿推进，
  * 但每次最多推进本窗口——若 echo 在窗口外（远超 30ms 才变高），驱动循环自身的
@@ -72,17 +72,28 @@ wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t t, pal_gpi
 wink_status_t pal_gpio_disable_interrupt(uint16_t pin) { (void)pin; return WINK_OK; }
 
 wink_status_t pal_pwm_init(uint8_t channel, uint32_t freq) {
-    if (channel >= PWM_CHANNELS) return WINK_ERR_INVALID_ARG;   /* Phase 3：channel 校验（原恒 true） */
-    /* Phase 2 Task 2-3：PWM 通道占用治理（先校验 channel 再 claim，避免污染非法项）。 */
-    wink_status_t rs = pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, channel, "pal_hal_host");
+    uint8_t timer_num = 0;
+    wink_status_t rs = pal_pwm_router_acquire(channel, freq, &timer_num);
     if (wink_status_is_error(rs)) { return rs; }
-    (void)freq;
+    rs = pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, channel, "pal_hal_host");
+    if (wink_status_is_error(rs)) {
+        pal_pwm_router_release(channel);   /* roll back router reservation */
+        return rs;
+    }
     return WINK_OK;
 }
 wink_status_t pal_pwm_set_duty(uint8_t channel, float duty) {
-    if (channel >= PWM_CHANNELS) return WINK_ERR_INVALID_ARG;
+    if (!pal_pwm_router_channel_ready(channel)) { return WINK_ERR_INVALID_ARG; }
     host_record_pwm(channel, duty);
     return WINK_OK;
+}
+
+void pal_pwm_deinit(uint8_t channel) {
+    if (!pal_pwm_router_channel_ready(channel)) { return; }   /* no-op if uninitialized */
+    /* gcc16 不因 (void) 抑制 warn_unused_result：先赋值再丢弃，释放/deinit best-effort 不失败。*/
+    wink_status_t _rel = pal_resource_release(PAL_RESOURCE_PWM_CHANNEL, channel, "pal_hal_host");
+    (void)_rel;
+    pal_pwm_router_release(channel);
 }
 
 /* Phase 2：host I2C 事务捕获（供 ssd1306 单测验证 flush 发出正确事务） */

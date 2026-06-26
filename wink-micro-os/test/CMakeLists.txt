@@ -79,6 +79,9 @@ add_wink_host_test(test_pal_resource test_pal_resource.c)
 # 任何被 ESP32/wasm/host 引用却未在 PAL 头定义的符号 → 此处编译失败。
 add_wink_host_test(test_pal_contract test_pal_contract.c)
 
+# target 无关 PWM 定时器分配状态机单测（router 经 pal_host OBJECT lib 链接）
+add_wink_host_test(test_pal_pwm_router test_pal_pwm_router.c)
+
 set(DAL_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_ultrasonic.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../dal/src/dal_servo.c

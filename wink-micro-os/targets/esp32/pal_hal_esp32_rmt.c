@@ -27,9 +27,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-#define RMT_CLK_DIV         80      /* 80MHz / 80 = 1MHz → 1us resolution */
-#define RMT_MEM_BLOCK_SYMB  64      /* 每个 memory block 64 symbols */
-#define RMT_RX_MAX_BYTES    1024    /* Ring buffer size */
+#define RMT_CLK_DIV             80      /* 80MHz / 80 = 1MHz → 1us resolution */
+#define RMT_MEM_BLOCK_SYMB      64      /* 每个 memory block 64 symbols */
+#define RMT_RX_MAX_BYTES        1024    /* Ring buffer size */
+
+/* HC-SR04 有效脉冲范围（对应 2cm ~ 400cm 测距范围）
+ * 声速 ~343m/s，往返距离 = 2 × 实测距离
+ * 最小脉冲: 2cm × 2 / 343m/s ≈ 117us
+ * 最大脉冲: 400cm × 2 / 343m/s ≈ 23324us
+ */
+#define MIN_VALID_PULSE_US      100     /* 略小于理论最小值，留余量 */
+#define MAX_VALID_PULSE_US      25000   /* 略大于理论最大值，留余量 */
 
 /* 全局状态（单实例超声波，MVP 阶段暂不支持多路） */
 static rmt_channel_handle_t   s_rmt_rx_chan = NULL;
@@ -97,6 +105,20 @@ wink_status_t pal_rmt_ultrasonic_init(uint16_t echo_pin) {
         return WINK_ERR_HARDWARE;
     }
 
+    /* 架构评审修复 #6：RMT 中断优先级说明
+     *
+     * ESP32 中断优先级：数值越大优先级越高（0=最低，7=NMI最高）
+     * WiFi/BT 中断优先级通常为 3~4。
+     *
+     * 验证方法（验收标准：中断响应延迟 < 10us）：
+     *   1. 在 TRIG 引脚输出时同时翻转另一 GPIO（打勾）
+     *   2. RMT ISR 中立即翻转另一 GPIO
+     *   3. 示波器测量两 GPIO 的上升沿间隔
+     *
+     * 注：ESP-IDF 5.x RMT new_channel 会自动分配合理优先级，
+     *     如需手动调整，需通过 CONFIG_RMT_INTERRUPT_PRIORITY kconfig。
+     */
+
     return WINK_OK;
 }
 
@@ -133,16 +155,37 @@ wink_status_t pal_rmt_ultrasonic_measure(uint32_t timeout_us, uint32_t *pulse_us
 
     /* 解析 RMT symbols → 超声波脉宽
      *
-     * HC-SR04 波形：
-     *   [0] duration0: 低电平时间 (从 TRIG 结束到 ECHO 上升沿, 可忽略)
-     *       level0: 0 (低)
-     *   [1] duration1: 高电平时间 (ECHO 脉冲宽度, 即为所需值)
-     *       level1: 1 (高)
+     * 鲁棒解析策略：
+     *   1. 遍历所有捕获的符号
+     *   2. 找最长的高电平脉冲（抗串扰噪声、边沿抖动）
+     *   3. 校验脉冲在有效范围内（过滤无效信号）
+     *
+     * HC-SR04 典型波形：
+     *   symbol[N].level0=0, duration0=低电平等待时间
+     *   symbol[N].level1=1, duration1=ECHO 脉冲宽度（有效值）
      */
     if (s_rx_done_data.num_symbols >= 1) {
-        /* 取第一个高电平脉冲的 duration */
-        *pulse_us = s_rx_done_data.received_symbols[0].duration1;
-        return WINK_OK;
+        uint32_t max_high_duration = 0;
+
+        /* 搜索所有符号，找最长的高电平脉冲 */
+        for (int i = 0; i < s_rx_done_data.num_symbols; i++) {
+            const rmt_symbol_word_t *sym = &s_rx_done_data.received_symbols[i];
+
+            /* 检查该符号的高电平时长（每个符号包含 level0 + level1 两段） */
+            if (sym->level0 == 1 && sym->duration0 > max_high_duration) {
+                max_high_duration = sym->duration0;
+            }
+            if (sym->level1 == 1 && sym->duration1 > max_high_duration) {
+                max_high_duration = sym->duration1;
+            }
+        }
+
+        /* 校验脉冲在有效范围内（过滤噪声和超时信号） */
+        if (max_high_duration >= MIN_VALID_PULSE_US &&
+            max_high_duration <= MAX_VALID_PULSE_US) {
+            *pulse_us = max_high_duration;
+            return WINK_OK;
+        }
     }
 
     return WINK_ERR_TIMEOUT;

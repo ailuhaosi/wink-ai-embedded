@@ -10,6 +10,9 @@
 #ifndef WINK_STATUS_H
 #define WINK_STATUS_H
 
+#include <stddef.h>   /* NULL —— 显式包含，保证 ESP-IDF/newlib 精简头文件下也可用
+                        （此前 host/wasm 靠传递包含侥幸通过，是移植性隐患） */
+
 #ifdef __cplusplus
 extern "C" {
 #endif

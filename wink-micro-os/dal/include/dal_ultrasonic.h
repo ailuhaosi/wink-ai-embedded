@@ -25,6 +25,7 @@ typedef struct {
     dal_ultrasonic_state_t state;     ///< Phase 4：非阻塞测量状态机
     wink_status_t last_status;        ///< Phase 4：上次测量结果状态（ERROR 时为具体错误码）
     uint32_t last_pulse_us;           ///< Phase 4：上次 echo 脉宽 μs
+    bool use_rmt;                     ///< ESP32：true=RMT 硬件捕获，false=busy-wait 降级
 } dal_ultrasonic_t;
 
 /**
@@ -37,6 +38,7 @@ typedef struct {
  *     （真机：WINK_ERR_IO / WINK_ERR_BUSY / WINK_ERR_RESOURCE_EXHAUSTED）。
  *   - Postconditions: WINK_OK 时 dev->initialized=true；trig/echo 方向已配置（真机）。
  *   - Sim 分支：跳过物理 GPIO 配置（旁路最低物理信号层，ADR-0003 决策2），仅置结构状态。
+ *   - ESP32：自动初始化 RMT 硬件脉冲捕获；RMT 失败自动降级到 busy-wait。
  */
 WINK_WARN_UNUSED_RESULT
 wink_status_t dal_ultrasonic_init(dal_ultrasonic_t *dev, uint16_t trig_pin, uint16_t echo_pin);
@@ -45,10 +47,10 @@ wink_status_t dal_ultrasonic_init(dal_ultrasonic_t *dev, uint16_t trig_pin, uint
  * @brief 请求一次测量（触发后立即返回；非阻塞）。
  * @note host：测量在 request 内经 pal_gpio_pulse_in 同步完成（虚拟时间下单 tick 即 READY），
  *       表现为「单 tick ready」——这是可接受的仿真保真（host 测状态机契约，非真实 wall-clock 异步）。
- *       真机未来 async capture 时，此处改为启动硬件捕获、保持 MEASURING。
+ *       ESP32：经 RMT 硬件测量，CPU 仅阻塞在信号量等待（不消耗 CPU，由 FreeRTOS 调度）。
  * @note API Contract:
  *   - Preconditions: dev 非 NULL；dal_ultrasonic_init() 已成功。
- *   - Blocking: No.
+ *   - Blocking: Yes (≈ 测量时间 + 调度开销)，but RMT version is not busy-waiting.
  *   - Thread-safe: No; ISR-safe: No.
  *   - Error-codes: WINK_OK(请求已发出) / WINK_ERR_INVALID_ARG / WINK_ERR_NOT_INITIALIZED。
  *   - Postconditions: 触发已发出；结果（READY/ERROR + last_status）经 get_cached_distance 读。

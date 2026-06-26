@@ -4,6 +4,9 @@
 #ifdef SIMULATION
 #include "wasm_bridge.h"   /* js_sim_* 旁路（sim 分支 request_measurement / read 引用） */
 #endif
+#if defined(ESP_PLATFORM) || defined(TARGET_PLATFORM_esp32)
+#include "pal_hal_rmt.h"   /* ESP32 RMT 硬件脉冲捕获 */
+#endif
 
 #define ULTRASONIC_TIMEOUT_US 30000u   /* 30ms 超时保护 */
 #define ULTRASONIC_CM_PER_US  0.017f   /* 声速换算系数 (340m/s, 往返折半) */
@@ -33,6 +36,17 @@ wink_status_t dal_ultrasonic_init(dal_ultrasonic_t *dev, uint16_t trig_pin, uint
     if (wink_status_is_error(status)) { return status; }
     status = pal_gpio_init(echo_pin, PAL_GPIO_INPUT);
     if (wink_status_is_error(status)) { return status; }
+
+#if defined(ESP_PLATFORM) || defined(TARGET_PLATFORM_esp32)
+    /* ESP32：初始化 RMT 硬件脉冲捕获（替代 busy-wait） */
+    status = pal_rmt_ultrasonic_init(echo_pin);
+    if (wink_status_is_error(status)) {
+        /* RMT 失败：降级到 pal_gpio_pulse_in busy-wait */
+    } else {
+        dev->use_rmt = true;
+    }
+#endif
+
     dev->initialized = true;
     return WINK_OK;
 #endif
@@ -52,9 +66,23 @@ wink_status_t dal_ultrasonic_request_measurement(dal_ultrasonic_t *dev) {
 #endif
     dev->state = DAL_ULTRASONIC_MEASURING;
 
-    /* 2. 捕获 echo 脉宽（host: pal_gpio_pulse_in 同步完成；真机未来改 async capture） */
+    /* 2. 捕获 echo 脉宽 */
     uint32_t pulse_us = 0;
-    wink_status_t cap = pal_gpio_pulse_in(dev->echo_pin, true, ULTRASONIC_TIMEOUT_US, &pulse_us);
+    wink_status_t cap;
+
+#if defined(ESP_PLATFORM) || defined(TARGET_PLATFORM_esp32)
+    /* ESP32：优先 RMT 硬件捕获（非阻塞，不消耗 CPU） */
+    if (dev->use_rmt) {
+        cap = pal_rmt_ultrasonic_measure(ULTRASONIC_TIMEOUT_US, &pulse_us);
+    } else {
+        /* 降级：pal_gpio_pulse_in busy-wait */
+        cap = pal_gpio_pulse_in(dev->echo_pin, true, ULTRASONIC_TIMEOUT_US, &pulse_us);
+    }
+#else
+    /* host / 其它平台：pal_gpio_pulse_in */
+    cap = pal_gpio_pulse_in(dev->echo_pin, true, ULTRASONIC_TIMEOUT_US, &pulse_us);
+#endif
+
     if (wink_status_is_error(cap)) {
         dev->last_status = cap;
         dev->state = DAL_ULTRASONIC_ERROR;

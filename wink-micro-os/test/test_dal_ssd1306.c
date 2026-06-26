@@ -12,7 +12,8 @@ void tearDown(void) {}
 
 /* ---- init 契约 ---- */
 void test_init_null_returns_invalid_arg(void) {
-    dal_ssd1306_t dev = {0};
+    static dal_ssd1306_t dev = {0};   /* static：1024B 帧缓冲移出栈，满足 -Wstack-usage 纪律；
+                                       * 各测试函数的 static 局部为独立对象且只跑一次，语义不变 */
     dal_ssd1306_config_t cfg = { .i2c_port = 0, .i2c_addr = 0x3C,
                                   .width = 128, .height = 64, .owner = "oled0" };
     TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG, dal_ssd1306_init(NULL, &cfg));
@@ -20,7 +21,8 @@ void test_init_null_returns_invalid_arg(void) {
 }
 
 void test_init_valid_claims_addr_and_sends_init(void) {
-    dal_ssd1306_t dev = {0};
+    static dal_ssd1306_t dev = {0};   /* static：1024B 帧缓冲移出栈，满足 -Wstack-usage 纪律；
+                                       * 各测试函数的 static 局部为独立对象且只跑一次，语义不变 */
     dal_ssd1306_config_t cfg = { .i2c_port = 0, .i2c_addr = 0x3C,
                                   .width = 128, .height = 64, .owner = "oled0" };
     TEST_ASSERT_EQUAL_INT(WINK_OK, dal_ssd1306_init(&dev, &cfg));
@@ -30,8 +32,8 @@ void test_init_valid_claims_addr_and_sends_init(void) {
 }
 
 void test_init_addr_conflict_returns_busy(void) {
-    dal_ssd1306_t dev0 = {0};
-    dal_ssd1306_t dev1 = {0};
+    static dal_ssd1306_t dev0 = {0};
+    static dal_ssd1306_t dev1 = {0};
     dal_ssd1306_config_t cfg0 = { .i2c_port = 0, .i2c_addr = 0x3C,
                                    .width = 128, .height = 64, .owner = "oled0" };
     dal_ssd1306_config_t cfg1 = { .i2c_port = 0, .i2c_addr = 0x3C,
@@ -42,7 +44,8 @@ void test_init_addr_conflict_returns_busy(void) {
 
 /* ---- clear / draw_text / flush ---- */
 void test_clear_zeros_framebuffer(void) {
-    dal_ssd1306_t dev = {0};
+    static dal_ssd1306_t dev = {0};   /* static：1024B 帧缓冲移出栈，满足 -Wstack-usage 纪律；
+                                       * 各测试函数的 static 局部为独立对象且只跑一次，语义不变 */
     dal_ssd1306_config_t cfg = { .i2c_port = 0, .i2c_addr = 0x3C,
                                   .width = 128, .height = 64, .owner = "oled0" };
     TEST_ASSERT_EQUAL_INT(WINK_OK, dal_ssd1306_init(&dev, &cfg));
@@ -52,7 +55,8 @@ void test_clear_zeros_framebuffer(void) {
 }
 
 void test_draw_text_modifies_framebuffer(void) {
-    dal_ssd1306_t dev = {0};
+    static dal_ssd1306_t dev = {0};   /* static：1024B 帧缓冲移出栈，满足 -Wstack-usage 纪律；
+                                       * 各测试函数的 static 局部为独立对象且只跑一次，语义不变 */
     dal_ssd1306_config_t cfg = { .i2c_port = 0, .i2c_addr = 0x3C,
                                   .width = 128, .height = 64, .owner = "oled0" };
     TEST_ASSERT_EQUAL_INT(WINK_OK, dal_ssd1306_init(&dev, &cfg));
@@ -64,7 +68,8 @@ void test_draw_text_modifies_framebuffer(void) {
 }
 
 void test_flush_generates_i2c_transfers(void) {
-    dal_ssd1306_t dev = {0};
+    static dal_ssd1306_t dev = {0};   /* static：1024B 帧缓冲移出栈，满足 -Wstack-usage 纪律；
+                                       * 各测试函数的 static 局部为独立对象且只跑一次，语义不变 */
     dal_ssd1306_config_t cfg = { .i2c_port = 0, .i2c_addr = 0x3C,
                                   .width = 128, .height = 64, .owner = "oled0" };
     TEST_ASSERT_EQUAL_INT(WINK_OK, dal_ssd1306_init(&dev, &cfg));
@@ -79,7 +84,8 @@ void test_flush_generates_i2c_transfers(void) {
 }
 
 void test_ops_before_init_returns_not_initialized(void) {
-    dal_ssd1306_t dev = {0};
+    static dal_ssd1306_t dev = {0};   /* static：1024B 帧缓冲移出栈，满足 -Wstack-usage 纪律；
+                                       * 各测试函数的 static 局部为独立对象且只跑一次，语义不变 */
     TEST_ASSERT_EQUAL_INT(WINK_ERR_NOT_INITIALIZED, dal_ssd1306_clear(&dev));
     TEST_ASSERT_EQUAL_INT(WINK_ERR_NOT_INITIALIZED,
                           dal_ssd1306_draw_text(&dev, 0, 0, "A"));

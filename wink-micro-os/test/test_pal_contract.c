@@ -1,0 +1,52 @@
+/* PAL 契约完整性编译探针（防符号漂移门禁；P0-1 对策）。
+ *
+ * 背景：ESP32 target 代码在 `#if defined(ESP_PLATFORM)` 内引用 PAL 契约符号，而 host 构建
+ * 不编译 ESP32 .c，曾导致 WINK_ERR_HARDWARE / WINK_MUTEX_WAIT_FOREVER / PAL_RESET_REASON_*
+ * 等「被引用却未在头中定义」的符号长期未被发现（2026-06 评审 P0-1，ESP32 在 idf.py 下无法编译）。
+ *
+ * 本测试 include 全部 PAL 契约头，并对每一个【跨 target 被使用】的枚举/宏符号做编译期断言。
+ * 任何符号缺失或取值漂移 → 编译失败 → run-tests 立即拦截。这是 host 端对 ESP32 契约完整性
+ * 能给出的最强自检（ESP32 .c 函数体的真机行为仍需 idf.py + 硬件验证，不在本探针范围）。
+ */
+#include "unity.h"
+#include "wink_status.h"
+#include "pal_hal.h"
+#include "pal_osal.h"
+#include "pal_resource.h"
+
+/* ---- 编译期：契约符号必须存在且取值正确（核心门禁）---- */
+_Static_assert(WINK_OK == 0,                       "WINK_OK must be 0");
+_Static_assert(WINK_ERR_HARDWARE == -12,           "P0-1: WINK_ERR_HARDWARE must be -12");
+_Static_assert(WINK_MUTEX_WAIT_FOREVER == 0xFFFFFFFFu, "P0-1: mutex 永久等待哨兵");
+_Static_assert(PAL_RESET_REASON_WATCHDOG == 2,     "runtime boot safe-lock 依赖");
+_Static_assert(PAL_RESET_REASON_PANIC    == 3,     "runtime boot safe-lock 依赖（ESP_RST_PANIC→PANIC）");
+_Static_assert(PAL_RESET_REASON_SOFTWARE == 4,     "ESP_RST_SW 映射");
+_Static_assert(PAL_RESET_REASON_BROWNOUT == 5,     "ESP_RST_BROWNOUT 映射");
+
+void setUp(void) { pal_resource_reset(); }
+void tearDown(void) {}
+
+void test_contract_error_codes_and_macros_exist(void) {
+    /* 引用符号到 volatile 防 DCE，并断言取值——符号缺失会在编译期（而非此处）失败 */
+    static volatile wink_status_t code = WINK_ERR_HARDWARE;
+    volatile uint32_t forever = WINK_MUTEX_WAIT_FOREVER;
+    TEST_ASSERT_EQUAL_INT(-12, (int)code);
+    TEST_ASSERT_EQUAL_INT(0xFFFFFFFFu, forever);
+}
+
+void test_contract_release_roundtrip(void) {
+    /* 顺带证明新增 pal_resource_release 在 host 链接且行为正确（P2-1） */
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_claim(PAL_RESOURCE_GPIO_PIN, 13, "probe"));
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_BUSY, pal_resource_claim(PAL_RESOURCE_GPIO_PIN, 13, "other"));
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG,
+                          pal_resource_release(PAL_RESOURCE_GPIO_PIN, 13, "other"));
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_release(PAL_RESOURCE_GPIO_PIN, 13, "probe"));
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_claim(PAL_RESOURCE_GPIO_PIN, 13, "other"));
+}
+
+int main(void) {
+    UNITY_BEGIN();
+    RUN_TEST(test_contract_error_codes_and_macros_exist);
+    RUN_TEST(test_contract_release_roundtrip);
+    return UNITY_END();
+}

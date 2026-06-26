@@ -17,3 +17,9 @@ wink_status_t pal_resource_claim(pal_resource_type_t type, uint32_t id, const ch
     (void)type; (void)id; (void)owner;
     return WINK_OK;
 }
+
+/* wasm 单线程沙箱无资源表：release 同 claim 退化为 no-op（host 仿真侧负责静态校验）。 */
+wink_status_t pal_resource_release(pal_resource_type_t type, uint32_t id, const char *owner) {
+    (void)type; (void)id; (void)owner;
+    return WINK_OK;
+}

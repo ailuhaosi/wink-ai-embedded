@@ -78,3 +78,31 @@ wink_status_t pal_resource_claim(pal_resource_type_t type, uint32_t id, const ch
 #endif
     return WINK_OK;
 }
+
+WINK_WARN_UNUSED_RESULT
+wink_status_t pal_resource_release(pal_resource_type_t type, uint32_t id, const char *owner) {
+    if (owner == NULL) { return WINK_ERR_INVALID_ARG; }
+
+#if defined(ESP_PLATFORM)
+    taskENTER_CRITICAL(NULL);
+#endif
+
+    wink_status_t result = WINK_ERR_INVALID_ARG;   /* 默认：未占用 */
+    for (uint32_t i = 0; i < s_count; i++) {
+        if (s_claims[i].type == type && s_claims[i].id == id) {
+            if (strcmp(s_claims[i].owner, owner) == 0) {
+                /* 命中且 owner 匹配：末尾覆盖缩表 */
+                s_count--;
+                s_claims[i] = s_claims[s_count];
+                result = WINK_OK;
+            }
+            /* owner 不匹配或命中处理后均停止查找 */
+            break;
+        }
+    }
+
+#if defined(ESP_PLATFORM)
+    taskEXIT_CRITICAL(NULL);
+#endif
+    return result;
+}

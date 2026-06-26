@@ -43,6 +43,26 @@ void test_resource_claim_i2c_addr_table_full_returns_exhausted(void) {
                           pal_resource_claim(PAL_RESOURCE_I2C_ADDR, overflow_id, "overflow"));
 }
 
+/* ---- release 语义（P2-1）---- */
+void test_resource_release_then_reclaim_ok(void) {
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_claim(PAL_RESOURCE_GPIO_PIN, 7, "devA"));
+    /* 释放后该资源应可被重新占用 */
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_release(PAL_RESOURCE_GPIO_PIN, 7, "devA"));
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_claim(PAL_RESOURCE_GPIO_PIN, 7, "devA"));
+}
+
+void test_resource_release_wrong_owner_returns_invalid_arg(void) {
+    TEST_ASSERT_EQUAL_INT(WINK_OK, pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, 1, "servoA"));
+    /* 不同 owner 释放 → 拒绝；原占用仍在，servoB 仍冲突 */
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG,
+                          pal_resource_release(PAL_RESOURCE_PWM_CHANNEL, 1, "servoB"));
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_BUSY,
+                          pal_resource_claim(PAL_RESOURCE_PWM_CHANNEL, 1, "servoB"));
+    /* 释放未占用的资源 → INVALID_ARG */
+    TEST_ASSERT_EQUAL_INT(WINK_ERR_INVALID_ARG,
+                          pal_resource_release(PAL_RESOURCE_GPIO_PIN, 99, "nobody"));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_resource_claim_same_owner_idempotent);
@@ -50,5 +70,7 @@ int main(void) {
     RUN_TEST(test_resource_claim_i2c_addr_shared_port_ok);
     RUN_TEST(test_resource_claim_i2c_addr_conflict_returns_busy);
     RUN_TEST(test_resource_claim_i2c_addr_table_full_returns_exhausted);
+    RUN_TEST(test_resource_release_then_reclaim_ok);
+    RUN_TEST(test_resource_release_wrong_owner_returns_invalid_arg);
     return UNITY_END();
 }

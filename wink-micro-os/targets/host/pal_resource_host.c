@@ -40,3 +40,21 @@ wink_status_t pal_resource_claim(pal_resource_type_t type, uint32_t id, const ch
     s_count++;
     return WINK_OK;
 }
+
+WINK_WARN_UNUSED_RESULT
+wink_status_t pal_resource_release(pal_resource_type_t type, uint32_t id, const char *owner) {
+    if (owner == NULL) { return WINK_ERR_INVALID_ARG; }
+
+    for (uint32_t i = 0; i < s_count; i++) {
+        if (s_claims[i].type == type && s_claims[i].id == id) {
+            if (strcmp(s_claims[i].owner, owner) != 0) {
+                return WINK_ERR_INVALID_ARG;   /* 不同 owner：拒绝误释放 */
+            }
+            /* 命中：用末尾元素覆盖并缩表（保持紧凑无空洞；顺序变化对集合语义无影响） */
+            s_count--;
+            s_claims[i] = s_claims[s_count];
+            return WINK_OK;
+        }
+    }
+    return WINK_ERR_INVALID_ARG;   /* 未占用 */
+}

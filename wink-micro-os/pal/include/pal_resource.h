@@ -1,16 +1,15 @@
 /**
  * @file pal_resource.h
- * @brief host/debug target 资源占用治理（静态表，零动态分配）。
+ * @brief 资源占用治理（静态表，零动态分配）。host/debug + esp32 真机双 target 接入；wasm no-op。
  *
- * 检测 GPIO 引脚 / PWM 通道 / I2C 端口的重复占用冲突（review P0-3 / Phase 2 Task 2-3）。
- * 仅 host/debug target；esp32 等真机的等价治理随 P2-6 ROADMAP 推进，wasm 单线程沙箱无需。
+ * 检测 GPIO 引脚 / PWM 通道 / I2C 端口/地址的重复占用冲突（review P0-3 / Phase 2 Task 2-3）。
+ * host/debug 与 esp32 真机均编译接入（esp32 在 FreeRTOS 临界区内维护静态表）；wasm 单线程
+ * 沙箱无需冲突治理，claim/release 退化为 no-op。
  *
  * ⚠ owner 生命周期契约：静态表**持有 owner 指针（不拷贝字符串）**。owner 必须指向
  *    生命周期 ≥ 资源占用期的静态存储——实践中仅接受**字符串字面量**或 device_tree 中的
  *    静态名。传栈上/临时字符串会产生悬垂指针。若需放宽，应在 claim 时 strncpy 到表内
  *    固定缓冲（增加每项体积，权衡，本阶段未做）。
- *
- * ⚠ host-only：pal_resource_* 仅 host/debug 编译接入。真机 target 不得假装已治理。
  */
 #ifndef PAL_RESOURCE_H
 #define PAL_RESOURCE_H
@@ -55,6 +54,18 @@ static inline uint32_t pal_resource_i2c_id(uint8_t port, uint16_t addr) {
  */
 WINK_WARN_UNUSED_RESULT
 wink_status_t pal_resource_claim(pal_resource_type_t type, uint32_t id, const char *owner);
+
+/**
+ * @brief 释放一个已占用的资源（与 claim 配对，支持 deinit/设备树变更回收占位）。
+ * @param type 资源类型
+ * @param id 资源标识
+ * @param owner 占用方静态字符串（须与 claim 时一致）
+ * @return WINK_OK / WINK_ERR_INVALID_ARG(owner 不匹配或未占用) / WINK_ERR_UNSUPPORTED(wasm no-op 视实现)
+ * @note 仅当 (type,id) 存在且 owner 完全匹配时才释放；不同 owner 视为未占用返回 INVALID_ARG，
+ *       防止误释放他人占位。wasm 单线程沙箱恒返回 WINK_OK（无表）。
+ */
+WINK_WARN_UNUSED_RESULT
+wink_status_t pal_resource_release(pal_resource_type_t type, uint32_t id, const char *owner);
 
 /** @brief 清空资源占用表（测试隔离 / 启动重置用） */
 void pal_resource_reset(void);

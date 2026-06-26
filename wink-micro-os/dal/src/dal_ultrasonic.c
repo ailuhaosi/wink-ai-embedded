@@ -4,7 +4,7 @@
 #ifdef SIMULATION
 #include "wasm_bridge.h"   /* js_sim_* 旁路（sim 分支 request_measurement / read 引用） */
 #endif
-#if defined(ESP_PLATFORM) || defined(TARGET_PLATFORM_esp32)
+#if defined(ESP_PLATFORM)
 #include "pal_hal_rmt.h"   /* ESP32 RMT 硬件脉冲捕获 */
 #endif
 
@@ -37,7 +37,7 @@ wink_status_t dal_ultrasonic_init(dal_ultrasonic_t *dev, uint16_t trig_pin, uint
     status = pal_gpio_init(echo_pin, PAL_GPIO_INPUT);
     if (wink_status_is_error(status)) { return status; }
 
-#if defined(ESP_PLATFORM) || defined(TARGET_PLATFORM_esp32)
+#if defined(ESP_PLATFORM)
     /* ESP32：初始化 RMT 硬件脉冲捕获（替代 busy-wait） */
     status = pal_rmt_ultrasonic_init(echo_pin);
     if (wink_status_is_error(status)) {
@@ -70,7 +70,7 @@ wink_status_t dal_ultrasonic_request_measurement(dal_ultrasonic_t *dev) {
     uint32_t pulse_us = 0;
     wink_status_t cap;
 
-#if defined(ESP_PLATFORM) || defined(TARGET_PLATFORM_esp32)
+#if defined(ESP_PLATFORM)
     /* ESP32：优先 RMT 硬件捕获（非阻塞，不消耗 CPU） */
     if (dev->use_rmt) {
         cap = pal_rmt_ultrasonic_measure(ULTRASONIC_TIMEOUT_US, &pulse_us);
@@ -119,6 +119,7 @@ wink_status_t dal_ultrasonic_get_cached_distance(const dal_ultrasonic_t *dev, fl
        extern 签名抄 wasm_bridge.h（SSOT 闭合）。 --- */
 #include "wasm_bridge.h"
 
+/* @deprecated @blocking —— 见头文件契约；BAL 10ms tick 禁用，迁移至 request_measurement + get_cached_distance。 */
 wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     if (dev == NULL || distance_cm == NULL) { return WINK_ERR_INVALID_ARG; }
     if (!dev->initialized) { return WINK_ERR_NOT_INITIALIZED; }
@@ -138,6 +139,8 @@ wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
 
 #else
 /* --- 真实芯片模式 --- */
+/* @deprecated @blocking —— 真机最坏 ≈60ms busy-wait，破坏 10ms tick/WCET；禁从 BAL 调用。
+ * 保留仅供过渡/单测；BAL 应使用 request_measurement + get_cached_distance（Phase 4）。 */
 wink_status_t dal_ultrasonic_read(dal_ultrasonic_t *dev, float *distance_cm) {
     if (dev == NULL || distance_cm == NULL) { return WINK_ERR_INVALID_ARG; }
     if (!dev->initialized) { return WINK_ERR_NOT_INITIALIZED; }

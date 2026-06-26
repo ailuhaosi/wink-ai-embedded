@@ -117,4 +117,4 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_i2c_transfer(uint8_t port, uint16_t de
 }
 #endif
 
-#endif // PAL_HAL_H
+#endif /* PAL_HAL_H */

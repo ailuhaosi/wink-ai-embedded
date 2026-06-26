@@ -121,4 +121,4 @@ void pal_critical_exit(uint32_t key);
 }
 #endif
 
-#endif // PAL_OSAL_H
+#endif /* PAL_OSAL_H */

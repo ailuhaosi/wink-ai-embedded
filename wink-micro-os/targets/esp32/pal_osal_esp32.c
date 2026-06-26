@@ -18,7 +18,7 @@
 #include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "esp_task_wdt.h"
-#include "esp_reset_reason.h"
+#include "esp_system.h"       /* esp_reset_reason() + esp_reset_reason_t (IDF v5.x moved it here) */
 #else
 /* 非 ESP32 编译环境：stub 声明供静态分析 */
 typedef void* SemaphoreHandle_t;

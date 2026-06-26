@@ -13,6 +13,7 @@
  * - 引脚映射为固定默认值（FIXME），后续接入 device_tree 真实路由（评审 P1-3，独立后续工作）
  */
 #include "pal_hal.h"
+#include "pal_osal.h"       /* pal_get_us() (used in pal_gpio_pulse_in busy-wait) */
 #include "pal_resource.h"
 
 #if defined(ESP_PLATFORM)
@@ -137,7 +138,8 @@ wink_status_t pal_gpio_enable_interrupt(uint16_t pin, pal_gpio_intr_t intr_type,
     s_gpio_isr[pin] = cb;
     s_gpio_isr_arg[pin] = arg;
 
-    esp_err_t err = gpio_isr_handler_add((gpio_num_t)pin, gpio_isr_wrapper, (void *)pin);
+    /* 经 uintptr_t 中转：uint16_t 可无损存入 void*，同时消除 -Wint-to-pointer-cast 警告 */
+    esp_err_t err = gpio_isr_handler_add((gpio_num_t)pin, gpio_isr_wrapper, (void *)(uintptr_t)pin);
     if (err != ESP_OK) { return WINK_ERR_HARDWARE; }
 
     err = gpio_set_intr_type((gpio_num_t)pin, esp_intr_type);

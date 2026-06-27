@@ -26,7 +26,12 @@ if(ESP_PLATFORM)
         INCLUDE_DIRS
             ${WINK_CORE_INCLUDE_DIRS}
         REQUIRES
+            # ESP-IDF v6.x: driver was split into fine-grained components
+            # v5.x uses 'driver' monolith; v6.x requires esp_driver_*
             driver
+            esp_driver_gpio
+            esp_driver_rmt
+            esp_driver_ledc
             esp_timer
             esp_system
     )

@@ -85,7 +85,7 @@ wink_status_t pal_rmt_ultrasonic_init(uint16_t echo_pin) {
         .gpio_num = echo_pin,
         .flags.invert_in = false,
         .flags.with_dma = false,
-        .flags.io_loop_back = false,
+        /* .flags.io_loop_back - REMOVED IN ESP-IDF v6.x */
     };
     esp_err_t err = rmt_new_rx_channel(&rx_cfg, &s_rmt_rx_chan);
     if (err != ESP_OK) {

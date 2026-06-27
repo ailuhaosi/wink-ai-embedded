@@ -72,5 +72,9 @@ if(NOT TARGET_PLATFORM STREQUAL "wasm")
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/samples/oled_dashboard
                      ${CMAKE_BINARY_DIR}/oled_dashboard_build)
 
+    # DevKitC 冒烟测试：裸板真机 S1-S8 全链路验证
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/samples/devkitc_smoke
+                     ${CMAKE_BINARY_DIR}/devkitc_smoke_build)
+
     add_subdirectory(test)
 endif()

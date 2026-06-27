@@ -19,6 +19,7 @@
 #include "esp_timer.h"
 #include "esp_task_wdt.h"
 #include "esp_system.h"       /* esp_reset_reason() + esp_reset_reason_t (IDF v5.x moved it here) */
+#include "esp_idf_version.h"
 #else
 /* 非 ESP32 编译环境：stub 声明供静态分析 */
 typedef void* SemaphoreHandle_t;
@@ -139,9 +140,19 @@ WINK_WARN_UNUSED_RESULT wink_status_t pal_watchdog_init(uint32_t timeout_ms) {
         .trigger_panic = true,
     };
     esp_err_t err = esp_task_wdt_init(&cfg);
-    if (err != ESP_OK) { return WINK_ERR_HARDWARE; }
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+    /* 如果已初始化，则尝试重配置（v5.1+ 支持） */
+    if (err == ESP_ERR_INVALID_STATE) {
+        err = esp_task_wdt_reconfigure(&cfg);
+    }
+#endif
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        return WINK_ERR_HARDWARE;
+    }
     err = esp_task_wdt_add(NULL);  /* 订阅当前 task */
-    if (err != ESP_OK) { return WINK_ERR_HARDWARE; }
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        return WINK_ERR_HARDWARE;
+    }
     return WINK_OK;
 #else
     (void)timeout_ms; return WINK_ERR_UNSUPPORTED;

@@ -505,9 +505,7 @@ wink_status_t pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
     }
 #endif /* WINK_I2C_USE_V6_API */
 
-    xSemaphoreGive(s_i2c_mutex);
-
-    /* 实际数据传输：在临界区外，让 ESP-IDF 内部锁处理并发 */
+    /* 实际数据传输：持有 s_i2c_mutex 锁以防止并发时设备被驱逐引致 UAF 漏洞 */
 #if WINK_I2C_USE_V6_API
     if (write_buf != NULL && write_len > 0) {
         if (read_buf != NULL && read_len > 0) {
@@ -536,6 +534,8 @@ wink_status_t pal_i2c_transfer(uint8_t port, uint16_t dev_addr,
         pdMS_TO_TICKS(I2C_TRANSFER_TIMEOUT_MS)
     );
 #endif /* WINK_I2C_USE_V6_API */
+
+    xSemaphoreGive(s_i2c_mutex);
 
     if (err != ESP_OK) {
         return pal_i2c_map_esp_err(err);

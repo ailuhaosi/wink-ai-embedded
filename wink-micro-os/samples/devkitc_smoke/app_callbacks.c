@@ -183,8 +183,8 @@ static void telemetry_task(void *arg)
         uint32_t now = (uint32_t)pal_get_ms();
 
         if (now - last_report >= 2000u) {
-            printf("[SMOKE] uptime=%ums isr_count=%lu faults=%lu wdt_verified=%d\n",
-                   now, (unsigned long)s_isr_count, (unsigned long)wink_trace_count(),
+            printf("[SMOKE] uptime=%lums isr_count=%lu faults=%lu wdt_verified=%d\n",
+                   (unsigned long)now, (unsigned long)s_isr_count, (unsigned long)wink_trace_count(),
                    (int)s_wdt_verified);
             last_report = now;
         }

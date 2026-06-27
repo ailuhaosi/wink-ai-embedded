@@ -1,56 +1,60 @@
-# Wink-Micro-OS ESP32 固件
+# README
+- en: [English](./README.md)
+- zh_CN: [简体中文](./README.zh_CN.md)
 
-将 `wink-micro-os/samples/` 下的业务应用编译为可烧录到 ESP32 的固件。
+# Wink-Micro-OS ESP32 Firmware
 
----
-
-## 🎯 核心特性：业务代码零改固件
-
-**业务代码放在 `wink-micro-os/samples/<AppName>/`，换 App / 增删源文件，`esp32_firmware/` 源码一行都不用改！**
-
-由 `generate_app_sources.ps1` 脚本自动扫描并注入构建。
+Compile business applications under `wink-micro-os/samples/` into firmware that can be flashed onto ESP32.
 
 ---
 
-## 📜 generate_app_sources.ps1 — 自动扫描 App 源文件
+## 🎯 Core Feature: Zero-Code Modification Firmware
 
-### 作用
+**Business code is located in `wink-micro-os/samples/<AppName>/`. When switching Apps or adding/removing source files, not a single line of code in `esp32_firmware/` needs to be modified!**
 
-自动扫描 `wink-micro-os/samples/<AppName>/` 下的所有 `.c` 源文件（排除 host 端到端测试文件 `test_*.c`），生成 CMake 片段 `main/app_sources.cmake`，供构建系统自动引入。
+Automatically scanned and injected into the build by the `generate_app_sources.ps1` script.
 
-**彻底消除：**
-- 换 App 时手动改 `CMakeLists.txt` 路径
-- 新增源文件时手动添加到 `SRCS` 列表
-- 硬编码耦合业务目录结构
+---
 
-### 使用方式
+## 📜 generate_app_sources.ps1 — Automatically Scan App Source Files
 
-**方式一：CMake 自动调用（推荐，完全无感）**
+### What it does
+
+Automatically scans all `.c` source files under `wink-micro-os/samples/<AppName>/` (excluding host end-to-end test files like `test_*.c`), and generates the CMake snippet `main/app_sources.cmake` to be automatically included by the build system.
+
+**Completely eliminates:**
+- Manually modifying `CMakeLists.txt` paths when switching Apps
+- Manually adding new source files to the `SRCS` list
+- Hardcoded coupling with the business directory structure
+
+### How to use
+
+**Method 1: Automatic call by CMake (Recommended, completely transparent)**
 ```powershell
-# 直接 build 即可，脚本会在 configure 阶段自动运行
+# Simply run build, the script runs automatically during the configure stage
 idf.py build
 ```
 
-**方式二：手动指定 App**
+**Method 2: Specifying App manually**
 ```powershell
-# 编译指定 App（零改源码）
+# Build a specific App (with zero source code changes)
 idf.py build -DWINK_APP=devkitc_smoke
 idf.py build -DWINK_APP=avoidance_car
 idf.py build -DWINK_APP=oled_dashboard
 ```
 
-**方式三：单独跑脚本（调试用）**
+**Method 3: Run script standalone (for debugging)**
 ```powershell
-# 生成默认 App (devkitc_smoke)
+# Generate for the default App (devkitc_smoke)
 .\generate_app_sources.ps1
 
-# 生成指定 App
+# Generate for a specific App
 .\generate_app_sources.ps1 -AppName avoidance_car
 ```
 
-### 生成产物
+### Output Artifact
 
-脚本输出到 `main/app_sources.cmake`（**自动生成，请勿手动修改**）：
+The script outputs to `main/app_sources.cmake` (**Automatically generated, do not modify manually**):
 ```cmake
 set(WINK_APP_NAME "devkitc_smoke")
 set(WINK_APP_DIR ".../wink-micro-os/samples/devkitc_smoke")
@@ -63,89 +67,89 @@ set(WINK_APP_SOURCES
 
 ---
 
-## 🚀 完整烧录流程
+## 🚀 Complete Flashing Workflow
 
-### 1. 进入固件目录并激活 ESP-IDF 环境（PowerShell）
+### 1. Enter the firmware directory and activate ESP-IDF environment (PowerShell)
 
 ```powershell
-# 进入 esp32_firmware 目录
+# Enter esp32_firmware directory
 cd esp32_firmware
 
-# 激活 EIM profile
+# Activate ESP-IDF profile
 . 'C:\Espressif\tools\Microsoft.v6.0.1.PowerShell_profile.ps1' *> $null
 
-# 解决中文编码问题（必须）
+# Resolve encoding issues for console output (Required)
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
-# 验证激活成功
+# Verify activation was successful
 idf.py --version
 ```
 
-### 2. 编译固件
+### 2. Compile Firmware
 
 ```powershell
-# （可选）彻底清空 build 目录，从零重编
+# (Optional) Completely clean build directory to compile from scratch
 idf.py fullclean
 
-# 编译默认 App (devkitc_smoke)
+# Build default App (devkitc_smoke)
 idf.py build
 
-# 或编译指定 App（零改源码）
+# Or build a specific App (with zero source code changes)
 idf.py build -DWINK_APP=avoidance_car
 ```
 
-### 3. 烧录 + 串口监视器
+### 3. Flash + Serial Monitor
 
 ```powershell
-# 将 COM3 替换为你的实际串口号
+# Replace COM3 with your actual serial port name
 idf.py -p COM3 flash monitor
 ```
 
-### 4. 退出监视器
+### 4. Exit Monitor
 
-按快捷键：`Ctrl + ]`
+Press shortcut: `Ctrl + ]`
 
 ---
 
-## 📋 可用 App 列表
+## 📋 Available Apps
 
-| App 名称 | 说明 |
+| App Name | Description |
 |---|---|
-| `devkitc_smoke` | DevKitC 冒烟测试（GPIO / PWM / I2C / 双核 / 看门狗）|
-| `avoidance_car` | 避障小车（超声波 + 舵机） |
-| `oled_dashboard` | OLED 仪表盘（按键 + LED + SSD1306） |
+| `devkitc_smoke` | DevKitC Smoke Test (GPIO / PWM / I2C / Dual-core / Watchdog) |
+| `avoidance_car` | Obstacle Avoidance Car (Ultrasonic + Servo) |
+| `oled_dashboard` | OLED Dashboard (Button + LED + SSD1306) |
 
 ---
 
-## 💡 常见问题
+## 💡 FAQ
 
-### Q: 新增了一个 `.c` 源文件，需要改 CMakeLists.txt 吗？
-**不需要。** 脚本会自动扫描到，重新 `idf.py build` 即可。
+### Q: I added a new `.c` source file. Do I need to modify CMakeLists.txt?
+**No.** The script will automatically scan it. Simply run `idf.py build` again.
 
-### Q: 编译报中文注释乱码错误？
-已在 CMake 中配置 GCC UTF-8 编码标志（`-finput-charset=UTF-8`），正常不会遇到。如果仍有问题，请确保源文件保存为 UTF-8 编码。
+### Q: Compile error due to encoding of Chinese comments?
+We have configured GCC UTF-8 encoding flags (`-finput-charset=UTF-8`) in CMake, so you shouldn't normally encounter this. If you still do, make sure the source files are saved in UTF-8 encoding.
 
-### Q: 什么时候需要 `fullclean`？
-- 换 App 后
-- 修改了 CMake 脚本后
-- 遇到奇怪的链接错误 / 构建问题时
-- 日常改代码直接 `build` 即可，不需要 `fullclean`
+### Q: When do I need to run `fullclean`?
+- After switching Apps
+- After modifying CMake scripts
+- When encountering strange link errors or build issues
+- For daily code changes, just run `build` directly, no `fullclean` is needed
 
-### Q: `IDF_TARGET is not set, guessed 'esp32'` 是错误吗？
-**不是。** 这是正常信息——ESP-IDF 从 `sdkconfig` 自动检测到编译目标为 `esp32`，可以忽略。
+### Q: Is "IDF_TARGET is not set, guessed 'esp32'" an error?
+**No.** This is informational — ESP-IDF automatically detects the build target as `esp32` from `sdkconfig` and can be safely ignored.
 
 ---
 
-## 📐 架构说明
+## 📐 Architecture Description
 
 ```
 esp32_firmware/
-├── CMakeLists.txt              # ESP-IDF 工程入口，EXTRA_COMPONENT_DIRS 引入 targets/esp32
-├── generate_app_sources.ps1    # ✅ 自动扫描 samples App 源文件
-├── sdkconfig                   # ESP32 默认配置（2MB flash）
+├── CMakeLists.txt              # ESP-IDF project entry point, pulls in targets/esp32 via EXTRA_COMPONENT_DIRS
+├── generate_app_sources.ps1    # ✅ Automatically scans sample App source files
+├── sdkconfig                   # ESP32 default config (2MB flash)
 └── main/
-    ├── app_main.c              # FreeRTOS task 创建 + 栈/heap 监控
-    ├── CMakeLists.txt          # 引入自动生成的 app_sources.cmake
-    └── app_sources.cmake       # ⚙️ 脚本自动生成，请勿手动修改
+    ├── app_main.c              # FreeRTOS task creation + stack/heap monitoring
+    ├── CMakeLists.txt          # Includes the automatically generated app_sources.cmake
+    └── app_sources.cmake       # ⚙️ Automatically generated by script, do not modify manually
 ```

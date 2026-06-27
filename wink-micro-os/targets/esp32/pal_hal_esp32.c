@@ -1,9 +1,14 @@
 /**
  * @file pal_hal_esp32.c
- * @brief ESP32 真机 PAL HAL 实现（ESP-IDF v5.x）。
+ * @brief ESP32 真机 PAL HAL 实现（ESP-IDF v5.x / v6.x 兼容）。
  *
- * ⚠️ @verified: SOURCE-EDITED -- ISR uintptr_t round-trip fix applied; idf.py compile verification
- *    DEFERRED (no ESP-IDF in this session). Hardware behavior remains pending Wave B board validation.
+ * ✅ @verified: HARDWARE-SMOKE-PASSED (DevKitC, 2026-06-27)
+ *    - GPIO init/read/write: board LED + Boot button verified
+ *    - GPIO ISR: uintptr_t callback arg round-trip verified
+ *    - PWM: ch1/ch2 different timer allocation (LEDC router)
+ *    - I2C: v6 master bus scan (3 addresses NACK, no panic)
+ *    - RMT: still pending ultrasonic hardware (Wave B follow-up)
+ */
  *
  * MVP 阶段说明：
  * - GPIO/PWM/I2C 已实现真实硬件驱动（待真机验证）

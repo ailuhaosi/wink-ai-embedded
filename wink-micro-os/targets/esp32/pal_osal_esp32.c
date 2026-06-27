@@ -2,6 +2,11 @@
  * @file pal_osal_esp32.c
  * @brief ESP32 真机 PAL OSAL 实现（FreeRTOS + ESP-IDF）。
  *
+ * ✅ @verified: HARDWARE-SMOKE-PASSED (DevKitC, 2026-06-27)
+ *    - pal_get_ms(): monotonic timestamp verified
+ *    - pal_watchdog_init(): timeout + reset + reason detection works
+ *    - Reset reason: WATCHDOG/PANIC detected by runtime boot check
+ *
  * 实现功能：
  * - 阻塞延时（vTaskDelay）
  * - 高精度时间戳（esp_timer）

@@ -14,9 +14,25 @@ Wink-AI 嵌入式运行时及仿真系统（**WinkMicroOS**）：面向 AI 生�
 - **Targets**: [targets/](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/wink-micro-os/targets/) — Wasm 仿真与真机（ESP32）的 OSAL/HAL 实现适配。
 
 ### 2. 设计文档库 (`docs/design/`)
-- **设计规范** (`01~07/`): 活文档，代表系统的最新设计真相。
-- **评审记录** (`reviews/`): 时间点快照，归档后不可修改。
-- **架构决策 (ADR)** (`decisions/`): 重大决策记录（如 [ADR-0001](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0001-error-code-sign-convention.md), [ADR-0004](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md)）。
+
+**四层文档体系（从抽象到具体）：**
+
+| 层级 | 目录 | 用途 | 生命周期 |
+|------|------|------|---------|
+| ① 设计规范 | `01-system-overall/` ~ `07-platform-governance/` | **活文档**，代表系统的最新设计真相。按模块组织，是系统架构的单一事实来源。 | 持续更新 |
+| ② 技术设计规格 | `tech-designs/` | 具体组件/特性的技术设计方案：架构图、API 设计、兼容性矩阵、方案比选理由。 | 稳定（设计完成后归档） |
+| ③ 实施计划 | `implementation-plans/` | **可执行的任务计划**：按日期命名，包含任务拆分、时间线、验收标准、风险跟踪。 | 一次性（执行完成后归档） |
+| ④ 评审记录 | `reviews/` | 时间点快照，代码/架构评审的归档记录。 | 只读，归档后不可修改 |
+| ⑤ 架构决策 (ADR) | `decisions/` | 重大设计决策记录：背景、备选方案、决策结论、后果与约束。 | 只读，Accepted 后需回写至设计规范 |
+
+**文档流转规则（重要）：**
+```
+技术问题 → 写 ADR 决策 → 决策 Accepted → 更新 ① 设计规范
+         ↓
+    需要具体实现 → 写 ② 技术设计规格 → 拆分为 ③ 实施计划 → 执行 → 评审记录 ④
+```
+
+- 示例 ADR：[ADR-0001](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0001-error-code-sign-convention.md), [ADR-0004](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md)
 
 ## Critical Patterns
 - **编译期静态分发**: 偏离传统 C 语言 OOP 多态，不使用虚拟函数表或 `container_of` 强转。DAL 外设实例使用 POD 结构体与命名 API（详见 [ADR-0004](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/docs/design/decisions/0004-static-dispatch-vs-runtime-ops.md)）。

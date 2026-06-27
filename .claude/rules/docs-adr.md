@@ -9,17 +9,79 @@ Guidelines and rules for writing, refactoring, and maintaining documentation and
 
 ## 1. Document Categories and Placement
 
-Our design documentation is organized into three distinct categories under `docs/design/` as defined in [CLAUDE.md](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/CLAUDE.md):
+Our design documentation is organized into **a five-layer hierarchical system** under `docs/design/` as defined in [CLAUDE.md](file:///d:/workspaces/ai-coding/wink-ai/wink-ai-embedded/CLAUDE.md). Each layer has a distinct purpose, audience, and lifecycle.
 
-- **Design Specifications** (`01-system-overall/`, `02-wink-micro-os/`, `03-bal-codegen/`, `04-wasm-simulation/`, `05-frontend-workbench/`, `06-build-toolchain/`, `07-platform-governance/`):
-  - These represent the "living specifications" and the current source of truth for the codebase.
-  - Directly edit these documents to reflect the actual and current system behaviors.
-- **Review Records** (`reviews/`):
-  - Datestamped, time-slice snapshots of system audits (e.g. `2026-06-22-architecture-review.md`).
-  - Read-only once finalized and committed. Never edit historic reviews.
-- **Architecture Decision Records (ADRs)** (`decisions/`):
-  - Capture major design trade-offs, options considered, and final selections (e.g., `0001-error-code-sign-convention.md`).
-  - Sequentially numbered (four digits starting at `0001-`).
+### 1.1 Five-Layer Documentation System
+
+| Layer | Directory | Purpose | Lifecycle | When to Create |
+|-------|-----------|---------|-----------|----------------|
+| **① Design Specifications** | `01-system-overall/`, `02-wink-micro-os/`, `03-bal-codegen/`, `04-wasm-simulation/`, `05-frontend-workbench/`, `06-build-toolchain/`, `07-platform-governance/` | **Living specifications** — the single source of truth for system architecture. Represents the current, actual system design. Organized by module/domain. | Continuously updated | At project inception; updated when design changes are finalized |
+| **② Technical Design Specifications** | `tech-designs/` | Detailed component-level design: architecture diagrams, API layouts, compatibility matrices, option comparisons with rationale. | Stable (archived after implementation) | When implementing a non-trivial feature that requires design decisions beyond just task breakdown |
+| **③ Implementation Plans** | `implementation-plans/` | **Executable task plans**. Datestamped, containing task breakdown, timelines, acceptance criteria, risk tracking, and verification gates. Naming: `YYYY-MM-DD-[feature-name]-plan.md` | One-time (archived after completion) | Before starting any non-trivial implementation that requires coordination or has multiple steps |
+| **④ Review Records** | `reviews/` | Point-in-time snapshots of code/architecture audits. Naming: `YYYY-MM-DD-[review-topic]-review.md` | Read-only — never edit after finalization | After any formal architecture or code review |
+| **⑤ Architecture Decision Records (ADRs)** | `decisions/` | Major design decisions with context, alternatives considered, and consequences. Sequentially numbered (four digits: `0001-xxx.md`). | Read-only after Accepted — must backport decisions to Design Specifications | When facing a significant architectural choice with lasting impact |
+
+### 1.2 Documentation Flow Rules
+
+```
+┌─────────────────┐
+│  Technical Issue│
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     Accepted      ┌─────────────────────┐
+│  Write ADR      │ ────────────────► │ Update Layer ①      │
+└────────┬────────┘                   │ Design Specs        │
+         │                            └─────────────────────┘
+         ▼
+┌─────────────────┐
+│  Needs code?    │─┐
+└────────┬────────┘ │
+         │ Yes      │
+         ▼          │ No
+┌─────────────────┐ │
+│  Write Layer ②  │ │
+│  Tech Design    │ │
+└────────┬────────┘ │
+         │          │
+         ▼          │
+┌─────────────────┐ │
+│  Write Layer ③  │ │
+│  Implementation  │ │
+│  Plan            │ │
+└────────┬────────┘ │
+         │          │
+         ▼          │
+┌─────────────────┐ │
+│  Execute &      │ │
+│  Verify          │ │
+└────────┬────────┘ │
+         │          │
+         ▼          │
+┌─────────────────┐ │
+│  Write Layer ④  │ │
+│  Review Record   │◄┘
+└─────────────────┘
+```
+
+### 1.3 Cross-Referencing Convention
+
+Always include these links:
+- **Implementation Plans (③)** link to **Technical Designs (②)** and vice versa
+- **ADRs (⑤)** in `Accepted` state **MUST** link to the updated **Design Specifications (①)**
+- All documents should reference related ADRs when applicable
+
+Example document header with cross-references:
+```markdown
+# ESP-IDF v6.x I2C Compatibility Design
+
+| 项 | 内容 |
+|----|------|
+| 创建日期 | 2026-06-27 |
+| 关联 ADR | (待定) |
+| 关联实施计划 | `implementation-plans/2026-06-27-esp-idf-v6-i2c-compat-plan.md` |
+| 关联设计规范 | `02-wink-micro-os/02-pal-platform-abstraction.md` |
+```
 
 ## 2. Decision Backporting (Single Source of Truth)
 

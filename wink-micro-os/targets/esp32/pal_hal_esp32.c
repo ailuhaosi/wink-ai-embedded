@@ -37,7 +37,7 @@
 /* v7.0 前向保护：检测到未验证的版本时编译报错 */
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(7, 0, 0)
     #error "ESP-IDF v7.x I2C API compatibility not verified yet. " \
-           "Please update 03-pal-i2c-v6-compat-design.md first."
+           "Please update tech-designs/pal-i2c-v6-compatibility.md first."
 #endif
 
 /* 强制回退开关：Kconfig 可配置强制使用 v5.x API */

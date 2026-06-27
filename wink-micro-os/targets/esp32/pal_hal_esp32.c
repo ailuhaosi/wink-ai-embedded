@@ -1,6 +1,6 @@
 /**
  * @file pal_hal_esp32.c
- * @brief ESP32 真机 PAL HAL 实现（ESP-IDF v5.x / v6.x 兼容）。
+ * @brief ESP32 PAL HAL implementation (ESP-IDF v5.x / v6.x compatible).
  *
  * ✅ @verified: HARDWARE-SMOKE-PASSED (DevKitC, 2026-06-27)
  *    - GPIO init/read/write: board LED + Boot button verified
@@ -8,12 +8,13 @@
  *    - PWM: ch1/ch2 different timer allocation (LEDC router)
  *    - I2C: v6 master bus scan (3 addresses NACK, no panic)
  *    - RMT: still pending ultrasonic hardware (Wave B follow-up)
- */
  *
- * MVP 阶段说明：
- * - GPIO/PWM/I2C 已实现真实硬件驱动（待真机验证）
- * - 超声波脉冲捕获：pal_gpio_pulse_in 仍为 busy-wait 降级路径；RMT 硬件捕获见 pal_hal_esp32_rmt.c
- * - PWM 引脚路由经 board_config.c（pal_pwm_pin_map 强定义；本 TU 提供弱默认）；I2C SDA/SCL 仍为固定默认（FIXME）
+ * MVP status:
+ * - GPIO/PWM/I2C hardware drivers implemented
+ * - Ultrasonic pulse capture: pal_gpio_pulse_in still uses busy-wait fallback;
+ *   RMT hardware capture in pal_hal_esp32_rmt.c
+ * - PWM pin routing via board_config.c (pal_pwm_pin_map strong definition;
+ *   this TU provides weak default); I2C SDA/SCL still fixed defaults (FIXME)
  */
 #include "pal_hal.h"
 #include "pal_osal.h"       /* pal_get_us() (used in pal_gpio_pulse_in busy-wait) */

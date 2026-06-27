@@ -39,6 +39,13 @@ if(ESP_PLATFORM)
     # 输出组件库目标
     set(ESP32_PAL_LIB ${COMPONENT_LIB} CACHE INTERNAL "")
     message(STATUS "wink esp32 target registered as IDF component")
+
+    # Windows GCC 默认按 GBK 解析源文件，中文 UTF-8 注释会乱码报错
+    # 强制指定源文件编码为 UTF-8，解决中文注释编译错误
+    target_compile_options(${COMPONENT_LIB} PRIVATE
+        -finput-charset=UTF-8
+        -fexec-charset=UTF-8
+    )
 elseif(TARGET_PLATFORM STREQUAL "esp32")
     # 非 ESP-IDF 环境：仅声明源文件（供静态分析）
     set(ESP32_PAL_SOURCES

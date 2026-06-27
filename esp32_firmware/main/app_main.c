@@ -17,8 +17,7 @@
 #include "wink_trace.h"
 #include "pal_osal.h"
 
-/* 引入 devkitc_smoke 冒烟测试应用回调 */
-#include "../../wink-micro-os/samples/devkitc_smoke/device_tree.h"
+/* 引入 samples App 回调工厂（符号由 WINK_APP 对应源文件提供） */
 extern const wink_app_callbacks_t *wink_app_get_callbacks(void);
 
 /* 架构评审修复 #3：栈大小调优

@@ -70,13 +70,26 @@ def find_auto_variables(func_info, content):
     errors = []
 
     # Find variable declarations inside the function
-    # Pattern: type name = ...; or type name;
-    # Negative lookbehind for 'static '
+    # Pattern: [static] type [*] name [;= []
+    # - type: known primitives OR any `*_t` typedef (covers wink_status_t / dal_*_t /
+    #   pal_*_t / future typedefs) — the old pattern only saw primitives and so missed
+    #   `dal_servo_t dev`, `float *p`, `wink_status_t st`.
+    # - optional single `*` to support pointer decls (`float *p`, `dal_servo_t *dev`).
+    # - `static` captured as a qualifier instead of a lookbehind: Python's re forbids
+    #   variable-width look-behind, and the old `(?<!static\s+)` would raise
+    #   re.error the moment a protothread function was actually found.
+    #   (C-style casts like `(float *)q` are naturally not matched — the `)` breaks
+    #   the type/star/name sequence.)
     var_pattern = re.compile(
-        r'(?<!static\s)(?<!static\s+)\b'
-        r'(int|uint8_t|uint16_t|uint32_t|uint64_t|'
-        r'float|double|char|bool|size_t|int8_t|int16_t|int32_t|int64_t)\s+'
-        r'([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:[;=]|\[)',
+        r'(?P<qual>static\s+)?'
+        r'\b(?P<type>'
+        r'int|uint8_t|uint16_t|uint32_t|uint64_t|'
+        r'int8_t|int16_t|int32_t|int64_t|'
+        r'float|double|char|bool|size_t'
+        r'|[A-Za-z_]\w*_t'
+        r')\b\s*\*?\s*'
+        r'(?P<name>[A-Za-z_]\w*)'
+        r'\s*(?:[;=]|\[)',
         re.MULTILINE
     )
 
@@ -88,13 +101,20 @@ def find_auto_variables(func_info, content):
     pt_begin_offset = func_info['body_start'] + pt_begin_match.end()
 
     for var_match in var_pattern.finditer(content, func_info['body_start'], func_info['body_end']):
-        var_type = var_match.group(1).strip()
-        var_name = var_match.group(2)
+        # static 局部变量存于静态存储区，yield 后不丢失 → 在 PT 中安全，跳过。
+        if var_match.group('qual'):
+            continue
+        var_type = var_match.group('type')
+        var_name = var_match.group('name')
 
-        # Skip loop counters (i, j, k) if immediately followed by for loop
+        # Skip loop counters (i, j, k) when the next statement is a for-loop.
+        # Strip comments and widen the window so an intervening inline comment
+        # (`int i; /* idx */ for (...)`) still suppresses the false positive.
         var_end = var_match.end()
-        remainder = content[var_end:var_end + 20]
-        if var_name in ('i', 'j', 'k') and 'for(' in remainder.replace(' ', ''):
+        remainder = content[var_end:var_end + 120]
+        remainder = re.sub(r'/\*.*?\*/|//[^\n]*', '', remainder, flags=re.DOTALL)
+        remainder = remainder.replace(' ', '').replace('\t', '')
+        if var_name in ('i', 'j', 'k') and 'for(' in remainder:
             continue
 
         # Skip variables declared BEFORE WINK_PT_BEGIN (executed on every call)

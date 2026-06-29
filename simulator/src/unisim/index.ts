@@ -4,11 +4,16 @@
  *
  * Public API Surface:
  * - PinArbiter: 4-value logic with strength-based arbitration
- * - Types: LogicState, DriveStrength, PinDriver, IPinArbiter
+ * - LogicStates: 4-value logic constants (values)
+ * - LogicState: 4-value logic type
+ * - DriveStrength: Drive strength levels enum
  */
 
 // Core classes
 export { PinArbiter } from './core/pin-arbiter';
+
+// Constants
+export { LogicStates } from './types/logic-types';
 
 // Type definitions
 export type {

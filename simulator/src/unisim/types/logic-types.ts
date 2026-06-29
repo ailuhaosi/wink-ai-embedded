@@ -2,7 +2,7 @@
  * 4-value logic state constants (SystemVerilog inspired)
  * Use these constants instead of literal values for type safety and IDE autocomplete
  */
-export const LogicState = {
+export const LogicStates = {
   /** Logic low level (0V) */
   LOW: 0 as const,
   /** Logic high level (3.3V) */
@@ -17,7 +17,7 @@ export const LogicState = {
  * 4-value logic state type (derived from constants)
  * 0 = low, 1 = high, 'Z' = high-impedance floating, 'X' = unknown/contention
  */
-export type LogicState = typeof LogicState[keyof typeof LogicState];
+export type LogicState = typeof LogicStates[keyof typeof LogicStates];
 
 /**
  * Drive strength levels for pin arbitration (from strongest to weakest)

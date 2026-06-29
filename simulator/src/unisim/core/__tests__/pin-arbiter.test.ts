@@ -9,74 +9,74 @@ describe('PinArbiter - Core Algorithm', () => {
   });
 
   test('single SUPPLY driver resolves to its state', () => {
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 1, strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(5)).toBe(1);
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(5)).toBe(LogicState.HIGH);
   });
 
   test('no drivers on pin resolves to Z (high-impedance)', () => {
-    expect(arbiter.readPin(99)).toBe('Z');
+    expect(arbiter.readPin(99)).toBe(LogicState.HI_Z);
   });
 
   test('driver with state Z is ignored (high-impedance does not drive)', () => {
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 'Z', strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(5)).toBe('Z');
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.HI_Z, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(5)).toBe(LogicState.HI_Z);
   });
 
   test('two SUPPLY drivers with same state resolve to that state', () => {
-    arbiter.setDriver(3, { id: 'mcu:gpio3', state: 1, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(3, { id: 'led:anode', state: 1, strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(3)).toBe(1);
+    arbiter.setDriver(3, { id: 'mcu:gpio3', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(3, { id: 'led:anode', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(3)).toBe(LogicState.HIGH);
   });
 
   test('two SUPPLY drivers with conflicting states resolve to X (contention)', () => {
-    arbiter.setDriver(3, { id: 'mcu:gpio3', state: 1, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(3, { id: 'led:anode', state: 0, strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(3)).toBe('X');
+    arbiter.setDriver(3, { id: 'mcu:gpio3', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(3, { id: 'led:anode', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(3)).toBe(LogicState.CONFLICT);
   });
 
   test('SUPPLY driver overrides WEAK driver (strength wins)', () => {
-    arbiter.setDriver(7, { id: 'mcu:weak-pullup', state: 1, strength: DriveStrength.WEAK });
-    arbiter.setDriver(7, { id: 'sensor:output', state: 0, strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(7)).toBe(0); // SUPPLY (3) > WEAK (1)
+    arbiter.setDriver(7, { id: 'mcu:weak-pullup', state: LogicState.HIGH, strength: DriveStrength.WEAK });
+    arbiter.setDriver(7, { id: 'sensor:output', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(7)).toBe(LogicState.LOW); // SUPPLY (3) > WEAK (1)
   });
 
   test('PULL resistor overrides WEAK pull-up', () => {
-    arbiter.setDriver(2, { id: 'internal:pullup', state: 1, strength: DriveStrength.WEAK });
-    arbiter.setDriver(2, { id: 'external:pulldown', state: 0, strength: DriveStrength.PULL });
-    expect(arbiter.readPin(2)).toBe(0); // PULL (2) > WEAK (1)
+    arbiter.setDriver(2, { id: 'internal:pullup', state: LogicState.HIGH, strength: DriveStrength.WEAK });
+    arbiter.setDriver(2, { id: 'external:pulldown', state: LogicState.LOW, strength: DriveStrength.PULL });
+    expect(arbiter.readPin(2)).toBe(LogicState.LOW); // PULL (2) > WEAK (1)
   });
 
   test('open-drain I2C wire-AND: pull-up high + MCU low = 0', () => {
     // I2C bus: external PULL resistor keeps high, MCU pulls low via open-drain
-    arbiter.setDriver(6, { id: 'i2c:pullup', state: 1, strength: DriveStrength.PULL });
-    arbiter.setDriver(6, { id: 'mcu:sda', state: 0, strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(6)).toBe(0); // Wire-AND: MCU low wins
+    arbiter.setDriver(6, { id: 'i2c:pullup', state: LogicState.HIGH, strength: DriveStrength.PULL });
+    arbiter.setDriver(6, { id: 'mcu:sda', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(6)).toBe(LogicState.LOW); // Wire-AND: MCU low wins
   });
 
   test('open-drain I2C wire-AND: pull-up high + MCU Z = 1', () => {
-    arbiter.setDriver(6, { id: 'i2c:pullup', state: 1, strength: DriveStrength.PULL });
-    arbiter.setDriver(6, { id: 'mcu:sda', state: 'Z', strength: DriveStrength.SUPPLY });
-    expect(arbiter.readPin(6)).toBe(1); // Pull-up wins
+    arbiter.setDriver(6, { id: 'i2c:pullup', state: LogicState.HIGH, strength: DriveStrength.PULL });
+    arbiter.setDriver(6, { id: 'mcu:sda', state: LogicState.HI_Z, strength: DriveStrength.SUPPLY });
+    expect(arbiter.readPin(6)).toBe(LogicState.HIGH); // Pull-up wins
   });
 
   test('removeDriver removes specific driver, others remain', () => {
-    arbiter.setDriver(4, { id: 'mcu:gpio4', state: 1, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(4, { id: 'periph:pin', state: 0, strength: DriveStrength.WEAK });
-    expect(arbiter.readPin(4)).toBe(1); // SUPPLY wins
+    arbiter.setDriver(4, { id: 'mcu:gpio4', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(4, { id: 'periph:pin', state: LogicState.LOW, strength: DriveStrength.WEAK });
+    expect(arbiter.readPin(4)).toBe(LogicState.HIGH); // SUPPLY wins
 
     arbiter.removeDriver(4, 'mcu:gpio4');
-    expect(arbiter.readPin(4)).toBe(0); // Only WEAK remains
+    expect(arbiter.readPin(4)).toBe(LogicState.LOW); // Only WEAK remains
   });
 
   test('removeDriver on non-existent driver does nothing', () => {
-    arbiter.setDriver(5, { id: 'real:driver', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'real:driver', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     expect(() => arbiter.removeDriver(5, 'nonexistent:driver')).not.toThrow();
-    expect(arbiter.readPin(5)).toBe(1);
+    expect(arbiter.readPin(5)).toBe(LogicState.HIGH);
   });
 
   test('getDrivers returns all registered drivers for pin', () => {
-    arbiter.setDriver(8, { id: 'd1', state: 1, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(8, { id: 'd2', state: 0, strength: DriveStrength.PULL });
+    arbiter.setDriver(8, { id: 'd1', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(8, { id: 'd2', state: LogicState.LOW, strength: DriveStrength.PULL });
     const drivers = arbiter.getDrivers(8);
     expect(drivers).toHaveLength(2);
     expect(drivers.map(d => d.id).sort()).toEqual(['d1', 'd2']);
@@ -98,17 +98,17 @@ describe('PinArbiter - Change Notifications', () => {
     const callback = jest.fn();
     arbiter.onPinChange(5, callback);
 
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     expect(callback).toHaveBeenCalledWith(5, 1);
   });
 
   test('callback does NOT fire when state does not change', () => {
     const callback = jest.fn();
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     arbiter.onPinChange(5, callback);
 
     // Update driver with same state - no resolution change
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     expect(callback).not.toHaveBeenCalled();
   });
 
@@ -116,11 +116,11 @@ describe('PinArbiter - Change Notifications', () => {
     const callback = jest.fn();
     const unsubscribe = arbiter.onPinChange(5, callback);
 
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     expect(callback).toHaveBeenCalledTimes(1);
 
     unsubscribe();
-    arbiter.setDriver(5, { id: 'mcu:gpio5', state: 0, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'mcu:gpio5', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
     expect(callback).toHaveBeenCalledTimes(1); // No additional call
   });
 
@@ -130,7 +130,7 @@ describe('PinArbiter - Change Notifications', () => {
     arbiter.onPinChange(3, cb1);
     arbiter.onPinChange(3, cb2);
 
-    arbiter.setDriver(3, { id: 'mcu:gpio3', state: 0, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(3, { id: 'mcu:gpio3', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
     expect(cb1).toHaveBeenCalledWith(3, 0);
     expect(cb2).toHaveBeenCalledWith(3, 0);
   });
@@ -144,7 +144,7 @@ describe('PinArbiter - Change Notifications', () => {
     arbiter.onPinChange(7, goodCb);
 
     expect(() => {
-      arbiter.setDriver(7, { id: 'mcu:gpio7', state: 1, strength: DriveStrength.SUPPLY });
+      arbiter.setDriver(7, { id: 'mcu:gpio7', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     }).not.toThrow();
 
     expect(goodCb).toHaveBeenCalled(); // Good listener still called
@@ -164,7 +164,7 @@ describe('PinArbiter - Change Notifications', () => {
     });
 
     expect(() => {
-      arbiter.setDriver(1, { id: 'loop:start', state: 1, strength: DriveStrength.SUPPLY });
+      arbiter.setDriver(1, { id: 'loop:start', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     }).not.toThrow();
 
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -182,18 +182,18 @@ describe('PinArbiter - Voltage Estimation', () => {
   });
 
   test('logic high returns 3.3V', () => {
-    arbiter.setDriver(1, { id: 'd1', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(1, { id: 'd1', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     expect(arbiter.getResolvedVoltage(1)).toBe(3.3);
   });
 
   test('logic low returns 0.0V', () => {
-    arbiter.setDriver(1, { id: 'd1', state: 0, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(1, { id: 'd1', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
     expect(arbiter.getResolvedVoltage(1)).toBe(0.0);
   });
 
   test('contention (X) returns 1.65V midpoint', () => {
-    arbiter.setDriver(2, { id: 'd1', state: 0, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(2, { id: 'd2', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(2, { id: 'd1', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(2, { id: 'd2', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
     expect(arbiter.getResolvedVoltage(2)).toBe(1.65);
   });
 
@@ -211,32 +211,32 @@ describe('PinArbiter - Complex Multi-Driver Scenarios', () => {
 
   test('I2C multi-master arbitration: two MCUs, one pulls low', () => {
     // Two MCU masters + one pull-up resistor
-    arbiter.setDriver(6, { id: 'i2c:pullup', state: 1, strength: DriveStrength.PULL });
-    arbiter.setDriver(6, { id: 'mcu1:sda', state: 0, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(6, { id: 'mcu2:sda', state: 'Z', strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(6, { id: 'i2c:pullup', state: LogicState.HIGH, strength: DriveStrength.PULL });
+    arbiter.setDriver(6, { id: 'mcu1:sda', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(6, { id: 'mcu2:sda', state: LogicState.HI_Z, strength: DriveStrength.SUPPLY });
 
-    expect(arbiter.readPin(6)).toBe(0); // MCU1 low wins wire-AND
+    expect(arbiter.readPin(6)).toBe(LogicState.LOW); // MCU1 low wins wire-AND
   });
 
   test('I2C multi-master contention: both MCUs drive opposite', () => {
-    arbiter.setDriver(6, { id: 'i2c:pullup', state: 1, strength: DriveStrength.PULL });
-    arbiter.setDriver(6, { id: 'mcu1:sda', state: 0, strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(6, { id: 'mcu2:sda', state: 1, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(6, { id: 'i2c:pullup', state: LogicState.HIGH, strength: DriveStrength.PULL });
+    arbiter.setDriver(6, { id: 'mcu1:sda', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(6, { id: 'mcu2:sda', state: LogicState.HIGH, strength: DriveStrength.SUPPLY });
 
-    expect(arbiter.readPin(6)).toBe('X'); // Two SUPPLY drivers conflict → X
+    expect(arbiter.readPin(6)).toBe(LogicState.CONFLICT); // Two SUPPLY drivers conflict → X
   });
 
   test('three strength levels: WEAK < PULL < SUPPLY', () => {
-    arbiter.setDriver(4, { id: 'weak', state: 0, strength: DriveStrength.WEAK });
-    arbiter.setDriver(4, { id: 'pull', state: 1, strength: DriveStrength.PULL });
-    arbiter.setDriver(4, { id: 'supply', state: 0, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(4, { id: 'weak', state: LogicState.LOW, strength: DriveStrength.WEAK });
+    arbiter.setDriver(4, { id: 'pull', state: LogicState.HIGH, strength: DriveStrength.PULL });
+    arbiter.setDriver(4, { id: 'supply', state: LogicState.LOW, strength: DriveStrength.SUPPLY });
 
-    expect(arbiter.readPin(4)).toBe(0); // SUPPLY wins
+    expect(arbiter.readPin(4)).toBe(LogicState.LOW); // SUPPLY wins
   });
 
   test('all Z drivers resolve to Z', () => {
-    arbiter.setDriver(5, { id: 'd1', state: 'Z', strength: DriveStrength.SUPPLY });
-    arbiter.setDriver(5, { id: 'd2', state: 'Z', strength: DriveStrength.PULL });
-    expect(arbiter.readPin(5)).toBe('Z');
+    arbiter.setDriver(5, { id: 'd1', state: LogicState.HI_Z, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(5, { id: 'd2', state: LogicState.HI_Z, strength: DriveStrength.PULL });
+    expect(arbiter.readPin(5)).toBe(LogicState.HI_Z);
   });
 });

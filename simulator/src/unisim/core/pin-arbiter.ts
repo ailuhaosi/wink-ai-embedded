@@ -10,7 +10,7 @@ export class PinArbiter implements IPinArbiter {
     let pinState = this.pinStates.get(pinNumber);
     if (!pinState) {
       pinState = {
-        resolvedState: 'Z',
+        resolvedState: LogicState.HI_Z,
         drivers: new Map(),
       };
       this.pinStates.set(pinNumber, pinState);
@@ -40,16 +40,16 @@ export class PinArbiter implements IPinArbiter {
 
   readPin(pinNumber: number): LogicState {
     const pinState = this.pinStates.get(pinNumber);
-    return pinState ? pinState.resolvedState : 'Z';
+    return pinState ? pinState.resolvedState : LogicState.HI_Z;
   }
 
   getResolvedVoltage(pinNumber: number): number {
     const state = this.readPin(pinNumber);
     switch (state) {
-      case 1: return 3.3;
-      case 0: return 0.0;
-      case 'X': return 1.65; // Contention mid-point (for LED brightness calculation)
-      case 'Z': default: return 0.0; // Floating defaults to 0V (component-specific handling can override)
+      case LogicState.HIGH: return 3.3;
+      case LogicState.LOW: return 0.0;
+      case LogicState.CONFLICT: return 1.65; // Contention mid-point (for LED brightness calculation)
+      case LogicState.HI_Z: default: return 0.0; // Floating defaults to 0V (component-specific handling can override)
     }
   }
 
@@ -70,28 +70,28 @@ export class PinArbiter implements IPinArbiter {
   /**
    * Strength-based arbitration algorithm
    * Algorithm rules (in priority order):
-   * 1. Ignore all drivers with state 'Z' (high-impedance doesn't drive)
+   * 1. Ignore all drivers with state HI_Z (high-impedance doesn't drive)
    * 2. Find max strength among remaining active drivers
    * 3. If all max-strength drivers agree on state → that state wins
-   * 4. If max-strength drivers disagree → 'X' (contention/unknown)
-   * 5. If no active drivers → 'Z' (floating)
+   * 4. If max-strength drivers disagree → CONFLICT (contention/unknown)
+   * 5. If no active drivers → HI_Z (floating)
    */
   private resolvePinState(drivers: Map<string, PinDriver>): LogicState {
-    if (drivers.size === 0) return 'Z';
+    if (drivers.size === 0) return LogicState.HI_Z;
 
     let maxStrength = -1;
     let activeDrivers: PinDriver[] = [];
 
-    // Collect non-Z drivers and find max strength
+    // Collect non-HI_Z drivers and find max strength
     for (const [, drv] of drivers) {
-      if (drv.state === 'Z') continue; // Hi-Z drivers don't contribute
+      if (drv.state === LogicState.HI_Z) continue; // Hi-Z drivers don't contribute
       activeDrivers.push(drv);
       if (drv.strength > maxStrength) {
         maxStrength = drv.strength;
       }
     }
 
-    if (activeDrivers.length === 0) return 'Z'; // All drivers are Hi-Z
+    if (activeDrivers.length === 0) return LogicState.HI_Z; // All drivers are Hi-Z
 
     // Filter to only max-strength drivers
     const maxStrengthDrivers = activeDrivers.filter(d => d.strength === maxStrength);
@@ -100,7 +100,7 @@ export class PinArbiter implements IPinArbiter {
     const firstState = maxStrengthDrivers[0].state;
     const allAgree = maxStrengthDrivers.every(d => d.state === firstState);
 
-    if (!allAgree) return 'X'; // Contention: strongest drivers disagree
+    if (!allAgree) return LogicState.CONFLICT; // Contention: strongest drivers disagree
 
     return firstState;
   }

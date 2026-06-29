@@ -6,7 +6,7 @@
  * - Fault injection transparency (PinManager level)
  */
 import { PinArbiter } from '../../core/pin-arbiter';
-import { DriveStrength } from '../../types/logic-types';
+import { LogicState, DriveStrength } from '../../types/logic-types';
 
 describe('LED Driver Integration - Corrected Pattern (per architecture review)', () => {
   let arbiter: PinArbiter;
@@ -25,12 +25,12 @@ describe('LED Driver Integration - Corrected Pattern (per architecture review)',
     // Register MCU GPIO drivers (as set up by simulator runtime)
     arbiter.setDriver(anodePin, {
       id: `mcu:gpio${anodePin}`,
-      state: 0,
+      state: LogicState.LOW,
       strength: DriveStrength.SUPPLY
     });
     arbiter.setDriver(cathodePin, {
       id: `mcu:gpio${cathodePin}`,
-      state: 0,
+      state: LogicState.LOW,
       strength: DriveStrength.SUPPLY
     });
 
@@ -78,7 +78,7 @@ describe('LED Driver Integration - Corrected Pattern (per architecture review)',
     // Anode high, cathode low → LED on
     arbiter.setDriver(anodePin, {
       id: `mcu:gpio${anodePin}`,
-      state: 1,
+      state: LogicState.HIGH,
       strength: DriveStrength.SUPPLY
     });
     expect(mockLedElement.value).toBe(true);
@@ -87,7 +87,7 @@ describe('LED Driver Integration - Corrected Pattern (per architecture review)',
     // Both high → no voltage difference → LED off
     arbiter.setDriver(cathodePin, {
       id: `mcu:gpio${cathodePin}`,
-      state: 1,
+      state: LogicState.HIGH,
       strength: DriveStrength.SUPPLY
     });
     expect(mockLedElement.value).toBe(false);
@@ -109,7 +109,7 @@ describe('LED Driver Integration - Corrected Pattern (per architecture review)',
     // Normal operation: MCU drives high
     arbiter.setDriver(anodePin, {
       id: 'mcu:gpio5',
-      state: 1,
+      state: LogicState.HIGH,
       strength: DriveStrength.SUPPLY
     });
 
@@ -124,7 +124,7 @@ describe('LED Driver Integration - Corrected Pattern (per architecture review)',
     // In real fault framework, this is handled by the fault injection middleware
     arbiter.setDriver(anodePin, {
       id: 'mcu:gpio5',
-      state: 'Z', // Disconnected = high-impedance
+      state: LogicState.HI_Z, // Disconnected = high-impedance
       strength: DriveStrength.SUPPLY
     });
 
@@ -134,7 +134,7 @@ describe('LED Driver Integration - Corrected Pattern (per architecture review)',
     // Restore connection
     arbiter.setDriver(anodePin, {
       id: 'mcu:gpio5',
-      state: 1,
+      state: LogicState.HIGH,
       strength: DriveStrength.SUPPLY
     });
     expect(brightness).toBeGreaterThan(0);

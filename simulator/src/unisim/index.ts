@@ -1,16 +1,18 @@
 /**
  * UniSim - Unified Simulation Engine
- * Pin Arbitration Subsystem (Phase 0)
+ * Virtual Peripheral Subsystem (Phase 1)
  *
  * Public API Surface:
  * - PinArbiter: 4-value logic with strength-based arbitration
- * - LogicStates: 4-value logic constants (values)
- * - LogicState: 4-value logic type
- * - DriveStrength: Drive strength levels enum
+ * - PinManagerAdapter: Backward-compatible boolean interface
+ * - PeripheralRegistry: Peripheral type registration and lifecycle management
+ * - Peripheral types: Full type definitions for peripherals and drivers
  */
 
 // Core classes
 export { PinArbiter } from './core/pin-arbiter';
+export { PinManagerAdapter } from './core/pin-manager-adapter';
+export { PeripheralRegistry } from './core/peripheral-registry';
 
 // Constants
 export { LogicStates } from './types/logic-types';
@@ -24,3 +26,15 @@ export type {
   PinChangeCallback,
   IPinArbiter,
 } from './types/logic-types';
+
+export type {
+  PowerDomain,
+  PinDirection,
+  PeripheralPinMapping,
+  PeripheralInstance,
+  PeripheralDriver,
+  PeripheralDriverFactory,
+  PeripheralTypeDefinition,
+  PeripheralRegistryEvent,
+  RegistryEventHandler,
+} from './types/peripheral-types';

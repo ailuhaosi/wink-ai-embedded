@@ -30,6 +30,8 @@ interface MockState {
   prng_seed: number;
   prng_state: number;
   clock_us: bigint;
+  /** When set to true the mocked WASM reports the one-shot overflow warning. */
+  clockWarningFired: boolean;
   gpioLevels: Map<number, boolean>;
   resetCount: number;
   advanceClockCalls: { us: bigint }[];
@@ -53,6 +55,7 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
     prng_seed: 1,
     prng_state: 1,
     clock_us: 0n,
+    clockWarningFired: false,
     gpioLevels: new Map(),
     resetCount: 0,
     advanceClockCalls: [],
@@ -66,6 +69,12 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
       state.clock_us += us;
     },
     pal_get_us() {
+      return state.clock_us;
+    },
+    pal_wasm_is_clock_warning_fired() {
+      return state.clockWarningFired;
+    },
+    pal_wasm_get_virtual_clock_us() {
       return state.clock_us;
     },
     pal_wasm_set_bounce_us(us) {
@@ -100,6 +109,7 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
       state.prng_seed = 1;
       state.prng_state = 1;
       state.clock_us = 0n;
+      state.clockWarningFired = false;
       state.gpioLevels.clear();
       state.resetCount += 1;
     },
@@ -203,6 +213,55 @@ describe('WasmPhysicalBridge — config / clock / GPIO / I²C', () => {
     const { exports } = makeMockExports();
     const bridge = new WasmPhysicalBridge(exports);
     expect(() => bridge.advanceClock(-1n)).toThrow(RangeError);
+  });
+
+  test('advanceClock emits a single console.warn when C-side warning fires (Wave2 P1 Task 6)', () => {
+    const { exports, state } = makeMockExports();
+    const bridge = new WasmPhysicalBridge(exports);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Before the C-side flag flips: no warning.
+    bridge.advanceClock(1_000_000n);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // C-side crosses the threshold and the one-shot flag latches true.
+    state.clockWarningFired = true;
+    bridge.advanceClock(1n);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const msg = warnSpy.mock.calls[0][0] as string;
+    expect(msg).toMatch(/\[CLOCK\]/);
+    expect(msg).toMatch(/292 years/);
+    expect(msg).toMatch(/us\)/);
+    expect(msg).toMatch(/Reset simulation/);
+
+    // Subsequent advances must NOT spam: TS-side latch dedupes.
+    bridge.advanceClock(1n);
+    bridge.advanceClock(1n);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    warnSpy.mockRestore();
+  });
+
+  test('reset clears the TS-side warning latch so a fresh long-run can re-emit', () => {
+    const { exports, state } = makeMockExports();
+    const bridge = new WasmPhysicalBridge(exports);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    state.clockWarningFired = true;
+    bridge.advanceClock(1n);
+    const callsAfterFirst = warnSpy.mock.calls.length;
+    expect(callsAfterFirst).toBeGreaterThanOrEqual(1);
+
+    bridge.reset();
+    // After reset the mock also clears the flag; simulate a NEW long-running
+    // instance crossing the threshold again. The TS latch must have been
+    // cleared by reset(), so a second emission is allowed.
+    state.clockWarningFired = true;
+    bridge.advanceClock(1n);
+    expect(warnSpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+
+    warnSpy.mockRestore();
   });
 
   test('setGpioIdeal records state and fires injector callback', () => {

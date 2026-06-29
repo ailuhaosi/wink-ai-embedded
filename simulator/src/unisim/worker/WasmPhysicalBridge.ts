@@ -47,6 +47,12 @@ export interface WasmExports {
   pal_wasm_advance_virtual_clock: (us: bigint) => void;
   pal_get_us: () => bigint;
 
+  // --- Clock overflow early-warning (Wave2 P1 Task 6) ---
+  /** Returns true once the virtual clock has crossed the 50% UINT64 threshold (~292 years). */
+  pal_wasm_is_clock_warning_fired: () => boolean;
+  /** Current virtual clock value, for the warning log payload. Bigint per WASM_BIGINT ABI. */
+  pal_wasm_get_virtual_clock_us: () => bigint;
+
   // --- Fault setters (number-safe widths) ---
   pal_wasm_set_bounce_us: (us: number) => void;
   pal_wasm_set_warmup_us: (us: number) => void;
@@ -91,6 +97,13 @@ export class WasmPhysicalBridge {
   private readonly exports: WasmExports;
   private readonly idealGpioStates: Map<number, boolean> = new Map();
   private readonly injectGpioIdeal?: GpioIdealInjector;
+  /**
+   * One-shot guard for the clock-overflow warning (Wave2 P1 Task 6). The
+   * C-side flag (`s_clock_warning_fired`) is itself one-shot, but it remains
+   * `true` for the rest of the wasm instance's life — without this JS-side
+   * latch, every subsequent `advanceClock()` would re-emit the same warning.
+   */
+  private clockWarningEmitted: boolean = false;
 
   constructor(exports: WasmExports, injectGpioIdeal?: GpioIdealInjector) {
     this.exports = exports;
@@ -140,6 +153,19 @@ export class WasmPhysicalBridge {
       throw new RangeError(`advanceClock: us must be non-negative, got ${us}`);
     }
     this.exports.pal_wasm_advance_virtual_clock(us);
+
+    // Wave2 P1 Task 6: poll the C-side one-shot overflow warning. The C flag
+    // stays `true` for the rest of the instance lifetime, so we additionally
+    // gate on a JS-side latch to keep this to a single `console.warn`.
+    if (!this.clockWarningEmitted && this.exports.pal_wasm_is_clock_warning_fired()) {
+      this.clockWarningEmitted = true;
+      const clockUs = this.exports.pal_wasm_get_virtual_clock_us();
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[CLOCK] Virtual clock exceeded 292 years (${clockUs}us). ` +
+          'Reset simulation soon to avoid uint64 overflow.',
+      );
+    }
   }
 
   /** Microsecond reading from the WASM-side `s_virtual_us`. */
@@ -169,5 +195,9 @@ export class WasmPhysicalBridge {
   reset(): void {
     this.exports.pal_wasm_reset_physical();
     this.idealGpioStates.clear();
+    // The C-side warning flag itself is BSS-zero-initialised on a fresh wasm
+    // instance. The TS latch is local to this bridge; clear it so a follow-up
+    // reset+long-run could re-emit the warning if it ever re-fires.
+    this.clockWarningEmitted = false;
   }
 }

@@ -1,6 +1,5 @@
 import { PeripheralRegistry } from '../peripheral-registry';
 import { PinArbiter } from '../pin-arbiter';
-import { PinManagerAdapter } from '../pin-manager-adapter';
 import { PowerDomain, PinDirection, PeripheralDriver } from '../../types/peripheral-types';
 
 describe('PeripheralRegistry', () => {
@@ -453,13 +452,9 @@ describe('PeripheralRegistry', () => {
     });
   });
 
-  describe('getPinArbiter and getPinManagerAdapter', () => {
+  describe('getPinArbiter', () => {
     test('getPinArbiter returns the underlying pin arbiter', () => {
       expect(registry.getPinArbiter()).toBe(pinArbiter);
-    });
-
-    test('getPinManagerAdapter returns the adapter instance', () => {
-      expect(registry.getPinManagerAdapter()).toBeInstanceOf(PinManagerAdapter);
     });
   });
 });

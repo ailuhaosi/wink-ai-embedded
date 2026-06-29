@@ -1,5 +1,4 @@
 import type { PinArbiter } from '../core/pin-arbiter';
-import type { PinManagerAdapter } from '../core/pin-manager-adapter';
 import type { LogicState } from './logic-types';
 
 /**
@@ -111,13 +110,13 @@ export interface PeripheralDriver {
   /**
    * Called during simulation initialization to attach to pin arbiter
    * This is where peripherals register pin change listeners and drivers
-   * @param pinManager Either PinArbiter (new 4-value logic) or PinManagerAdapter (legacy boolean)
+   * @param arbiter Native PinArbiter with 4-value logic API
    * @param getMappedPin Helper to get MCU pin number from peripheral pin name
    * @param element Optional DOM element for visual interaction
    * @returns Cleanup function to be called on detach
    */
   attachEvents?(
-    pinManager: PinArbiter | PinManagerAdapter,
+    arbiter: PinArbiter,
     getMappedPin: (peripheralPinName: string) => number | null,
     element?: HTMLElement
   ): () => void;

@@ -1,5 +1,4 @@
 import { PinArbiter } from './pin-arbiter';
-import { PinManagerAdapter } from './pin-manager-adapter';
 import {
   PeripheralTypeDefinition,
   PeripheralInstance,
@@ -19,6 +18,9 @@ import {
  * - Pin mapping and resource allocation
  * - Event notification for UI updates
  * - Fault injection hooks
+ *
+ * Architecture principle: Pure native PinArbiter 4-value logic API
+ * No backward compatibility layers - best practice design from day one
  */
 export class PeripheralRegistry {
   /** Registered peripheral types */
@@ -36,18 +38,14 @@ export class PeripheralRegistry {
   /** Event listeners */
   private listeners = new Set<RegistryEventHandler>();
 
-  /** Pin arbiter instance */
+  /** Pin arbiter instance - native 4-value logic API */
   private pinArbiter: PinArbiter;
-
-  /** Legacy pin manager adapter (for backward-compatible drivers) */
-  private pinManagerAdapter: PinManagerAdapter;
 
   /** Track used pins for conflict detection */
   private usedPins = new Map<number, Set<string>>();
 
   constructor(pinArbiter: PinArbiter) {
     this.pinArbiter = pinArbiter;
-    this.pinManagerAdapter = new PinManagerAdapter(pinArbiter);
   }
 
   //
@@ -484,13 +482,6 @@ export class PeripheralRegistry {
    */
   getPinArbiter(): PinArbiter {
     return this.pinArbiter;
-  }
-
-  /**
-   * Get the legacy pin manager adapter
-   */
-  getPinManagerAdapter(): PinManagerAdapter {
-    return this.pinManagerAdapter;
   }
 
   /**

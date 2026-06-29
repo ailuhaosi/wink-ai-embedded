@@ -178,6 +178,7 @@ export type PeripheralRegistryEvent =
   | { type: 'peripheral-powered-on'; instanceId: string }
   | { type: 'peripheral-powered-off'; instanceId: string }
   | { type: 'peripheral-property-changed'; instanceId: string; key: string }
+  | { type: 'peripheral-pin-mapping-changed'; instanceId: string; mapping: PeripheralPinMapping }
   | { type: 'type-registered'; peripheralType: string }
   | { type: 'type-unregistered'; peripheralType: string };
 

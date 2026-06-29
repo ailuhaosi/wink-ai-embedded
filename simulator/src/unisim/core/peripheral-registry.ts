@@ -7,6 +7,7 @@ import {
   RegistryEventHandler,
   PeripheralPinMapping,
   PowerDomain,
+  PinDirection,
 } from '../types/peripheral-types';
 
 /**
@@ -145,8 +146,8 @@ export class PeripheralRegistry {
       element: options.element,
     };
 
-    // Check for pin conflicts
-    this.checkPinConflicts(instance);
+    // Check for electrical pin conflicts using direction matrix
+    instance.pins.forEach(pin => this.checkPinConflictForMapping(instanceId, pin));
 
     // Create driver instance
     instance.driver = typeDef.driverFactory(instance);
@@ -214,6 +215,7 @@ export class PeripheralRegistry {
   /**
    * Power on a peripheral instance
    * @param instanceId Instance identifier
+   * @throws Error if driver onPowerOn hangs beyond timeout
    */
   async powerOnInstance(instanceId: string): Promise<void> {
     const instance = this.instances.get(instanceId);
@@ -232,12 +234,22 @@ export class PeripheralRegistry {
       await new Promise(resolve => setTimeout(resolve, instance.powerUpDelayUs / 1000));
     }
 
-    // Call driver power-on hook
+    // Call driver power-on hook with timeout protection (5s default)
+    // Prevents misbehaving drivers from hanging the entire simulator
     if (instance.driver?.onPowerOn) {
-      await instance.driver.onPowerOn();
+      const POWER_ON_TIMEOUT_MS = 5000;
+      await Promise.race([
+        instance.driver.onPowerOn(),
+        new Promise((_, reject) =>
+          setTimeout(() =>
+            reject(new Error(`Peripheral "${instanceId}" onPowerOn timed out after ${POWER_ON_TIMEOUT_MS}ms`)),
+            POWER_ON_TIMEOUT_MS
+          )
+        )
+      ]);
     }
 
-    // Attach events to pin arbiter
+    // Attach events to pin arbiter - attachEvents is sync, no timeout needed
     if (instance.driver?.attachEvents) {
       const getMappedPin = (peripheralPinName: string): number | null => {
         const mapping = instance.pins.find(p => p.peripheralPin === peripheralPinName);
@@ -310,16 +322,20 @@ export class PeripheralRegistry {
    * Power on all peripherals in a specific power domain
    */
   async powerOnDomain(domain: PowerDomain): Promise<void> {
-    const instances = this.getAllInstances().filter(i => i.powerDomain === domain);
-    await Promise.all(instances.map(i => this.powerOnInstance(i.id)));
+    await Promise.all(
+      this.getAllInstances()
+        .filter(i => i.powerDomain === domain && !i.isPowered)
+        .map(i => this.powerOnInstance(i.id))
+    );
   }
 
   /**
    * Power off all peripherals in a specific power domain
+   * ✅ Filter out already powered-off instances to avoid warning spam
    */
   powerOffDomain(domain: PowerDomain): void {
     this.getAllInstances()
-      .filter(i => i.powerDomain === domain)
+      .filter(i => i.powerDomain === domain && i.isPowered)
       .forEach(i => this.powerOffInstance(i.id));
   }
 
@@ -327,14 +343,21 @@ export class PeripheralRegistry {
    * Power on all registered peripherals
    */
   async powerOnAll(): Promise<void> {
-    await Promise.all(this.getAllInstances().map(i => this.powerOnInstance(i.id)));
+    await Promise.all(
+      this.getAllInstances()
+        .filter(i => !i.isPowered)
+        .map(i => this.powerOnInstance(i.id))
+    );
   }
 
   /**
    * Power off all registered peripherals
+   * ✅ Filter out already powered-off instances to avoid warning spam
    */
   powerOffAll(): void {
-    this.getAllInstances().forEach(i => this.powerOffInstance(i.id));
+    this.getAllInstances()
+      .filter(i => i.isPowered)
+      .forEach(i => this.powerOffInstance(i.id));
   }
 
   //
@@ -376,6 +399,7 @@ export class PeripheralRegistry {
 
   /**
    * Add or update a pin mapping for an instance
+   * @emits peripheral-pin-mapping-changed
    */
   setPinMapping(instanceId: string, pinMapping: PeripheralPinMapping): void {
     const instance = this.instances.get(instanceId);
@@ -386,8 +410,9 @@ export class PeripheralRegistry {
       p => p.peripheralPin === pinMapping.peripheralPin
     );
 
+    let oldMapping: PeripheralPinMapping | null = null;
     if (existingIndex >= 0) {
-      const oldMapping = instance.pins[existingIndex];
+      oldMapping = instance.pins[existingIndex];
       // Unregister old pin
       const pinUsers = this.usedPins.get(oldMapping.mcuPin);
       if (pinUsers) {
@@ -399,14 +424,14 @@ export class PeripheralRegistry {
       instance.pins.splice(existingIndex, 1);
     }
 
-    // Check for conflicts on the new pin
-    const existingUsers = this.usedPins.get(pinMapping.mcuPin);
-    if (existingUsers && existingUsers.size > 0 && !existingUsers.has(instanceId)) {
-      console.warn(
-        `[PeripheralRegistry] Pin ${pinMapping.mcuPin} already in use by:`,
-        Array.from(existingUsers)
-      );
+    // Skip if no actual change
+    if (oldMapping && this.isPinMappingEqual(oldMapping, pinMapping)) {
+      instance.pins.push(pinMapping); // Restore, nothing changed
+      return;
     }
+
+    // Check for real electrical conflicts using direction matrix
+    this.checkPinConflictForMapping(instanceId, pinMapping);
 
     // Register new pin
     if (!this.usedPins.has(pinMapping.mcuPin)) {
@@ -414,6 +439,89 @@ export class PeripheralRegistry {
     }
     this.usedPins.get(pinMapping.mcuPin)!.add(instanceId);
     instance.pins.push(pinMapping);
+
+    // Notify UI of pin routing change
+    this.emit({ type: 'peripheral-pin-mapping-changed', instanceId, mapping: pinMapping });
+  }
+
+  /**
+   * Check if two pin mappings are identical (for deduplication)
+   */
+  private isPinMappingEqual(a: PeripheralPinMapping, b: PeripheralPinMapping): boolean {
+    return a.mcuPin === b.mcuPin &&
+           a.direction === b.direction &&
+           a.peripheralPin === b.peripheralPin;
+  }
+
+  /**
+   * Electrical conflict detection matrix
+   *
+   * Conflict Rules (row = new pin, column = existing pin):
+   * - SOURCE vs SOURCE: 🔴 CONFLICT (two outputs driving same net)
+   * - SOURCE vs SINK: ✅ OK (output drives input)
+   * - SOURCE vs BIDIRECTIONAL: ⚠️ WARNING (open-drain assumed but check direction)
+   * - SOURCE vs POWER/GROUND: ✅ OK
+   * - SINK vs anything: ✅ OK (inputs can be shared)
+   * - BIDIRECTIONAL vs BIDIRECTIONAL: ✅ OK (I2C/SPI open-drain bus)
+   * - POWER/GROUND vs anything: ✅ OK (power rails are always shared)
+   *
+   * @see https://learn.sparkfun.com/tutorials/i2c/all
+   */
+  private checkPinConflictForMapping(instanceId: string, pinMapping: PeripheralPinMapping): void {
+    const existingUsers = this.usedPins.get(pinMapping.mcuPin);
+    if (!existingUsers || existingUsers.size === 0) return;
+    if (existingUsers.has(instanceId)) return; // Already registered to same instance
+
+    // POWER and GROUND pins can always be shared - no warning
+    if (pinMapping.direction === PinDirection.POWER ||
+        pinMapping.direction === PinDirection.GROUND) {
+      return;
+    }
+
+    // Check each existing user for real electrical conflict
+    const conflictingInstances: string[] = [];
+    for (const existingInstanceId of existingUsers) {
+      const existingInstance = this.instances.get(existingInstanceId);
+      if (!existingInstance) continue;
+
+      const existingPin = existingInstance.pins.find(p => p.mcuPin === pinMapping.mcuPin);
+      if (!existingPin) continue;
+
+      // POWER/GROUND existing can always be shared
+      if (existingPin.direction === PinDirection.POWER ||
+          existingPin.direction === PinDirection.GROUND) {
+        continue;
+      }
+
+      // Two outputs (SOURCE) driving the same pin = HARD CONFLICT
+      if (pinMapping.direction === PinDirection.SOURCE &&
+          existingPin.direction === PinDirection.SOURCE) {
+        conflictingInstances.push(existingInstanceId);
+        continue;
+      }
+
+      // Bidirectional + Output = Potential conflict (e.g., I2C SDA vs GPIO output)
+      if ((pinMapping.direction === PinDirection.SOURCE &&
+           existingPin.direction === PinDirection.BIDIRECTIONAL) ||
+          (pinMapping.direction === PinDirection.BIDIRECTIONAL &&
+           existingPin.direction === PinDirection.SOURCE)) {
+        console.warn(
+          `[PeripheralRegistry] ⚠️ Potential conflict on pin ${pinMapping.mcuPin}: ` +
+          `${instanceId} (${pinMapping.direction}) vs ${existingInstanceId} (${existingPin.direction})`
+        );
+        continue;
+      }
+
+      // All other combinations are electrically valid (input-input, bidir-bidir, etc.)
+      // Intentionally silent - sharing I2C/SPI buses is normal and expected
+    }
+
+    if (conflictingInstances.length > 0) {
+      console.error(
+        `[PeripheralRegistry] 🔴 HARD CONFLICT on pin ${pinMapping.mcuPin}: ` +
+        `${instanceId} (OUTPUT) drives against: ${conflictingInstances.join(', ')}`
+      );
+    }
   }
 
   /**
@@ -465,16 +573,9 @@ export class PeripheralRegistry {
     });
   }
 
-  private checkPinConflicts(instance: PeripheralInstance): void {
-    instance.pins.forEach(pin => {
-      const existingUsers = this.usedPins.get(pin.mcuPin);
-      if (existingUsers && existingUsers.size > 0) {
-        console.warn(
-          `[PeripheralRegistry] Pin ${pin.mcuPin} already in use by:`,
-          Array.from(existingUsers)
-        );
-      }
-    });
+  /** @deprecated Use checkPinConflictForMapping instead */
+  private checkPinConflicts(_instance: PeripheralInstance): void {
+    // Legacy function - replaced by checkPinConflictForMapping with direction-aware logic
   }
 
   /**

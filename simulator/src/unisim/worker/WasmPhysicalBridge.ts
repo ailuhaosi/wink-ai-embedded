@@ -45,7 +45,7 @@ export interface SimFaultsConfig {
 export interface WasmExports {
   // --- 64-bit clock (bigint required by WASM_BIGINT ABI) ---
   pal_wasm_advance_virtual_clock: (us: bigint) => void;
-  pal_get_us: () => bigint;
+  pal_os_get_us: () => bigint;
 
   // --- Clock overflow early-warning (Wave2 P1 Task 6) ---
   /** Returns true once the virtual clock has crossed the 50% UINT64 threshold (~292 years). */
@@ -170,7 +170,7 @@ export class WasmPhysicalBridge {
 
   /** Microsecond reading from the WASM-side `s_virtual_us`. */
   getClockUs(): bigint {
-    return this.exports.pal_get_us();
+    return this.exports.pal_os_get_us();
   }
 
   /** Current PRNG state (for determinism assertions / golden compares). */

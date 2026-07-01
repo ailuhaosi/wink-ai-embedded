@@ -68,7 +68,7 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
       state.advanceClockCalls.push({ us });
       state.clock_us += us;
     },
-    pal_get_us() {
+    pal_os_get_us() {
       return state.clock_us;
     },
     pal_wasm_is_clock_warning_fired() {

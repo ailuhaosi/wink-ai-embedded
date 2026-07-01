@@ -4,7 +4,7 @@
  * Mirrors the WASM-side `s_virtual_us` (uint64_t monotonic microsecond counter
  * declared in `wink-micro-os/targets/wasm/pal_osal_wasm.c`). The two clocks are
  * never directly compared in production — the WASM clock is authoritative for
- * `pal_get_us()`/`pal_get_ms()` consumers inside the sandbox — but the JS host
+ * `pal_os_get_us()`/`pal_os_get_ms()` consumers inside the sandbox — but the JS host
  * holds an equivalent view so the Worker can:
  *   1. Decide when to call `pal_wasm_advance_virtual_clock(us: bigint)` and by
  *      how much (delta accounting / scheduling).
@@ -32,12 +32,12 @@ export class VirtualClock {
     this.us += us;
   }
 
-  /** Microsecond reading; aligns with C-side `pal_get_us()`. */
+  /** Microsecond reading; aligns with C-side `pal_os_get_us()`. */
   getUs(): bigint {
     return this.us;
   }
 
-  /** Millisecond reading; aligns with C-side `pal_get_ms()` (integer division). */
+  /** Millisecond reading; aligns with C-side `pal_os_get_ms()` (integer division). */
   getMs(): bigint {
     return this.us / 1000n;
   }

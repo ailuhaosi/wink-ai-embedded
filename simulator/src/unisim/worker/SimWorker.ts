@@ -26,10 +26,10 @@
 import { VirtualClock } from '../core/VirtualClock';
 import {
   WasmPhysicalBridge,
-  WasmExports,
   SimFaultsConfig,
   GpioIdealInjector,
 } from './WasmPhysicalBridge';
+import type { WasmExports } from '../types/wasm/exports';
 
 // ---- Request envelopes ----
 

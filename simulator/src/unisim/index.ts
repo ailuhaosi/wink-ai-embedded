@@ -38,3 +38,7 @@ export type {
   PeripheralRegistryEvent,
   RegistryEventHandler,
 } from './types/peripheral-types';
+
+// Wasm boundary contracts (Phase B B1)
+export type { WasmExports, PalI2cTransferMarshalled } from './types/wasm/exports';
+export { VirtualClock, VirtualClockResetError } from './core/VirtualClock';

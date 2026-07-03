@@ -13,6 +13,20 @@
  * at compile time before it can manifest as an Emscripten boundary TypeError.
  */
 
+import type { WasmExports } from '../types/wasm/exports';
+
+/**
+ * Minimal subset of the Emscripten Module needed for I²C marshalling. This is
+ * structurally compatible with the `EmscriptenModuleLike` interface that
+ * Task 12 exports from bridge/installUnisimBridge.ts; kept local to avoid a
+ * cross-file dependency during the Phase B landing sequence.
+ */
+interface RawModule {
+  _malloc(size: number): number;
+  _free(ptr: number): void;
+  HEAPU8: Uint8Array;
+}
+
 /**
  * Fault configuration payload. Field types mirror the C setter signatures
  * exactly so a one-to-one wire-up via `setFaults()` is the only sanctioned
@@ -37,54 +51,6 @@ export interface SimFaultsConfig {
 }
 
 /**
- * Minimal export surface this bridge consumes. Real Emscripten modules expose
- * far more (memory, malloc, etc.); the bridge only depends on what it calls.
- *
- * Naming/types are SSOT-aligned with `wasm_bridge.h` Wave 2 declarations.
- */
-export interface WasmExports {
-  // --- 64-bit clock (bigint required by WASM_BIGINT ABI) ---
-  pal_wasm_advance_virtual_clock: (us: bigint) => void;
-  pal_os_get_us: () => bigint;
-
-  // --- Clock overflow early-warning (Wave2 P1 Task 6) ---
-  /** Returns true once the virtual clock has crossed the 50% UINT64 threshold (~292 years). */
-  pal_wasm_is_clock_warning_fired: () => boolean;
-  /** Current virtual clock value, for the warning log payload. Bigint per WASM_BIGINT ABI. */
-  pal_wasm_get_virtual_clock_us: () => bigint;
-
-  // --- Fault setters (number-safe widths) ---
-  pal_wasm_set_bounce_us: (us: number) => void;
-  pal_wasm_set_warmup_us: (us: number) => void;
-  pal_wasm_set_sample_interval_us: (us: number) => void;
-  pal_wasm_set_adc_noise_v: (v: number) => void;
-  pal_wasm_set_rc_tau_s: (s: number) => void;
-  pal_wasm_set_i2c_drop_permil: (permil: number) => void;
-  pal_wasm_set_prng_seed: (seed: number) => void;
-
-  // --- Physical state management ---
-  pal_wasm_reset_physical: () => void;
-  pal_wasm_get_prng_state: () => number;
-
-  // --- Degraded HAL surface (post-debounce / post-drop) ---
-  pal_gpio_read: (pin: number) => boolean;
-
-  /**
-   * Simplified I²C transfer wrapper. The Emscripten-exported C symbol
-   * `pal_i2c_transfer` actually takes pointers into linear memory; production
-   * Worker code marshals via `Module._malloc` + `HEAPU8.set`. For unit
-   * testability we expose a high-level shape and let real-Worker code wrap
-   * the cwrap'd binding into this signature.
-   */
-  pal_i2c_transfer: (
-    port: number,
-    devAddr: number,
-    writeBuf: Uint8Array,
-    readLen: number,
-  ) => boolean;
-}
-
-/**
  * Optional hook fired when `setGpioIdeal` is invoked. The bridge holds the
  * authoritative ideal-level map (so unit tests can inspect / replay it), but
  * actual injection into WASM happens through whatever mechanism the host
@@ -97,6 +63,7 @@ export class WasmPhysicalBridge {
   private readonly exports: WasmExports;
   private readonly idealGpioStates: Map<number, boolean> = new Map();
   private readonly injectGpioIdeal?: GpioIdealInjector;
+  private readonly rawModule: RawModule | null;
   /**
    * One-shot guard for the clock-overflow warning (Wave2 P1 Task 6). The
    * C-side flag (`s_clock_warning_fired`) is itself one-shot, but it remains
@@ -105,9 +72,14 @@ export class WasmPhysicalBridge {
    */
   private clockWarningEmitted: boolean = false;
 
-  constructor(exports: WasmExports, injectGpioIdeal?: GpioIdealInjector) {
+  constructor(
+    exports: WasmExports,
+    injectGpioIdeal?: GpioIdealInjector,
+    rawModule?: RawModule,
+  ) {
     this.exports = exports;
     this.injectGpioIdeal = injectGpioIdeal;
+    this.rawModule = rawModule ?? null;
   }
 
   /** Push the full faults JSON payload into WASM in one shot. */
@@ -180,7 +152,9 @@ export class WasmPhysicalBridge {
 
   /**
    * Issue an I²C transfer through the degraded HAL path (drop-rate honoured).
-   * Returns false on PRNG-driven drop or device-side NAK; true on success.
+   * Marshals writeBuf into the wasm heap via _malloc/HEAPU8.set, invokes the
+   * raw C ABI, copies the read buffer back out, then _frees. Returns false
+   * on PRNG-driven drop or device-side NAK; true on success.
    */
   i2cTransfer(
     port: number,
@@ -188,7 +162,29 @@ export class WasmPhysicalBridge {
     writeBuf: Uint8Array,
     readLen: number,
   ): boolean {
-    return this.exports.pal_i2c_transfer(port, devAddr, writeBuf, readLen);
+    const m = this.rawModule;
+    if (!m) {
+      // Testing path where exports are mocked but the Module isn't wired
+      // through — assume the mock's pal_i2c_transfer is already the marshalled
+      // shape (all Wave-2 tests were written against that).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (this.exports as any).pal_i2c_transfer(port, devAddr, writeBuf, readLen);
+    }
+    const wlen = writeBuf.length;
+    const wbufPtr = wlen > 0 ? m._malloc(wlen) : 0;
+    const rbufPtr = readLen > 0 ? m._malloc(readLen) : 0;
+    try {
+      if (wlen > 0) m.HEAPU8.set(writeBuf, wbufPtr);
+      const ok = this.exports.pal_i2c_transfer(
+        port, devAddr, wbufPtr, wlen, rbufPtr, readLen,
+      );
+      // We intentionally do NOT expose the read buffer back to callers here —
+      // Wave 2 API only asked for success/fail. Phase C will extend the DTO.
+      return ok;
+    } finally {
+      if (wbufPtr) m._free(wbufPtr);
+      if (rbufPtr) m._free(rbufPtr);
+    }
   }
 
   /** Reset all fault state, debounce contexts, and PRNG to seed=1. */

@@ -12,9 +12,9 @@
 import { VirtualClock } from '../../core/VirtualClock';
 import {
   WasmPhysicalBridge,
-  WasmExports,
   SimFaultsConfig,
 } from '../WasmPhysicalBridge';
+import type { WasmExports } from '../../types/wasm/exports';
 import { SimWorker, SimWorkerRequest, SimWorkerResponse, OkResponse } from '../SimWorker';
 
 // ---------------------------------------------------------------------------
@@ -119,10 +119,29 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
     pal_gpio_read(pin) {
       return state.gpioLevels.get(pin) ?? false;
     },
-    pal_i2c_transfer(port, devAddr, writeBuf, readLen) {
-      state.i2cTransfers.push({ port, devAddr, writeBuf, readLen });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pal_i2c_transfer(port: any, devAddr: any, writeBuf: any, readLen: any) {
+      // When testing the null-branch path (no rawModule wired), the bridge
+      // casts exports to `any` and passes marshalled args; when used against
+      // the raw ABI the args will be numbers. We coerce to Uint8Array/number
+      // only when writeBuf looks like a Uint8Array for backward test compat.
+      if (writeBuf instanceof Uint8Array) {
+        state.i2cTransfers.push({ port, devAddr, writeBuf, readLen });
+      } else {
+        // Raw ABI call (wbufPtr, wlen, rbufPtr, rlen) — record the shape but
+        // don't attempt heap marshalling in this mock.
+        state.i2cTransfers.push({ port, devAddr, writeBuf: new Uint8Array(0), readLen: readLen ?? 0 });
+      }
       return state.i2cReturn;
     },
+    pal_wasm_get_fault_log_count: () => 0,
+    pal_wasm_reset_fault_log: () => {},
+    pal_wasm_fault_event_get_timestamp: () => 0n,
+    pal_wasm_fault_event_get_type: () => 0,
+    pal_wasm_fault_event_get_pin_or_bus: () => 0,
+    pal_wasm_fault_event_get_sequence: () => 0,
+    pal_wasm_set_pin_power_model: () => 0,
+    pal_wasm_get_total_energy_mj: () => 0n,
   };
 
   return { exports, state };

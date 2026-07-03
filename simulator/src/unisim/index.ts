@@ -41,4 +41,18 @@ export type {
 
 // Wasm boundary contracts (Phase B B1)
 export type { WasmExports, PalI2cTransferMarshalled } from './types/wasm/exports';
+export type { WasmImports } from './types/wasm/imports';
+export type { WasmInterruptQueue, PendingInterrupt } from './types/wasm/interrupt-queue';
 export { VirtualClock, VirtualClockResetError } from './core/VirtualClock';
+
+// Runtime object contracts (Phase B B1)
+export type {
+  I2CDevice,
+  I2CTransferResult,
+  I2CBusApi,
+} from './types/runtime/i2c';
+export type {
+  FaultAuditLogEvent,
+  FaultDomainControl,
+  FaultEventTypeCode,
+} from './types/runtime/fault';

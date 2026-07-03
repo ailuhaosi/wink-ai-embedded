@@ -62,3 +62,5 @@ export { I2CBus } from './bridge/I2CBus';
 export { InterruptQueue, INTERRUPT_QUEUE_CAPACITY } from './bridge/InterruptQueue';
 export { createUnisimImports } from './bridge/createUnisimImports';
 export type { UnisimBridgeDeps } from './bridge/createUnisimImports';
+export { installUnisimBridge } from './bridge/installUnisimBridge';
+export type { EmscriptenModuleLike } from './bridge/installUnisimBridge';

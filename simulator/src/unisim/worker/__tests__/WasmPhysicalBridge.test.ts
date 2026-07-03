@@ -116,11 +116,11 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
     pal_wasm_get_prng_state() {
       return state.prng_state;
     },
-    pal_gpio_read(pin) {
+    pal_wasm_gpio_read(pin) {
       return state.gpioLevels.get(pin) ?? false;
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    pal_i2c_transfer(port: any, devAddr: any, writeBuf: any, readLen: any) {
+    pal_wasm_i2c_transfer(port: any, devAddr: any, writeBuf: any, readLen: any) {
       // When testing the null-branch path (no rawModule wired), the bridge
       // casts exports to `any` and passes marshalled args; when used against
       // the raw ABI the args will be numbers. We coerce to Uint8Array/number
@@ -134,6 +134,7 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
       }
       return state.i2cReturn;
     },
+    pal_os_get_ms: () => state.clock_us / 1000n,
     pal_wasm_get_fault_log_count: () => 0,
     pal_wasm_reset_fault_log: () => {},
     pal_wasm_fault_event_get_timestamp: () => 0n,

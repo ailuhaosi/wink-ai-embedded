@@ -116,7 +116,7 @@ export class WasmPhysicalBridge {
 
   /** Read the post-degradation (debounced) pin level from WASM. */
   readGpioDegraded(pin: number): boolean {
-    return this.exports.pal_gpio_read(pin);
+    return this.exports.pal_wasm_gpio_read(pin);
   }
 
   /** Advance the WASM virtual clock. `us` must be bigint per WASM_BIGINT ABI. */
@@ -165,17 +165,17 @@ export class WasmPhysicalBridge {
     const m = this.rawModule;
     if (!m) {
       // Testing path where exports are mocked but the Module isn't wired
-      // through — assume the mock's pal_i2c_transfer is already the marshalled
+      // through — assume the mock's pal_wasm_i2c_transfer is already the marshalled
       // shape (all Wave-2 tests were written against that).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (this.exports as any).pal_i2c_transfer(port, devAddr, writeBuf, readLen);
+      return (this.exports as any).pal_wasm_i2c_transfer(port, devAddr, writeBuf, readLen);
     }
     const wlen = writeBuf.length;
     const wbufPtr = wlen > 0 ? m._malloc(wlen) : 0;
     const rbufPtr = readLen > 0 ? m._malloc(readLen) : 0;
     try {
       if (wlen > 0) m.HEAPU8.set(writeBuf, wbufPtr);
-      const ok = this.exports.pal_i2c_transfer(
+      const ok = this.exports.pal_wasm_i2c_transfer(
         port, devAddr, wbufPtr, wlen, rbufPtr, readLen,
       );
       // We intentionally do NOT expose the read buffer back to callers here —

@@ -15,6 +15,7 @@ export interface WasmExports {
   // --- 64-bit clock (bigint required by WASM_BIGINT ABI) ---
   pal_wasm_advance_virtual_clock: (us: bigint) => void;
   pal_os_get_us: () => bigint;
+  pal_os_get_ms: () => bigint;
 
   // --- Clock overflow early-warning (Wave2 P1 Task 6) ---
   /** Returns true once the virtual clock has crossed the 50% UINT64 threshold (~292 years). */
@@ -36,7 +37,9 @@ export interface WasmExports {
   pal_wasm_get_prng_state: () => number;
 
   // --- Degraded HAL surface (post-debounce / post-drop) ---
-  pal_gpio_read: (pin: number) => boolean;
+  // JS-facing simplified wrappers (bool-returning, no out-pointer).
+  // C-side: see pal_wasm_gpio_read / pal_wasm_i2c_transfer in pal_wasm_physical.c.
+  pal_wasm_gpio_read: (pin: number) => boolean;
 
   /**
    * Raw C ABI signature — pointers cross as wasm-heap offsets. Kept aligned
@@ -45,7 +48,7 @@ export interface WasmExports {
    * high-level wrapper `pal_i2c_transfer_marshalled` below which handles
    * `_malloc` + `HEAPU8.set` + `_free` around a Uint8Array + readLen shape.
    */
-  pal_i2c_transfer: (
+  pal_wasm_i2c_transfer: (
     port: number,
     devAddr: number,
     wbufPtr: number,

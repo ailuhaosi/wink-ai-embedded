@@ -56,3 +56,9 @@ export type {
   FaultDomainControl,
   FaultEventTypeCode,
 } from './types/runtime/fault';
+
+// Phase B B2 bridge exports
+export { I2CBus } from './bridge/I2CBus';
+export { InterruptQueue, INTERRUPT_QUEUE_CAPACITY } from './bridge/InterruptQueue';
+export { createUnisimImports } from './bridge/createUnisimImports';
+export type { UnisimBridgeDeps } from './bridge/createUnisimImports';

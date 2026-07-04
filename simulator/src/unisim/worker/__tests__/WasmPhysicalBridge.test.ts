@@ -16,6 +16,7 @@ import {
 } from '../WasmPhysicalBridge';
 import type { WasmExports } from '../../types/wasm/exports';
 import { SimWorker, SimWorkerRequest, SimWorkerResponse, OkResponse } from '../SimWorker';
+import { LogicStates, DriveStrength } from '../../types/logic-types';
 
 // ---------------------------------------------------------------------------
 // Test double: records every call and lets us script `pal_gpio_read` returns.
@@ -42,6 +43,10 @@ interface MockState {
     readLen: number;
   }>;
   i2cReturn: boolean;
+  /** Tracks pins passed to pal_wasm_gpio_read (for asserting fallback path hit). */
+  gpioReadCalls: number[];
+  /** If set, overrides gpioLevels lookup for pal_wasm_gpio_read return value. */
+  gpioReadResult: boolean | undefined;
 }
 
 function makeMockExports(): { exports: WasmExports; state: MockState } {
@@ -61,6 +66,8 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
     advanceClockCalls: [],
     i2cTransfers: [],
     i2cReturn: true,
+    gpioReadCalls: [],
+    gpioReadResult: undefined,
   };
 
   const exports: WasmExports = {
@@ -111,12 +118,16 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
       state.clock_us = 0n;
       state.clockWarningFired = false;
       state.gpioLevels.clear();
+      state.gpioReadCalls = [];
+      state.gpioReadResult = undefined;
       state.resetCount += 1;
     },
     pal_wasm_get_prng_state() {
       return state.prng_state;
     },
     pal_wasm_gpio_read(pin) {
+      state.gpioReadCalls.push(pin);
+      if (state.gpioReadResult !== undefined) return state.gpioReadResult;
       return state.gpioLevels.get(pin) ?? false;
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -525,6 +536,52 @@ describe('SimWorker — message protocol', () => {
     });
     const ok = expectOk<{ level: boolean }>(resp);
     expect(ok.payload.level).toBe(false);
+  });
+
+  test('READ_GPIO_DEGRADED reads from PinArbiter when a driver is registered (HIGH/LOW)', () => {
+    const { worker } = makeWorker();
+    const arbiter = worker.getArbiter();
+
+    // Simulate WASM pal_gpio_write driving pin 10 HIGH via the arbiter
+    // (same path js_pal_gpio_write uses on real wasm instantiation).
+    // Use the same driver id 'wasm-driver' for the LOW transition so setDriver
+    // replaces (Map semantics) rather than adding a second driver which would
+    // cause CONFLICT between two opposing SUPPLY-strength drivers.
+    arbiter.setDriver(10, { id: 'wasm-driver', state: LogicStates.HIGH, strength: DriveStrength.SUPPLY });
+    let resp = worker.handleMessage({ type: 'READ_GPIO_DEGRADED', id: 20, pin: 10 });
+    let ok = expectOk<{ level: boolean }>(resp);
+    expect(ok.payload.level).toBe(true); // HIGH → true
+
+    // Drive LOW (same driver id → replaces previous state)
+    arbiter.setDriver(10, { id: 'wasm-driver', state: LogicStates.LOW, strength: DriveStrength.SUPPLY });
+    resp = worker.handleMessage({ type: 'READ_GPIO_DEGRADED', id: 21, pin: 10 });
+    ok = expectOk<{ level: boolean }>(resp);
+    expect(ok.payload.level).toBe(false); // LOW → false
+  });
+
+  test('READ_GPIO_DEGRADED returns true for CONFLICT state (errs on signal present)', () => {
+    const { worker } = makeWorker();
+    const arbiter = worker.getArbiter();
+    // CONFLICT state (mid-rail, two drivers fighting) — code errs on signal present (true)
+    arbiter.setDriver(11, { id: 'driver-a', state: LogicStates.HIGH, strength: DriveStrength.SUPPLY });
+    arbiter.setDriver(11, { id: 'driver-b', state: LogicStates.LOW, strength: DriveStrength.SUPPLY });
+    const resp = worker.handleMessage({ type: 'READ_GPIO_DEGRADED', id: 22, pin: 11 });
+    const ok = expectOk<{ level: boolean }>(resp);
+    expect(ok.payload.level).toBe(true);
+  });
+
+  test('READ_GPIO_DEGRADED falls through to wasm bridge for HI_Z (no driver)', () => {
+    const { exports, state } = makeMockExports();
+    const worker = new SimWorker({ exports });
+
+    // Pin 12 has no driver registered in arbiter → HI_Z → falls through to
+    // bridge.readGpioDegraded() which calls exports.pal_wasm_gpio_read().
+    // Script the mock to return true so we can observe the fallback was reached.
+    state.gpioReadResult = true;
+    const resp = worker.handleMessage({ type: 'READ_GPIO_DEGRADED', id: 23, pin: 12 });
+    const ok = expectOk<{ level: boolean }>(resp);
+    expect(ok.payload.level).toBe(true); // came from mock, not arbiter default
+    expect(state.gpioReadCalls).toContain(12);
   });
 
   test('TEST_I2C_TRANSFER forwards args and reports success', () => {

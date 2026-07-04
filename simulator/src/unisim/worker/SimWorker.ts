@@ -215,14 +215,16 @@ export class SimWorker {
       pwmSink: opts.pwmSink,
       ultrasonicEchoUs: opts.ultrasonicEchoUs,
       reportHostFault(code, err) {
-        // P0-3: write the error message to wasm heap and invoke pal_wasm_host_fault
-        const exports = self.bridge?.['exports'] as WasmExports | undefined;
-        if (!exports || !exports.pal_wasm_host_fault || !self.rawModule) {
+        // P0-3: write the error message to wasm heap and invoke pal_wasm_host_fault.
+        // rawModule is required for _malloc/_free marshalling; host_fault export is
+        // always present once wasm is instantiated (checked via type system below).
+        if (!self.rawModule) {
           // eslint-disable-next-line no-console
-          console.warn('[SimWorker] host fault cannot be delivered (no rawModule or export):', err);
+          console.warn('[SimWorker] host fault cannot be delivered (rawModule not wired):', err);
           return;
         }
-        if (exports.pal_wasm_is_faulted && exports.pal_wasm_is_faulted()) return; // idempotent
+        const exports = self.bridge.getExports();
+        if (exports.pal_wasm_is_faulted()) return; // idempotent: safe-off already executed
         const msg = err instanceof Error ? err.message : String(err);
         const M = self.rawModule;
         const enc = new TextEncoder();
@@ -398,10 +400,33 @@ export class SimWorker {
     // arbitration (e.g. PWM "driver" on the same pin) and reflects the
     // post-arbitration level the physical world sees.
     //
+    // Data path rationale:
+    //   - When WASM app calls pal_gpio_write(), the js_pal_gpio_write import
+    //     registers a SUPPLY-strength driver in PinArbiter → arbiter reads
+    //     return HIGH/LOW directly (no bounce/noise applied, since WASM HAL
+    //     applies that on its own read path when there IS a driver).
+    //   - When host injects ideal levels via SET_GPIO_IDEAL (test/UI input
+    //     stimulus) WITHOUT the WASM app ever calling pal_gpio_write (i.e.
+    //     pin is an input-only sensor), no driver is registered → arbiter
+    //     returns HI_Z. In that case we fall through to the wasm-side
+    //     pal_wasm_gpio_read → pal_gpio_read → debounce middleware, which
+    //     reads the ideal level via js_pal_gpio_read (which itself reads
+    //     the arbiter, but the ideal-inject hook writes directly to... see
+    //     note below) and applies bounce/noise.
+    //
     // Mapping: HIGH / CONFLICT → true (driven), LOW / HI_Z → false.
     // For CONFLICT we err on the side of "signal present" since the
-    // physical level is mid-rail. Fall back to wasm read if arbiter
-    // returns HI_Z (no driver registered) — wasm applies bounce/noise.
+    // physical level is mid-rail.
+    //
+    // NOTE (HI_Z fallback path): in the current wiring, host SET_GPIO_IDEAL
+    // calls bridge.setGpioIdeal() which fires the injectGpioIideal callback.
+    // Production hosts that wire injectGpioIdeal to arbiter.setDriver will
+    // never hit HI_Z (a driver exists); test/mock hosts that use the default
+    // bridge-only cache will hit HI_Z and fall through to wasm-side degraded
+    // reads, which read via js_pal_gpio_read (arbiter-backed, returning
+    // false for HI_Z) — so the ideal-level path goes through bridge cache
+    // for set and arbiter returns false for undriven inputs, matching the
+    // physical model (floating pins read LOW in the digital model).
     const arbiterState = this.arbiter.readPin(msg.pin);
     let level: boolean;
     if (arbiterState === LogicStates.HIGH || arbiterState === LogicStates.CONFLICT) {
@@ -409,8 +434,9 @@ export class SimWorker {
     } else if (arbiterState === LogicStates.LOW) {
       level = false;
     } else {
-      // HI_Z — no driver in arbiter; fall through to wasm-side degraded
-      // read so bounce/noise middleware still applies to ideal injects.
+      // HI_Z — no driver registered in PinArbiter (input-only pin, or
+      // test/mock host); fall through to wasm-side degraded read path
+      // which applies bounce/noise middleware using js_pal_gpio_read.
       level = this.bridge.readGpioDegraded(msg.pin);
     }
     return {

@@ -84,6 +84,10 @@ export class WasmPhysicalBridge {
   /** Expose rawModule for createUnisimImports' reportHostFault closure (P0-3). */
   getRawModule(): RawModule | null { return this.rawModule; }
 
+  /** Expose typed WasmExports for host-fault delivery and diagnostics.
+   *  Use this instead of bracket- access or `as` casts in consuming code. */
+  getExports(): WasmExports { return this.exports; }
+
   /** Push the full faults JSON payload into WASM in one shot. */
   setFaults(config: SimFaultsConfig): void {
     this.exports.pal_wasm_set_bounce_us(config.bounce_us);

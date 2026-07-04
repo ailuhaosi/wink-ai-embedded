@@ -16,12 +16,11 @@
 import type { WasmExports } from '../types/wasm/exports';
 
 /**
- * Minimal subset of the Emscripten Module needed for I²C marshalling. This is
- * structurally compatible with the `EmscriptenModuleLike` interface that
- * Task 12 exports from bridge/installUnisimBridge.ts; kept local to avoid a
- * cross-file dependency during the Phase B landing sequence.
+ * Minimal subset of the Emscripten Module needed for I²C marshalling and
+ * host-fault string writing (P0-3). Structurally compatible with the
+ * EmscriptenModuleLike interface from bridge/installUnisimBridge.ts.
  */
-interface RawModule {
+export interface RawModule {
   _malloc(size: number): number;
   _free(ptr: number): void;
   HEAPU8: Uint8Array;
@@ -81,6 +80,9 @@ export class WasmPhysicalBridge {
     this.injectGpioIdeal = injectGpioIdeal;
     this.rawModule = rawModule ?? null;
   }
+
+  /** Expose rawModule for createUnisimImports' reportHostFault closure (P0-3). */
+  getRawModule(): RawModule | null { return this.rawModule; }
 
   /** Push the full faults JSON payload into WASM in one shot. */
   setFaults(config: SimFaultsConfig): void {
@@ -153,22 +155,32 @@ export class WasmPhysicalBridge {
   /**
    * Issue an I²C transfer through the degraded HAL path (drop-rate honoured).
    * Marshals writeBuf into the wasm heap via _malloc/HEAPU8.set, invokes the
-   * raw C ABI, copies the read buffer back out, then _frees. Returns false
-   * on PRNG-driven drop or device-side NAK; true on success.
+   * raw C ABI, copies the read buffer back out (P0-4: Phase C DTO extension
+   * — previously the read buffer was freed without being returned, making
+   * read-type I2C transactions (RTC/WHO_AM_I/ADC/IMU) completely unusable),
+   * then _frees.
+   *
+   * Returns `{ ok: true, data: Uint8Array }` on success (data is a COPY of
+   * wasm heap memory, safe to use after this call returns); `{ ok: false }`
+   * on PRNG-driven drop or device-side NAK.
+   *
+   * NOTE: uses HEAPU8.slice() (COPY), not .subarray() (view) — rbufPtr is
+   * _free()'d immediately after, so a view would be overwritten by a
+   * subsequent malloc.
    */
   i2cTransfer(
     port: number,
     devAddr: number,
     writeBuf: Uint8Array,
     readLen: number,
-  ): boolean {
+  ): { ok: boolean; data?: Uint8Array } {
     const m = this.rawModule;
     if (!m) {
       // Testing path where exports are mocked but the Module isn't wired
-      // through — assume the mock's pal_wasm_i2c_transfer is already the marshalled
-      // shape (all Wave-2 tests were written against that).
+      // through — return {ok: boolean} matching the mock's boolean-return shape.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (this.exports as any).pal_wasm_i2c_transfer(port, devAddr, writeBuf, readLen);
+      const mockOk = (this.exports as any).pal_wasm_i2c_transfer(port, devAddr, writeBuf, readLen);
+      return { ok: Boolean(mockOk) };
     }
     const wlen = writeBuf.length;
     const wbufPtr = wlen > 0 ? m._malloc(wlen) : 0;
@@ -178,9 +190,12 @@ export class WasmPhysicalBridge {
       const ok = this.exports.pal_wasm_i2c_transfer(
         port, devAddr, wbufPtr, wlen, rbufPtr, readLen,
       );
-      // We intentionally do NOT expose the read buffer back to callers here —
-      // Wave 2 API only asked for success/fail. Phase C will extend the DTO.
-      return ok;
+      if (!ok) return { ok: false };
+      if (readLen > 0 && rbufPtr) {
+        // COPY (slice), not view — _free runs immediately after.
+        return { ok: true, data: m.HEAPU8.slice(rbufPtr, rbufPtr + readLen) };
+      }
+      return { ok: true };
     } finally {
       if (wbufPtr) m._free(wbufPtr);
       if (rbufPtr) m._free(rbufPtr);

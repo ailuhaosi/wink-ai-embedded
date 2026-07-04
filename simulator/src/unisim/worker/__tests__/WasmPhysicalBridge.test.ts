@@ -143,6 +143,8 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
     pal_wasm_fault_event_get_sequence: () => 0,
     pal_wasm_set_pin_power_model: () => 0,
     pal_wasm_get_total_energy_mj: () => 0n,
+    pal_wasm_is_faulted: () => false,
+    pal_wasm_host_fault: (_code: number, _msgCstr: number) => {},
   };
 
   return { exports, state };
@@ -327,15 +329,17 @@ describe('WasmPhysicalBridge — config / clock / GPIO / I²C', () => {
     expect(() => bridge.readGpioDegraded(-1)).not.toThrow();
   });
 
-  test('i2cTransfer forwards args and returns mock result', () => {
+  test('i2cTransfer forwards args and returns {ok, data}-shaped result', () => {
     const { exports, state } = makeMockExports();
     const bridge = new WasmPhysicalBridge(exports);
     const buf = new Uint8Array([0x12, 0x34]);
 
     state.i2cReturn = true;
-    expect(bridge.i2cTransfer(0, 0x68, buf, 4)).toBe(true);
+    const okResult = bridge.i2cTransfer(0, 0x68, buf, 4);
+    expect(okResult).toEqual({ ok: true });
     state.i2cReturn = false;
-    expect(bridge.i2cTransfer(1, 0x77, buf, 0)).toBe(false);
+    const failResult = bridge.i2cTransfer(1, 0x77, buf, 0);
+    expect(failResult).toEqual({ ok: false });
 
     expect(state.i2cTransfers).toHaveLength(2);
     expect(state.i2cTransfers[0]).toEqual({
@@ -356,6 +360,74 @@ describe('WasmPhysicalBridge — config / clock / GPIO / I²C', () => {
 
     expect(state.resetCount).toBe(1);
     expect(bridge.getGpioIdeal(3)).toBeUndefined();
+  });
+
+  test('i2cTransfer with rawModule copies read bytes out of wasm heap (P0-4)', () => {
+    // Build a fake "wasm heap" where _malloc allocates sequentially and
+    // pal_wasm_i2c_transfer writes known bytes into the rbuf region — this
+    // exercises the _malloc / HEAPU8.set / HEAPU8.slice / _free path that
+    // the null-branch mock skips.
+    const heap = new Uint8Array(1024);
+    let bump = 256;
+    const allocated: number[] = [];
+    const freed: number[] = [];
+    const rawModule = {
+      _malloc(size: number) {
+        const ptr = bump;
+        bump += size;
+        allocated.push(ptr);
+        return ptr;
+      },
+      _free(ptr: number) { freed.push(ptr); },
+      HEAPU8: heap,
+    };
+    const exports = {
+      ...makeMockExports().exports,
+      // On success, fill rbuf with a recognizable byte pattern [0xAA, 0xBB, 0xCC]
+      // that the bridge must copy out before _free.
+      pal_wasm_i2c_transfer(
+        _port: number, _addr: number, _wptr: number, _wlen: number,
+        rbufPtr: number, rlen: number,
+      ) {
+        // Fill with recognizable pattern [0xAA, 0xBB, 0xCC]
+        const pat = [0xAA, 0xBB, 0xCC];
+        for (let i = 0; i < rlen; i++) heap[rbufPtr + i] = pat[i] ?? 0;
+        return true;
+      },
+    } as WasmExports;
+
+    const bridge = new WasmPhysicalBridge(exports, undefined, rawModule);
+    const result = bridge.i2cTransfer(0, 0x68, new Uint8Array([0x12, 0x34]), 3);
+    expect(result.ok).toBe(true);
+    expect(result.data).toBeInstanceOf(Uint8Array);
+    expect(result.data).toEqual(new Uint8Array([0xAA, 0xBB, 0xCC]));
+    // data must be a copy, not a view — mutating heap must not affect result
+    heap[allocated[allocated.length - 1]] = 0xFF;
+    expect(result.data).toEqual(new Uint8Array([0xAA, 0xBB, 0xCC]));
+    // every malloc'd pointer was freed exactly once
+    expect(freed.sort()).toEqual(allocated.sort());
+  });
+
+  test('i2cTransfer with rawModule returns ok=false on NACK without leaking', () => {
+    const heap = new Uint8Array(1024);
+    let bump = 256;
+    const allocated: number[] = [];
+    const freed: number[] = [];
+    const rawModule = {
+      _malloc(size: number) { const p = bump; bump += size; allocated.push(p); return p; },
+      _free(ptr: number) { freed.push(ptr); },
+      HEAPU8: heap,
+    };
+    const exports = {
+      ...makeMockExports().exports,
+      pal_wasm_i2c_transfer() { return false; },
+    } as WasmExports;
+
+    const bridge = new WasmPhysicalBridge(exports, undefined, rawModule);
+    const result = bridge.i2cTransfer(0, 0x77, new Uint8Array([0x00]), 4);
+    expect(result.ok).toBe(false);
+    expect(result.data).toBeUndefined();
+    expect(freed.sort()).toEqual(allocated.sort());
   });
 });
 

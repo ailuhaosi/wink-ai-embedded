@@ -168,7 +168,7 @@ describe('PinArbiter - Change Notifications', () => {
     }).not.toThrow();
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Infinite event loop detected')
+      expect.stringContaining('maxRecursionDepth')
     );
     consoleSpy.mockRestore();
   });

@@ -1,10 +1,29 @@
 import { LogicStates, LogicState, DriveStrength, PinDriver, PinState, PinChangeCallback, IPinArbiter } from '../types/logic-types';
 
+/** Default recursion depth before PinArbiter aborts a mutual-drive cascade. */
+export const DEFAULT_MAX_RECURSION_DEPTH = 10;
+
+export interface PinArbiterOptions {
+  /**
+   * Maximum pin-change notification recursion depth before PinArbiter
+   * aborts the cascade (P2-6). Complex combinational logic may require
+   * raising this; leave at the default for typical MCU circuits.
+   *
+   * Default: 10.
+   */
+  maxRecursionDepth?: number;
+}
+
 export class PinArbiter implements IPinArbiter {
   private pinStates = new Map<number, PinState>();
   private changeListeners = new Map<number, Set<PinChangeCallback>>();
   private notifyingPins = new Set<number>();
   private recursionCounters = new Map<number, number>();
+  private readonly maxRecursionDepth: number;
+
+  constructor(opts: PinArbiterOptions = {}) {
+    this.maxRecursionDepth = opts.maxRecursionDepth ?? DEFAULT_MAX_RECURSION_DEPTH;
+  }
 
   setDriver(pinNumber: number, driver: PinDriver): void {
     let pinState = this.pinStates.get(pinNumber);
@@ -113,8 +132,13 @@ export class PinArbiter implements IPinArbiter {
     if (this.notifyingPins.has(pinNumber)) {
       const depth = (this.recursionCounters.get(pinNumber) ?? 0) + 1;
       this.recursionCounters.set(pinNumber, depth);
-      if (depth > 10) {
-        console.warn(`[PinArbiter] Infinite event loop detected on pin ${pinNumber}. Aborting recursion cascade.`);
+      if (depth > this.maxRecursionDepth) {
+        console.warn(
+          `[PinArbiter] Pin ${pinNumber} notification cascade exceeded ` +
+            `maxRecursionDepth=${this.maxRecursionDepth}; aborting recursion. ` +
+            `Raise PinArbiterOptions.maxRecursionDepth if your circuit needs ` +
+            `deeper combinational chains.`,
+        );
         return;
       }
     } else {

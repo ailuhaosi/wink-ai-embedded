@@ -8,15 +8,21 @@
  * header and compares keys.
  *
  * ABI rules encoded here (WASM_BIGINT=1, Asyncify):
- *   - uint64_t  <-> bigint  (js_pal_os_get_ms / _us)
  *   - uint16_t / uint32_t / uint8_t <-> number
  *   - float     <-> number
  *   - bool      <-> boolean
- *   - pointer   <-> number (wasm-heap byte offset)
+ *   - pointer   <-> number (wasm-heap byte offset; wasm32 = 4-byte)
  *   - Asyncify import (sleep_ms / busy_wait_us) MUST return Promise<void>;
  *     returning `undefined` triggers a silent Asyncify unwind->rewind loop
  *     with no diagnostic (spike #8 in ADR-0019). This type is the only
  *     compile-time defense.
+ *
+ * Time SSOT (P2-1, Phase C): C-side pal_os_get_us/ms() reads `s_virtual_us`
+ * directly (zero JS call); the only time-advancement entry point is the
+ * C→JS export `pal_wasm_advance_virtual_clock(bigint)`. The legacy
+ * `js_pal_os_get_ms/_us` dead stubs were removed because wasm never
+ * actually imported them. Hosts that need wall-clock or virtual-clock
+ * reads should hold their own VirtualClock instance.
  */
 export interface WasmImports {
   // --- PAL HAL ---
@@ -48,8 +54,6 @@ export interface WasmImports {
   js_pal_os_sleep_ms(ms: number): Promise<void>;
   /** Asyncify yield point. MUST return Promise<void>. */
   js_pal_os_busy_wait_us(us: number): Promise<void>;
-  js_pal_os_get_ms(): bigint;
-  js_pal_os_get_us(): bigint;
 
   // --- DAL bypass (physical-quantity injection, ADR-0003 decision 2) ---
   js_sim_trigger_ultrasonic(trigPin: number): void;

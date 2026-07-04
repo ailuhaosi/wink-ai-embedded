@@ -36,7 +36,7 @@ function makeDeps(overrides: Partial<UnisimBridgeDeps> = {}): {
 }
 
 describe('createUnisimImports', () => {
-  test('produces an object with all 13 WasmImports members as functions', () => {
+  test('produces an object with all 11 WasmImports members as functions', () => {
     const { deps } = makeDeps();
     const imports = createUnisimImports(deps);
     const expected = [
@@ -44,7 +44,6 @@ describe('createUnisimImports', () => {
       'js_pal_i2c_transfer',
       'js_pal_register_interrupt', 'js_pal_deregister_interrupt', 'js_pal_poll_interrupt',
       'js_pal_os_sleep_ms', 'js_pal_os_busy_wait_us',
-      'js_pal_os_get_ms', 'js_pal_os_get_us',
       'js_sim_trigger_ultrasonic', 'js_sim_measure_echo_pulse_us',
     ] as const;
     for (const key of expected) {
@@ -179,15 +178,6 @@ describe('createUnisimImports', () => {
     clock.advance(1n);
     await p;
     expect(resolved).toBe(true);
-  });
-
-  test('get_ms / get_us return bigint from VirtualClock', () => {
-    const { deps, clock } = makeDeps();
-    const imports = createUnisimImports(deps);
-    clock.advance(1_234_567n);
-    expect(imports.js_pal_os_get_us()).toBe(1_234_567n);
-    expect(imports.js_pal_os_get_ms()).toBe(1234n);
-    expect(typeof imports.js_pal_os_get_us()).toBe('bigint');
   });
 
   test('ultrasonic trigger is a no-op; measure returns 1000 by default', () => {

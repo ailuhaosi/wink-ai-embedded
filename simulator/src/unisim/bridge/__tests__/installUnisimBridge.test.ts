@@ -26,7 +26,6 @@ describe('installUnisimBridge', () => {
       'js_pal_i2c_transfer',
       'js_pal_register_interrupt', 'js_pal_deregister_interrupt', 'js_pal_poll_interrupt',
       'js_pal_os_sleep_ms', 'js_pal_os_busy_wait_us',
-      'js_pal_os_get_ms', 'js_pal_os_get_us',
       'js_sim_trigger_ultrasonic', 'js_sim_measure_echo_pulse_us',
     ] as const;
     for (const key of keys) {

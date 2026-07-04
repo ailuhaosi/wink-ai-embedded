@@ -111,8 +111,6 @@ const EXPECTED_IMPORT_SIGNATURES: Record<keyof WasmImports, string> = {
   js_pal_poll_interrupt: 'bool(uint32_t*,uint32_t*)',
   js_pal_os_sleep_ms: 'void(uint32_t)',
   js_pal_os_busy_wait_us: 'void(uint32_t)',
-  js_pal_os_get_ms: 'uint64_t()',
-  js_pal_os_get_us: 'uint64_t()',
   js_sim_trigger_ultrasonic: 'void(uint16_t)',
   js_sim_measure_echo_pulse_us: 'uint32_t(uint16_t)',
 };
@@ -143,6 +141,9 @@ const EXPECTED_EXPORT_SIGNATURES: Record<keyof WasmExports, string> = {
   pal_wasm_fault_event_get_type: 'uint8_t(uint32_t)',
   pal_wasm_fault_event_get_pin_or_bus: 'uint16_t(uint32_t)',
   pal_wasm_fault_event_get_sequence: 'uint32_t(uint32_t)',
+  pal_wasm_is_faulted: 'bool()',
+  // Note: C-side decl is `const char*`; the header parser strips the `const` qualifier.
+  pal_wasm_host_fault: 'void(uint32_t,char*)',
   pal_wasm_set_pin_power_model: 'wink_status_t(uint8_t,wasm_pin_power_model_t*)',
   pal_wasm_get_total_energy_mj: 'uint64_t()',
 };

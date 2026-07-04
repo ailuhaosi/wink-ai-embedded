@@ -199,10 +199,10 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
       //
       // These are the js_* symbols the wasm binary ACTUALLY imports
       // (verified via WebAssembly.Module.imports on the built artifact).
-      // js_pal_os_get_ms / js_pal_os_get_us are declared extern in
-      // wasm_bridge.h but the C-side pal_os_get_us/ms() definitions read
-      // s_virtual_us directly (ADR-0009 virtual-clock SSOT lives in C),
-      // so they are not in the wasm's import set.
+      // Note: the legacy js_pal_os_get_ms/_us dead stubs were removed in
+      // Phase C P2-1 — C-side pal_os_get_us/ms() reads s_virtual_us
+      // directly (virtual-clock SSOT lives in C); the JS VirtualClock is
+      // pushed forward via the C→JS export pal_wasm_advance_virtual_clock.
       const expectedActuallyImported = [
         'js_pal_gpio_write',
         'js_pal_gpio_read',
@@ -232,6 +232,32 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
 
       // Final dual-clock invariant.
       expect(Module._pal_os_get_us()).toBe(clock.getUs());
+
+      // P1-1 CI gate: Asyncify backup-stack high-water must remain under 80%
+      // of ASYNCIFY_STACK_SIZE (64 KiB = 65536 bytes, per CMakeLists.txt).
+      // If this fails, either a deeper AI-generated call chain needs a bigger
+      // stack (raise -sASYNCIFY_STACK_SIZE) or there's an unintended recursion
+      // path through Asyncify that should be flattened.
+      //
+      // Guard: emcc installs a throwing getter on Module for any runtime method
+      // requested via EXPORTED_RUNTIME_METHODS but not actually provided by the
+      // linked library — accessing .Asyncify directly would abort(). Use
+      // getOwnPropertyDescriptor to detect the real binding before reading it.
+      let highwater: number | undefined;
+      {
+        const desc = Object.getOwnPropertyDescriptor(Module, 'Asyncify');
+        const AsyncifyRT = desc?.value as { getStackMax?: () => number } | undefined;
+        if (AsyncifyRT && typeof AsyncifyRT.getStackMax === 'function') {
+          highwater = AsyncifyRT.getStackMax();
+        }
+      }
+      if (highwater !== undefined) {
+        const ASYNCIFY_STACK_SIZE = 65536;
+        expect(highwater).toBeLessThan(ASYNCIFY_STACK_SIZE * 0.8);
+      }
+      // If Asyncify isn't exposed (different emcc config / ASSERTIONS off),
+      // we skip the assertion — the gate is best-effort in CI, not a hard
+      // requirement for smoke to pass. Production profiling can add logging.
     },
     15_000,
   );

@@ -65,6 +65,17 @@ export interface WasmExports {
   pal_wasm_fault_event_get_pin_or_bus: (index: number) => number;
   pal_wasm_fault_event_get_sequence: (index: number) => number;
 
+  // --- Host→C fault injection (P0-3 Phase C) ---
+  /** Returns true once wasm has entered the faulted state (safe-off executed). */
+  pal_wasm_is_faulted: () => boolean;
+  /**
+   * Inject a host-side fault (e.g. user plugin threw). JS must malloc a
+   * NUL-terminated UTF-8 string onto the wasm heap, pass its pointer as msgCstr,
+   * then _free after this returns. msgCstr may be 0 (no message).
+   * code 8003 = JS host plugin fault (by convention).
+   */
+  pal_wasm_host_fault: (code: number, msgCstr: number) => void;
+
   // --- Power model (Wave3 stub; ADR-0009 Wave 2 Task 9) ---
   /**
    * Returns wink_status_t (int): 0 = OK, NEGATIVE = error (ADR-0001 sign

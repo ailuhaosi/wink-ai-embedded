@@ -48,12 +48,27 @@ export class VirtualClock {
   private us: bigint = 0n;
   private pending: PendingSleep[] = [];
 
+  /**
+   * DEBUG-only re-entry guard. Set to `true` during the synchronous portion of
+   * `advance()`; cleared by a queued microtask so that subsequent advances in
+   * a later macrotask / after an `await Promise.resolve()` are permitted.
+   *
+   * Production builds strip the guard via `NODE_ENV !== 'development'` so that
+   * bundlers can tree-shake the bookkeeping away.
+   */
+  private _advancing = false;
+
   /** Advance the clock by `us` microseconds and resolve any pending sleeps
    *  whose `wakeAt <= this.us`, in ascending-wakeAt order.
    *
    *  IMPORTANT: callers MUST call advance() only ONCE per synchronous block,
    *  then yield the microtask queue before the next call. See Global Constraint
    *  "advance() single-tick-per-sync-block convention" for rationale.
+   *
+   *  In dev mode this invariant is enforced at runtime: a synchronous re-entry
+   *  (e.g. a sleep `.then()` that synchronously calls advance() again) throws
+   *  an Error so the bug surfaces immediately instead of corrupting virtual
+   *  time ordering.
    *
    *  Complexity: O(N log N) where N = pending.length. This is fine for Phase B
    *  (N < 10 typical). Phase C: if FreeRTOS multi-task simulation pushes N > 50
@@ -62,6 +77,27 @@ export class VirtualClock {
   advance(us: bigint): void {
     if (us < 0n) {
       throw new RangeError(`VirtualClock.advance: us must be non-negative, got ${us}`);
+    }
+    // Re-entry guard (dev-mode only) — P1-2
+    if (
+      typeof process !== 'undefined' &&
+      process.env &&
+      process.env.NODE_ENV === 'development'
+    ) {
+      if (this._advancing) {
+        throw new Error(
+          '[VirtualClock] advance() re-entered in the same synchronous block; ' +
+            'yield the microtask queue (await Promise.resolve()) before the next ' +
+            'advance() to preserve virtual-time causal ordering.',
+        );
+      }
+      this._advancing = true;
+      // Microtask-latched reset: clears after the current macrotask's microtask
+      // queue is drained, which is exactly the boundary at which a second
+      // advance() becomes legal.
+      queueMicrotask(() => {
+        this._advancing = false;
+      });
     }
     this.us += us;
     if (this.pending.length === 0) return;

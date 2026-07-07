@@ -92,8 +92,14 @@ if (!artifactsPresent) {
   );
 }
 
+/* Address 0x50 is chosen to avoid the C-side SSD1306 simulator, which
+ * unconditionally intercepts 0x3C/0x3D in wasm_sim_registry.c (Scheme A
+ * short-circuit in pal_i2c_transfer). unisim_smoke's SMOKE_I2C_ADDR must
+ * match this; the fixture and test are kept in lockstep via this constant. */
+const SMOKE_I2C_ADDR = 0x50;
+
 class EchoI2CDevice implements I2CDevice {
-  readonly addr = 0x3c;
+  readonly addr = SMOKE_I2C_ADDR;
   onTransfer(w: Uint8Array, rl: number) {
     const out = new Uint8Array(rl);
     for (let i = 0; i < rl; i++) out[i] = w[i] ?? 0;
@@ -129,8 +135,8 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
       i2cBus.register(0, new EchoI2CDevice());
 
       const pwmSeen: Array<{ ch: number; duty: number }> = [];
-      const ultrasonicTrigPins: number[] = [];
       const ultrasonicEchoPins: number[] = [];
+      const gpioWrites: Array<{ pin: number; level: number }> = [];
 
       // Stable closure over a mutable heap-view slot. createUnisimImports
       // captures deps.memoryView and calls it once per operation, so once we
@@ -150,10 +156,6 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
         },
       };
 
-      // Wrap js_sim_trigger_ultrasonic to observe calls (createUnisimImports
-      // leaves it a no-op; we do it here at the Proxy layer like the other
-      // imports so we don't have to add an ultrasonicTrigSink option to
-      // UnisimBridgeDeps just for tests).
       const rawImports = createUnisimImports(deps);
       const called = new Set<string>();
       const imports = new Proxy(rawImports, {
@@ -162,8 +164,13 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
           if (typeof v === 'function' && typeof prop === 'string' && prop.startsWith('js_')) {
             return (...args: unknown[]) => {
               called.add(prop);
-              if (prop === 'js_sim_trigger_ultrasonic') {
-                ultrasonicTrigPins.push(args[0] as number);
+              /* ADR-0017: TRIG is fired via raw pal_gpio_write (the TRIG pulse
+               * is a standard GPIO HIGH→delay→LOW sequence, not a dedicated
+               * js_sim_trigger_ultrasonic hook). We record GPIO writes here so
+               * we can assert TRIG pin 12 toggled, replacing the stale
+               * js_sim_trigger_ultrasonic observation. */
+              if (prop === 'js_pal_gpio_write' && args.length >= 2) {
+                gpioWrites.push({ pin: args[0] as number, level: args[1] as number });
               }
               return (v as (...a: unknown[]) => unknown).apply(target, args);
             };
@@ -239,6 +246,26 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
       // Phase C P2-1 — C-side pal_os_get_us/ms() reads s_virtual_us
       // directly (virtual-clock SSOT lives in C); the JS VirtualClock is
       // pushed forward via the C→JS export pal_wasm_advance_virtual_clock.
+      /* js_* imports whose calls the JS host bridge is expected to observe
+       * (verified against the built artifact):
+       *
+       * - js_sim_trigger_ultrasonic is TREE-SHAKEN: per ADR-0017
+       *   unisim_smoke fires TRIG via raw pal_gpio_write, no dedicated
+       *   bridge hook. Ultrasonic ECHO is measured through
+       *   pal_gpio_pulse_in → js_sim_measure_echo_pulse_us (C-side
+       *   ultrasonic model defaults to the -1.0f "not injected" sentinel
+       *   so JS fallback fires when the host does not call
+       *   pal_wasm_set_ultrasonic_distance).
+       * - js_pal_log is imported but intentionally not asserted here: it
+       *   is handled by the default --js-library wrapper which routes to
+       *   console.*; createUnisimImports does not intercept it because
+       *   log routing has no effect on device simulation.
+       * - js_pal_i2c_transfer fires for addr=0x50; the C-side SSD1306 sim
+       *   unconditionally intercepts 0x3C/0x3D (wasm_sim_registry.c), so
+       *   SMOKE_I2C_ADDR/EchoI2CDevice both use 0x50 to exercise the JS
+       *   bridge path. C-side SSD1306 coverage lives in
+       *   test_wasm_devices_sim (host Unity test).
+       */
       const expectedActuallyImported = [
         'js_pal_gpio_write',
         'js_pal_gpio_read',
@@ -249,7 +276,6 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
         'js_pal_poll_interrupt',
         'js_pal_os_sleep_ms',
         'js_pal_os_busy_wait_us',
-        'js_sim_trigger_ultrasonic',
         'js_sim_measure_echo_pulse_us',
       ];
       const missing = expectedActuallyImported.filter((k) => !called.has(k));
@@ -259,8 +285,19 @@ dsuite('Node smoke: real wasm + createUnisimImports end-to-end', () => {
       expect(pwmSeen.length).toBeGreaterThan(0);
       expect(pwmSeen[0].ch).toBe(1);
       expect(pwmSeen[0].duty).toBeCloseTo(50.0, 3);
-      expect(ultrasonicTrigPins).toContain(12); // SMOKE_ULTRASONIC_TRIG
-      expect(ultrasonicEchoPins).toContain(13); // SMOKE_ULTRASONIC_ECHO
+
+      /* ADR-0017: TRIG pulse is a standard pal_gpio_write sequence on pin 12
+       * (HIGH → busy_wait 10us → LOW), not a dedicated bridge hook. The Proxy
+       * records js_pal_gpio_write calls into gpioWrites; assert pin 12
+       * transitions through HIGH. */
+      const trigWrites = gpioWrites.filter((w) => w.pin === 12);
+      expect(trigWrites.length).toBeGreaterThanOrEqual(2); // HIGH + LOW
+      expect(trigWrites.some((w) => w.level === 1)).toBe(true); // at least one HIGH
+      /* ECHO measurement flows through js_sim_measure_echo_pulse_us because the
+       * C-side ultrasonic model starts at -1.0f sentinel (BSS-init bug fix in
+       * wasm_dev_ultrasonic.c). Pin 13 = SMOKE_ULTRASONIC_ECHO from
+       * device_tree.h. */
+      expect(ultrasonicEchoPins).toContain(13);
 
       // PinArbiter observed the LED write HIGH on pin 2.
       // arbiter.readPin returns LogicState (numeric const: HIGH=1, LOW=0, etc.).

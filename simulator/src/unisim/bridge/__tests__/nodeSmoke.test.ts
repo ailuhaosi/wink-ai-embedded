@@ -3,20 +3,29 @@
  * createUnisimImports, drive app_init to completion, and assert every
  * js_* import the wasm actually references was hit at least once.
  *
- * Build the wasm before running this test (from repo root):
- *   cd wink-micro-os
- *   emcmake cmake -B build-wasm-unisim -DTARGET_PLATFORM=wasm \
- *                 -DWINK_APP_DIR=samples/unisim_smoke .
- *   cmake --build build-wasm-unisim
- *   # Stage artifacts where this test expects them (repo-root build-wasm-unisim-smoke/):
- *   mkdir -p ../build-wasm-unisim-smoke
- *   cp build-wasm-unisim/wink_simulator.{js,wasm} ../build-wasm-unisim-smoke/
+ * Build the wasm before running this test. Choose one of:
  *
- * If build-wasm-unisim-smoke/wink_simulator.js is absent this test suite
- * skips with a diagnostic — CI must build it as a prereq step.
+ *   (A) In-tree canonical build (auto-discovered — no staging step):
+ *       cd wink-micro-os
+ *       emcmake cmake -B build-wasm-unisim -DTARGET_PLATFORM=wasm \
+ *                     -DWINK_APP_DIR=samples/unisim_smoke .
+ *       cmake --build build-wasm-unisim
+ *       # (no cp needed; test looks for wink-micro-os/build-wasm-unisim/)
+ *
+ *   (B) Host ctest ExternalProject build — point at ctest-built artifact:
+ *       cd wink-micro-os
+ *       cmake -S . -B build-host -DTARGET_PLATFORM=host -G "MinGW Makefiles"
+ *       cmake --build build-host --target wasm_unisim_smoke_build-build
+ *       # then: WASM_BUILD_DIR=wink-micro-os/build-host/wasm-unisim-smoke npx jest nodeSmoke
+ *
+ *   (C) Set WASM_BUILD_DIR env var to any absolute or repo-root-relative path
+ *       containing wink_simulator.{js,wasm}.
+ *
+ * If no build directory contains artifacts, this suite skips with a diagnostic.
  *
  * Note on the "13 imports" plan: the wasm fixture declares 13 extern js_*
- * functions in wasm_bridge.h, but the actual imported-symbol set is 11.
+ * functions in wasm_bridge.h, but the actual imported-symbol set is 11
+ * (12 when js_pal_log is linked — count fluctuates by App variant).
  * pal_os_get_us() / pal_os_get_ms() are defined in C (pal_osal_wasm.c) as
  * direct reads of s_virtual_us (per ADR-0009 — virtual clock is owned on
  * the C side; JS advances it via pal_wasm_advance_virtual_clock, not via
@@ -36,7 +45,34 @@ import type { WasmImports } from '../../types/wasm/imports';
 import { I2CDevice } from '../../types/runtime/i2c';
 
 const REPO_ROOT = path.resolve(__dirname, '../../../../..');
-const BUILD_DIR = path.join(REPO_ROOT, 'build-wasm-unisim-smoke');
+/* BUILD_DIR resolution precedence:
+ *   1. WASM_BUILD_DIR env var (set by CI / ctest shim / developer), absolute or
+ *      repo-root-relative. Lets the test point at any freshly-built artifact,
+ *      e.g. the ctest ExternalProject dir: WINK_MICRO_OS/build-host/wasm-unisim-smoke.
+ *   2. Legacy repo-root staging dir build-wasm-unisim-smoke/ (created by manual
+ *      cp step in old instructions).
+ * The first path that actually contains both wink_simulator.js and .wasm wins;
+ * if neither exists we skip the suite (same behavior as before). */
+function resolveBuildDir(): string {
+  const envDir = process.env.WASM_BUILD_DIR;
+  const candidates: string[] = [];
+  if (envDir) {
+    candidates.push(path.isAbsolute(envDir) ? envDir : path.resolve(REPO_ROOT, envDir));
+  }
+  candidates.push(path.join(REPO_ROOT, 'build-wasm-unisim-smoke'));
+  // Also auto-discover the canonical in-tree build-wasm-unisim/ used by developers
+  // running `cmake --build build-wasm-unisim` from wink-micro-os/:
+  candidates.push(path.join(REPO_ROOT, 'wink-micro-os', 'build-wasm-unisim'));
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, 'wink_simulator.js')) &&
+        fs.existsSync(path.join(c, 'wink_simulator.wasm'))) {
+      return c;
+    }
+  }
+  // Default: legacy staging dir (test will skip if artifacts absent).
+  return candidates[0];
+}
+const BUILD_DIR = resolveBuildDir();
 const GLUE_PATH = path.join(BUILD_DIR, 'wink_simulator.js');
 const WASM_PATH = path.join(BUILD_DIR, 'wink_simulator.wasm');
 

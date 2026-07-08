@@ -200,6 +200,8 @@
                     :stroke-width="wire.width + 3" 
                     :opacity="seg.layer === 0 ? 0.15 : 0.08"
                     :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                     filter="url(#neon-glow)"
                   />
                   <!-- Dark outline for crossings -->
@@ -209,6 +211,7 @@
                     stroke="#080c14" 
                     :stroke-width="wire.width + 2" 
                     stroke-linecap="round"
+                    stroke-linejoin="round"
                     :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
                   />
                   <!-- Visible wire segment -->
@@ -218,6 +221,7 @@
                     :stroke="seg.layer === 0 ? wire.color : '#3b82f6'" 
                     :stroke-width="wire.width" 
                     stroke-linecap="round"
+                    stroke-linejoin="round"
                     :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
                   />
                   <!-- Thick transparent path for click strike zone -->

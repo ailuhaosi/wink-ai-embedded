@@ -59,6 +59,9 @@ function resolveBuildDir(): string {
   if (envDir) {
     candidates.push(path.isAbsolute(envDir) ? envDir : path.resolve(REPO_ROOT, envDir));
   }
+  // Try subfolders first as they are updated automatically by CMake builds
+  candidates.push(path.join(REPO_ROOT, 'build-wasm-unisim-smoke', 'wink-micro-os'));
+  candidates.push(path.join(REPO_ROOT, 'build-wasm', 'wink-micro-os'));
   candidates.push(path.join(REPO_ROOT, 'build-wasm-unisim-smoke'));
   // Also auto-discover the canonical in-tree build-wasm-unisim/ used by developers
   // running `cmake --build build-wasm-unisim` from wink-micro-os/:

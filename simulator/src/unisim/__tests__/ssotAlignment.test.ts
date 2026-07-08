@@ -111,6 +111,7 @@ const EXPECTED_IMPORT_SIGNATURES: Record<keyof WasmImports, string> = {
   js_pal_poll_interrupt: 'bool(uint32_t*,uint32_t*)',
   js_pal_os_sleep_ms: 'void(uint32_t)',
   js_pal_os_busy_wait_us: 'void(uint32_t)',
+  js_pal_log: 'void(uint8_t,char*)',
   js_sim_trigger_ultrasonic: 'void(uint16_t)',
   js_sim_measure_echo_pulse_us: 'uint32_t(uint16_t)',
 };
@@ -146,6 +147,12 @@ const EXPECTED_EXPORT_SIGNATURES: Record<keyof WasmExports, string> = {
   pal_wasm_host_fault: 'void(uint32_t,char*)',
   pal_wasm_set_pin_power_model: 'wink_status_t(uint8_t,wasm_pin_power_model_t*)',
   pal_wasm_get_total_energy_mj: 'uint64_t()',
+  pal_wasm_sim_reset_all_devices: 'void()',
+  pal_wasm_get_ssd1306_fb: 'uint8_t*(uint32_t*,uint32_t*)',
+  pal_wasm_get_servo_angle: 'float(uint8_t)',
+  pal_wasm_set_ultrasonic_distance: 'void(uint8_t,float)',
+  pal_wasm_set_gpio_input: 'void(uint8_t,bool)',
+  pal_wasm_get_gpio_output: 'bool(uint8_t)',
 };
 
 describe('SSOT alignment: wasm_bridge.h <-> WasmImports/WasmExports', () => {

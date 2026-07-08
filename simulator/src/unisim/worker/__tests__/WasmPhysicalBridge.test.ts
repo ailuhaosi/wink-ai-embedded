@@ -156,6 +156,12 @@ function makeMockExports(): { exports: WasmExports; state: MockState } {
     pal_wasm_get_total_energy_mj: () => 0n,
     pal_wasm_is_faulted: () => false,
     pal_wasm_host_fault: (_code: number, _msgCstr: number) => {},
+    pal_wasm_sim_reset_all_devices: () => {},
+    pal_wasm_get_ssd1306_fb: (_w: number, _h: number) => 0,
+    pal_wasm_get_servo_angle: (_ch: number) => 0,
+    pal_wasm_set_ultrasonic_distance: (_p: number, _d: number) => {},
+    pal_wasm_set_gpio_input: (_p: number, _l: boolean) => {},
+    pal_wasm_get_gpio_output: (_p: number) => false,
   };
 
   return { exports, state };

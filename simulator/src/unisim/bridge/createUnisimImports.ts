@@ -287,6 +287,23 @@ export function createUnisimImports(deps: UnisimBridgeDeps): WasmImports {
       // in some embedded drivers).
       await safeClockSleepUs(BigInt(us >>> 0));
     },
+    js_pal_log(level, msgCstr) {
+      const view = memoryView();
+      let len = 0;
+      while (view[msgCstr + len] !== 0) {
+        len++;
+      }
+      const bytes = view.subarray(msgCstr, msgCstr + len);
+      const msg = new TextDecoder().decode(bytes);
+      // Fallback log to console.info/error/warn/debug
+      switch (level) {
+        case 1: console.error(`[wink E] ${msg}`); break;
+        case 2: console.warn(`[wink W] ${msg}`); break;
+        case 3: console.info(`[wink I] ${msg}`); break;
+        case 4: console.debug(`[wink D] ${msg}`); break;
+        default: console.log(`[wink ?] ${msg}`); break;
+      }
+    },
 
     // --- DAL bypass ---
     js_sim_trigger_ultrasonic(_trigPin) {

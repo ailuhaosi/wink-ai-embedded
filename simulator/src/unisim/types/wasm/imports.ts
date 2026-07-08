@@ -55,6 +55,9 @@ export interface WasmImports {
   /** Asyncify yield point. MUST return Promise<void>. */
   js_pal_os_busy_wait_us(us: number): Promise<void>;
 
+  // --- Logging bridge (P1-L1) ---
+  js_pal_log(level: number, msgCstr: number): void;
+
   // --- DAL bypass (physical-quantity injection, ADR-0003 decision 2) ---
   js_sim_trigger_ultrasonic(trigPin: number): void;
   js_sim_measure_echo_pulse_us(trigPin: number): number;

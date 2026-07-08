@@ -85,6 +85,14 @@ export interface WasmExports {
    */
   pal_wasm_set_pin_power_model: (pin: number, modelPtr: number) => number;
   pal_wasm_get_total_energy_mj: () => bigint;
+
+  // --- Virtual device control and status APIs (Scheme A + Value-injection) ---
+  pal_wasm_sim_reset_all_devices: () => void;
+  pal_wasm_get_ssd1306_fb: (widthPtr: number, heightPtr: number) => number;
+  pal_wasm_get_servo_angle: (channel: number) => number;
+  pal_wasm_set_ultrasonic_distance: (pin: number, distanceCm: number) => void;
+  pal_wasm_set_gpio_input: (pin: number, level: boolean) => void;
+  pal_wasm_get_gpio_output: (pin: number) => boolean;
 }
 
 /**

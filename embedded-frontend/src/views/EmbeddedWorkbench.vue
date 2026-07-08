@@ -131,7 +131,7 @@
         <div class="workspace-content">
           <!-- Canvas Tab -->
           <div v-show="activeTab === 'canvas'" class="canvas-container">
-            <svg class="circuit-svg" width="800" height="580" viewBox="0 0 800 580">
+            <svg class="circuit-svg" width="800" height="580" viewBox="0 0 800 580" @click="handleCanvasClick">
               <!-- Grid background -->
               <defs>
                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -188,7 +188,7 @@
               </g>
 
               <!-- Connection Wires -->
-              <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group">
+              <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group" :class="{ 'selected-wire': selectedWireId === wire.id }">
                 <!-- 0. Teardrops (Pads transitions) -->
                 <path 
                   v-for="(td, idx) in wire.teardrops" 
@@ -240,7 +240,7 @@
                     stroke-width="12" 
                     stroke-linecap="round"
                     style="cursor: pointer;"
-                    @click="addWaypoint($event, wire.id)"
+                    @click="handleWireClick($event, wire.id)"
                   />
                 </g>
 
@@ -268,7 +268,7 @@
                   stroke-width="1.5"
                   class="waypoint-handle"
                   style="cursor: move;"
-                  @mousedown="startDragWaypoint($event, wire.id, wpIdx)"
+                  @mousedown="startDragWaypoint(wire.id, wpIdx)"
                   @dblclick.stop="removeWaypoint(wire.id, wpIdx)"
                 />
               </g>
@@ -285,8 +285,9 @@
                 zIndex: 10
               }"
               @click="selectComponent(comp)"
+              @mousedown="startDragComponent($event, comp)"
               class="canvas-peripheral-wrapper"
-              :class="{ 'selected-peripheral': selectedCompId === comp.id }"
+              :class="{ 'selected-peripheral': selectedCompId === comp.id, 'dragging': draggedCompId === comp.id }"
             >
               <!-- Raw visual components on the Canvas -->
               <wokwi-led 
@@ -595,13 +596,16 @@ import {
   peripheralConfigs, 
   getDefaultPinConnections, 
   getDefaultProps, 
+  getNetDefinitions,
+  boardDescriptor,
   availableGPIOs,
   powerOptions,
   PinConnectionValue,
   generateSmartOrthogonalPath,
   generateSmartPCBPath,
   Obstacle,
-  WirePathResult
+  WirePathResult,
+  NetDefinition
 } from '../types/peripheral-pins';
 
 // Local Types
@@ -618,6 +622,22 @@ interface ComponentInstance {
   pinConnections: Record<string, PinConnectionValue>;
   props: Record<string, any>;
 }
+
+interface LayoutPosition {
+  x: number;
+  y: number;
+}
+
+const defaultPositions: Record<string, { x: number; y: number }> = {
+  led: { x: 50, y: 60 },
+  button: { x: 50, y: 200 },
+  oled: { x: 580, y: 80 },
+  ultrasonic: { x: 50, y: 340 },
+};
+
+const layoutState = ref<Record<string, LayoutPosition>>({});
+
+const nextPositionOffset = ref<Record<string, number>>({});
 
 // Scaffolding components list
 const catalog = ref<CatalogItem[]>([
@@ -752,10 +772,19 @@ function addComponent(item: CatalogItem) {
   
   activeComponents.value.push(newItem);
   selectedCompId.value = newId;
+
+  const offset = nextPositionOffset.value[item.type] || 0;
+  const basePos = defaultPositions[item.type];
+  layoutState.value[newId] = {
+    x: basePos.x + offset * 80,
+    y: basePos.y + (offset % 3) * 20,
+  };
+  nextPositionOffset.value[item.type] = offset + 1;
 }
 
 function removeComponent(id: string) {
   activeComponents.value = activeComponents.value.filter(c => c.id !== id);
+  delete layoutState.value[id];
   if (selectedCompId.value === id && activeComponents.value.length > 0) {
     selectedCompId.value = activeComponents.value[0].id;
   }
@@ -854,67 +883,134 @@ interface Point {
 const wireWaypoints = ref<Record<string, Point[]>>({});
 const draggedWireId = ref<string | null>(null);
 const draggingWaypoint = ref<{ wireId: string; index: number } | null>(null);
+const selectedWireId = ref<string | null>(null);
+const dragThreshold = 8;
+const wireDragStart = ref({ x: 0, y: 0 });
+const pendingWaypoint = ref<{ wireId: string; x: number; y: number } | null>(null);
+let clickTimer: ReturnType<typeof setTimeout> | null = null;
+let clickCount = 0;
 
-function addWaypoint(event: MouseEvent, wireId: string) {
-  const svg = document.querySelector('.circuit-svg');
-  if (!svg) return;
-  const rect = svg.getBoundingClientRect();
-  const x = Math.round(event.clientX - rect.left);
-  const y = Math.round(event.clientY - rect.top);
-  
-  if (!wireWaypoints.value[wireId]) {
-    wireWaypoints.value[wireId] = [];
-  }
-  
-  const index = wireWaypoints.value[wireId].length;
-  wireWaypoints.value[wireId].push({ x, y });
-  
-  draggedWireId.value = wireId;
-  event.stopPropagation();
-  
-  startDragWaypoint(event, wireId, index);
-}
-
-function startDragWaypoint(event: MouseEvent, wireId: string, index: number) {
+function handleWireClick(event: MouseEvent, wireId: string) {
   event.preventDefault();
   event.stopPropagation();
+  
+  clickCount++;
+  
+  if (clickTimer) {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+  }
+  
+  if (clickCount === 2) {
+    clickCount = 0;
+    selectedWireId.value = selectedWireId.value === wireId ? null : wireId;
+    return;
+  }
+  
+  clickTimer = setTimeout(() => {
+    clickCount = 0;
+    
+    const svg = document.querySelector('.circuit-svg');
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    
+    wireDragStart.value = {
+      x: Math.round(event.clientX - rect.left),
+      y: Math.round(event.clientY - rect.top),
+    };
+    
+    pendingWaypoint.value = { wireId, x: wireDragStart.value.x, y: wireDragStart.value.y };
+    
+    window.addEventListener('mousemove', handleWaypointMouseMove);
+    window.addEventListener('mouseup', handleWaypointMouseUp);
+  }, 250);
+}
 
+function startDragWaypoint(wireId: string, index: number) {
   draggingWaypoint.value = { wireId, index };
   draggedWireId.value = wireId;
-
+  
   window.addEventListener('mousemove', handleWaypointMouseMove);
   window.addEventListener('mouseup', handleWaypointMouseUp);
 }
 
 function handleWaypointMouseMove(event: MouseEvent) {
-  if (!draggingWaypoint.value) return;
-  const { wireId, index } = draggingWaypoint.value;
-
+  if (clickTimer) {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+    clickCount = 0;
+  }
+  
   const svg = document.querySelector('.circuit-svg');
   if (!svg) return;
   const rect = svg.getBoundingClientRect();
 
-  // Constrain coordinates to canvas bounds
-  let x = Math.round(event.clientX - rect.left);
-  let y = Math.round(event.clientY - rect.top);
+  const currentX = Math.round(event.clientX - rect.left);
+  const currentY = Math.round(event.clientY - rect.top);
 
-  x = Math.max(10, Math.min(790, x));
-  y = Math.max(10, Math.min(570, y));
+  const dx = Math.abs(currentX - wireDragStart.value.x);
+  const dy = Math.abs(currentY - wireDragStart.value.y);
+  const distance = Math.sqrt(dx * dx + dy * dy);
 
-  // Snap to 10px grid
-  x = Math.round(x / 10) * 10;
-  y = Math.round(y / 10) * 10;
+  if (pendingWaypoint.value && distance > dragThreshold) {
+    const { wireId, x, y } = pendingWaypoint.value;
+    
+    if (!wireWaypoints.value[wireId]) {
+      wireWaypoints.value[wireId] = [];
+    }
+    
+    const index = wireWaypoints.value[wireId].length;
+    wireWaypoints.value[wireId].push({ x, y });
+    
+    startDragWaypoint(wireId, index);
+    pendingWaypoint.value = null;
+  }
 
-  if (wireWaypoints.value[wireId] && wireWaypoints.value[wireId][index]) {
-    wireWaypoints.value[wireId][index] = { x, y };
+  if (draggingWaypoint.value) {
+    const { wireId, index } = draggingWaypoint.value;
+
+    let x = Math.round(event.clientX - rect.left);
+    let y = Math.round(event.clientY - rect.top);
+
+    x = Math.max(10, Math.min(790, x));
+    y = Math.max(10, Math.min(570, y));
+
+    x = Math.round(x / 10) * 10;
+    y = Math.round(y / 10) * 10;
+
+    if (wireWaypoints.value[wireId] && wireWaypoints.value[wireId][index]) {
+      wireWaypoints.value[wireId][index] = { x, y };
+    }
   }
 }
 
 function handleWaypointMouseUp() {
+  if (clickTimer) {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+    clickCount = 0;
+  }
+  
+  if (pendingWaypoint.value && !draggingWaypoint.value) {
+    const { wireId } = pendingWaypoint.value;
+    if (wireWaypoints.value[wireId] && wireWaypoints.value[wireId].length > 0) {
+      wireWaypoints.value[wireId].pop();
+    }
+    pendingWaypoint.value = null;
+  }
+  
   draggingWaypoint.value = null;
   draggedWireId.value = null;
+  
   window.removeEventListener('mousemove', handleWaypointMouseMove);
   window.removeEventListener('mouseup', handleWaypointMouseUp);
+}
+
+function handleCanvasClick(event: MouseEvent) {
+  const target = event.target as Element;
+  if (target.tagName === 'svg' || target.classList.contains('circuit-svg')) {
+    selectedWireId.value = null;
+  }
 }
 
 function removeWaypoint(wireId: string, index: number) {
@@ -923,25 +1019,76 @@ function removeWaypoint(wireId: string, index: number) {
   }
 }
 
+// Component Drag State
+const draggedCompId = ref<string | null>(null);
+const dragOffset = ref({ x: 0, y: 0 });
+
+function startDragComponent(event: MouseEvent, comp: ComponentInstance) {
+  if (event.button !== 0) return;
+  
+  event.preventDefault();
+  event.stopPropagation();
+
+  draggedCompId.value = comp.id;
+  selectComponent(comp);
+
+  const svg = document.querySelector('.circuit-svg');
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+
+  const currentX = getCanvasX(comp);
+  const currentY = getCanvasY(comp);
+  
+  dragOffset.value = {
+    x: event.clientX - rect.left - currentX,
+    y: event.clientY - rect.top - currentY,
+  };
+
+  window.addEventListener('mousemove', handleComponentMouseMove);
+  window.addEventListener('mouseup', handleComponentMouseUp);
+}
+
+function handleComponentMouseMove(event: MouseEvent) {
+  if (!draggedCompId.value) return;
+
+  const svg = document.querySelector('.circuit-svg');
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+
+  let x = Math.round(event.clientX - rect.left - dragOffset.value.x);
+  let y = Math.round(event.clientY - rect.top - dragOffset.value.y);
+
+  x = Math.max(10, Math.min(700, x));
+  y = Math.max(10, Math.min(500, y));
+
+  x = Math.round(x / 10) * 10;
+  y = Math.round(y / 10) * 10;
+
+  if (!layoutState.value[draggedCompId.value]) {
+    layoutState.value[draggedCompId.value] = { x: 0, y: 0 };
+  }
+  layoutState.value[draggedCompId.value] = { x, y };
+}
+
+function handleComponentMouseUp() {
+  draggedCompId.value = null;
+  window.removeEventListener('mousemove', handleComponentMouseMove);
+  window.removeEventListener('mouseup', handleComponentMouseUp);
+}
+
 // Canvas layouts helpers - Using SVG viewBox coordinate system (0-800, 0-500)
 function getCanvasX(comp: ComponentInstance): number {
-  const positions: Record<string, { x: number; y: number }> = {
-    led: { x: 50, y: 60 },
-    button: { x: 50, y: 200 },
-    oled: { x: 580, y: 80 },
-    ultrasonic: { x: 50, y: 340 },
-  };
-  return positions[comp.type]?.x ?? 50;
+  if (layoutState.value[comp.id]) {
+    return layoutState.value[comp.id].x;
+  }
+  return defaultPositions[comp.type]?.x ?? 50;
 }
 
 function getCanvasY(comp: ComponentInstance): number {
-  const positions: Record<string, { x: number; y: number }> = {
-    led: { x: 50, y: 60 },
-    button: { x: 50, y: 200 },
-    oled: { x: 580, y: 80 },
-    ultrasonic: { x: 50, y: 340 },
-  };
-  return positions[comp.type]?.y ?? 50;
+  if (layoutState.value[comp.id]) {
+    return layoutState.value[comp.id].y;
+  }
+  return defaultPositions[comp.type]?.y ?? 50;
 }
 
 function getComponentWidth(comp: ComponentInstance): number {
@@ -973,21 +1120,11 @@ function getWireColor(comp: ComponentInstance): string {
 }
 
 function getPinPosition(pin: number): { x: number; y: number } {
-  const pinMap: Record<number, { x: number; y: number }> = {
-    12: { x: 317, y: 162 },
-    13: { x: 317, y: 192 },
-    14: { x: 317, y: 222 },
-    21: { x: 487, y: 162 },
-    22: { x: 487, y: 192 },
-  };
-  return pinMap[pin] || { x: 317, y: 252 };
+  return boardDescriptor.pins[pin] || { x: boardDescriptor.x + 7, y: boardDescriptor.y + 122 };
 }
 
 function getPowerPinPosition(powerType: string): { x: number; y: number } {
-  if (powerType === 'VCC' || powerType === '3V3') {
-    return { x: 487, y: 222 };
-  }
-  return { x: 317, y: 252 };
+  return boardDescriptor.powerPins[powerType] || { x: boardDescriptor.x + 7, y: boardDescriptor.y + 122 };
 }
 
 function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x: number; y: number } {
@@ -1003,20 +1140,9 @@ function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x
 function getAllWires(): Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> {
   const allWires: Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> = [];
   activeComponents.value.forEach(comp => {
-    const modes: Array<'primary' | 'secondary' | 'vcc' | 'gnd'> = ['primary', 'gnd'];
-    if (comp.type === 'oled' || comp.type === 'ultrasonic') {
-      modes.push('secondary', 'vcc');
-    }
-    modes.forEach(mode => {
-      const pinMap: Record<string, string> = {
-        led: { primary: 'A', gnd: 'C' },
-        button: { primary: '1.l', gnd: '1.r' },
-        oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
-        ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
-      }[comp.type] || {};
-      const pinName = pinMap[mode];
-      if (pinName && comp.pinConnections[pinName] !== null) {
-        allWires.push({ comp, mode });
+    getNetDefinitions(comp.type).forEach(net => {
+      if (comp.pinConnections[net.pinName] !== null) {
+        allWires.push({ comp, mode: net.mode });
       }
     });
   });
@@ -1024,16 +1150,10 @@ function getAllWires(): Array<{ comp: ComponentInstance; mode: 'primary' | 'seco
 }
 
 function getWirePoints(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd'): { start: { x: number; y: number }, end: { x: number; y: number } } | null {
-  const pinMap: Record<string, string> = {
-    led: { primary: 'A', gnd: 'C' },
-    button: { primary: '1.l', gnd: '1.r' },
-    oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
-    ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
-  }[comp.type] || {};
+  const netDef = getNetDefinitions(comp.type).find(n => n.mode === mode);
+  if (!netDef) return null;
   
-  const pinName = pinMap[mode];
-  if (!pinName) return null;
-  
+  const pinName = netDef.pinName;
   const connection = comp.pinConnections[pinName];
   if (connection === null || connection === undefined) return null;
 
@@ -1069,17 +1189,11 @@ function getWirePCBPath(
   const pts = getWirePoints(comp, mode);
   if (!pts) return null;
 
-  const pinMap: Record<string, string> = {
-    led: { primary: 'A', gnd: 'C' },
-    button: { primary: '1.l', gnd: '1.r' },
-    oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
-    ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
-  }[comp.type] || {};
-  const pinName = pinMap[mode];
+  const netDef = getNetDefinitions(comp.type).find(n => n.mode === mode);
+  const pinName = netDef?.pinName || '';
 
   const lane = getWireLane(comp, mode);
 
-  // Exit directions
   let startDir: 'left' | 'right' | 'up' | 'down' = 'down';
   if (comp.type === 'button') {
     if (pinName.endsWith('.l')) startDir = 'left';
@@ -1092,15 +1206,14 @@ function getWirePCBPath(
 
   const endDir = pts.end.x < 400 ? 'left' : 'right';
 
-  const signalType = (mode === 'vcc' || mode === 'gnd') ? 'power' : (mode === 'secondary' ? 'i2c' : 'digital');
+  const signalType = netDef?.signalType || 'digital';
 
   return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints, wireStyle.value);
 }
 
 const wiresToRender = computed(() => {
-  // Gather obstacles (ESP32 board + active components)
   const obstacles: Obstacle[] = [
-    { x: 310, y: 130, width: 180, height: 200 } // ESP32 board
+    { x: boardDescriptor.x, y: boardDescriptor.y, width: boardDescriptor.width, height: boardDescriptor.height }
   ];
   activeComponents.value.forEach(comp => {
     obstacles.push({
@@ -1111,7 +1224,6 @@ const wiresToRender = computed(() => {
     });
   });
 
-  // Collect all nets/wires that need to be routed
   interface NetRequest {
     compId: string;
     comp: ComponentInstance;
@@ -1121,30 +1233,18 @@ const wiresToRender = computed(() => {
   const requests: NetRequest[] = [];
 
   activeComponents.value.forEach(comp => {
-    const modes: Array<'primary' | 'secondary' | 'vcc' | 'gnd'> = ['primary', 'gnd'];
-    if (comp.type === 'oled' || comp.type === 'ultrasonic') {
-      modes.push('secondary', 'vcc');
-    }
-
-    modes.forEach(mode => {
-      const pinMap: Record<string, string> = {
-        led: { primary: 'A', gnd: 'C' },
-        button: { primary: '1.l', gnd: '1.r' },
-        oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
-        ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
-      }[comp.type] || {};
-      
-      const pinName = pinMap[mode];
+    getNetDefinitions(comp.type).forEach(net => {
+      const pinName = net.pinName;
       if (!pinName || comp.pinConnections[pinName] === null || comp.pinConnections[pinName] === undefined) {
         return;
       }
 
       let color = '#ffffff';
-      if (mode === 'vcc') {
-        color = '#ef4444'; // Red for VCC
-      } else if (mode === 'gnd') {
-        color = '#475569'; // Slate for GND
-      } else if (mode === 'secondary') {
+      if (net.mode === 'vcc') {
+        color = '#ef4444';
+      } else if (net.mode === 'gnd') {
+        color = '#475569';
+      } else if (net.mode === 'secondary') {
         color = comp.type === 'oled' ? '#c084fc' : '#f59e0b';
       } else {
         color = getWireColor(comp);
@@ -1153,7 +1253,7 @@ const wiresToRender = computed(() => {
       requests.push({
         compId: comp.id,
         comp,
-        mode,
+        mode: net.mode,
         color
       });
     });
@@ -1256,6 +1356,12 @@ onMounted(() => {
   outline: 2px solid var(--color-highlight);
   box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
 }
+.dragging {
+  cursor: grabbing;
+  transform: scale(1.05);
+  box-shadow: 0 12px 24px rgba(56, 189, 248, 0.35);
+  z-index: 100 !important;
+}
 
 .waypoint-handle {
   transition: transform 0.15s ease, r 0.15s ease, fill 0.15s ease;
@@ -1264,6 +1370,18 @@ onMounted(() => {
   r: 8px;
   fill: #fbbf24;
   filter: drop-shadow(0 0 4px #fbbf24);
+}
+
+.smart-wire-group {
+  transition: filter 0.15s ease;
+}
+
+.smart-wire-group.selected-wire {
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.8));
+}
+
+.smart-wire-group.selected-wire path {
+  stroke-width: calc(var(--wire-width, 2) + 1);
 }
 
 .workbench {

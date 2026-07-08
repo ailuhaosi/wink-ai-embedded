@@ -105,6 +105,71 @@ export function getDefaultProps(type: string): Record<string, any> {
   return props;
 }
 
+export interface NetDefinition {
+  mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
+  pinName: string;
+  signalType: 'digital' | 'i2c' | 'power';
+}
+
+export interface BoardPin {
+  x: number;
+  y: number;
+}
+
+export interface BoardDescriptor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  pins: Record<number, BoardPin>;
+  powerPins: Record<string, BoardPin>;
+}
+
+export const boardDescriptor: BoardDescriptor = {
+  x: 310,
+  y: 130,
+  width: 180,
+  height: 200,
+  pins: {
+    12: { x: 317, y: 162 },
+    13: { x: 317, y: 192 },
+    14: { x: 317, y: 222 },
+    21: { x: 487, y: 162 },
+    22: { x: 487, y: 192 },
+  },
+  powerPins: {
+    VCC: { x: 487, y: 222 },
+    '3V3': { x: 487, y: 222 },
+    GND: { x: 317, y: 252 },
+  },
+};
+
+export function getNetDefinitions(type: string): NetDefinition[] {
+  const netMaps: Record<string, NetDefinition[]> = {
+    led: [
+      { mode: 'primary', pinName: 'A', signalType: 'digital' },
+      { mode: 'gnd', pinName: 'C', signalType: 'power' },
+    ],
+    button: [
+      { mode: 'primary', pinName: '1.l', signalType: 'digital' },
+      { mode: 'gnd', pinName: '1.r', signalType: 'power' },
+    ],
+    oled: [
+      { mode: 'primary', pinName: 'DATA', signalType: 'i2c' },
+      { mode: 'secondary', pinName: 'CLK', signalType: 'i2c' },
+      { mode: 'vcc', pinName: '3V3', signalType: 'power' },
+      { mode: 'gnd', pinName: 'GND', signalType: 'power' },
+    ],
+    ultrasonic: [
+      { mode: 'primary', pinName: 'ECHO', signalType: 'digital' },
+      { mode: 'secondary', pinName: 'TRIG', signalType: 'digital' },
+      { mode: 'vcc', pinName: 'VCC', signalType: 'power' },
+      { mode: 'gnd', pinName: 'GND', signalType: 'power' },
+    ],
+  };
+  return netMaps[type] || [];
+}
+
 interface Point {
   x: number;
   y: number;
@@ -160,11 +225,94 @@ class AStarNode3D {
   f: number = 0;
   parent: AStarNode3D | null = null;
   dir: { dx: number; dy: number } = { dx: 0, dy: 0 };
+  heapIndex: number = -1;
 
   constructor(x: number, y: number, layer: number) {
     this.x = x;
     this.y = y;
     this.layer = layer;
+  }
+}
+
+class AStarMinHeap {
+  private nodes: AStarNode3D[] = [];
+
+  push(node: AStarNode3D): void {
+    this.nodes.push(node);
+    node.heapIndex = this.nodes.length - 1;
+    this.bubbleUp(node.heapIndex);
+  }
+
+  pop(): AStarNode3D | undefined {
+    if (this.nodes.length === 0) return undefined;
+    
+    const root = this.nodes[0];
+    const last = this.nodes.pop();
+    
+    if (last && this.nodes.length > 0) {
+      this.nodes[0] = last;
+      last.heapIndex = 0;
+      this.bubbleDown(0);
+    }
+    
+    if (root) root.heapIndex = -1;
+    return root;
+  }
+
+  update(node: AStarNode3D): void {
+    if (node.heapIndex >= 0 && node.heapIndex < this.nodes.length) {
+      this.bubbleUp(node.heapIndex);
+    }
+  }
+
+  get size(): number {
+    return this.nodes.length;
+  }
+
+  isEmpty(): boolean {
+    return this.nodes.length === 0;
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.nodes[index].f >= this.nodes[parentIndex].f) break;
+      
+      this.swap(index, parentIndex);
+      index = parentIndex;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    const length = this.nodes.length;
+    
+    while (true) {
+      let leftChildIndex = 2 * index + 1;
+      let rightChildIndex = 2 * index + 2;
+      let smallestIndex = index;
+
+      if (leftChildIndex < length && this.nodes[leftChildIndex].f < this.nodes[smallestIndex].f) {
+        smallestIndex = leftChildIndex;
+      }
+
+      if (rightChildIndex < length && this.nodes[rightChildIndex].f < this.nodes[smallestIndex].f) {
+        smallestIndex = rightChildIndex;
+      }
+
+      if (smallestIndex === index) break;
+      
+      this.swap(index, smallestIndex);
+      index = smallestIndex;
+    }
+  }
+
+  private swap(i: number, j: number): void {
+    const temp = this.nodes[i];
+    this.nodes[i] = this.nodes[j];
+    this.nodes[j] = temp;
+    
+    this.nodes[i].heapIndex = i;
+    this.nodes[j].heapIndex = j;
   }
 }
 
@@ -187,7 +335,6 @@ function findAStarPath3D(
   const endGridX = Math.round(endPt.x / resolution);
   const endGridY = Math.round(endPt.y / resolution);
 
-  // Dynamic grid bounds
   let minX = Math.min(startGridX, endGridX);
   let maxX = Math.max(startGridX, endGridX);
   let minY = Math.min(startGridY, endGridY);
@@ -205,7 +352,6 @@ function findAStarPath3D(
   const gridMinY = minY - 6;
   const gridMaxY = maxY + 6;
 
-  // Obstacle cells
   const blocked = new Set<string>();
   const padding = 1;
   for (const obs of obstacles) {
@@ -221,7 +367,6 @@ function findAStarPath3D(
     }
   }
 
-  // Escape cells (exempt from hard block check)
   const escapeCells = new Set<string>();
   for (let dx = -2; dx <= 2; dx++) {
     for (let dy = -2; dy <= 2; dy++) {
@@ -242,14 +387,15 @@ function findAStarPath3D(
       if (d < minD) minD = d;
     }
 
-    if (minD < 10) return Infinity; // Blocked
+    if (minD < 10) return Infinity;
     if (minD < 25) {
-      return 1.5 * Math.pow((25 - minD) / 15, 2); // Quadratic potential gradient
+      return 1.5 * Math.pow((25 - minD) / 15, 2);
     }
     return 0;
   };
 
-  const openList: AStarNode3D[] = [];
+  const openHeap = new AStarMinHeap();
+  const openSet = new Map<string, AStarNode3D>();
   const closedSet = new Set<string>();
 
   const startNode = new AStarNode3D(startGridX, startGridY, 0);
@@ -258,30 +404,31 @@ function findAStarPath3D(
   }
   startNode.h = Math.abs(startGridX - endGridX) + Math.abs(startGridY - endGridY);
   startNode.f = startNode.h;
-  openList.push(startNode);
+  openHeap.push(startNode);
+  openSet.set(`${startGridX},${startGridY},0`, startNode);
 
   const directions = [
-    { dx: 0, dy: -1, isDiag: false }, // Up
-    { dx: 0, dy: 1, isDiag: false },  // Down
-    { dx: -1, dy: 0, isDiag: false }, // Left
-    { dx: 1, dy: 0, isDiag: false },  // Right
-    { dx: -1, dy: -1, isDiag: true }, // Up-Left
-    { dx: 1, dy: -1, isDiag: true },  // Up-Right
-    { dx: -1, dy: 1, isDiag: true },  // Down-Left
-    { dx: 1, dy: 1, isDiag: true }    // Down-Right
+    { dx: 0, dy: -1, isDiag: false },
+    { dx: 0, dy: 1, isDiag: false },
+    { dx: -1, dy: 0, isDiag: false },
+    { dx: 1, dy: 0, isDiag: false },
+    { dx: -1, dy: -1, isDiag: true },
+    { dx: 1, dy: -1, isDiag: true },
+    { dx: -1, dy: 1, isDiag: true },
+    { dx: 1, dy: 1, isDiag: true }
   ];
 
   let iterations = 0;
   const maxIterations = 6000;
 
-  while (openList.length > 0) {
+  while (!openHeap.isEmpty()) {
     iterations++;
     if (iterations > maxIterations) {
       break;
     }
 
-    openList.sort((a, b) => a.f - b.f);
-    const curr = openList.shift()!;
+    const curr = openHeap.pop()!;
+    openSet.delete(`${curr.x},${curr.y},${curr.layer}`);
 
     const key = `${curr.x},${curr.y},${curr.layer}`;
     closedSet.add(key);
@@ -302,10 +449,10 @@ function findAStarPath3D(
           let dirs = (val >> 8) & 0xF;
           count = Math.min(count + 1, 0xFF);
 
-          if (dx === 0 && dy === -1) dirs |= 1;      // Up
-          else if (dx === 0 && dy === 1) dirs |= 2;   // Down
-          else if (dx === -1 && dy === 0) dirs |= 4;  // Left
-          else if (dx === 1 && dy === 0) dirs |= 8;   // Right
+          if (dx === 0 && dy === -1) dirs |= 1;
+          else if (dx === 0 && dy === 1) dirs |= 2;
+          else if (dx === -1 && dy === 0) dirs |= 4;
+          else if (dx === 1 && dy === 0) dirs |= 8;
 
           channelOccupancyMap.set(occupancyKey, (dirs << 8) | count);
         }
@@ -317,7 +464,6 @@ function findAStarPath3D(
 
     const neighbors: Array<{ nx: number; ny: number; nLayer: number; stepCost: number; dir: { dx: number; dy: number } }> = [];
 
-    // Same layer moves
     for (const dir of directions) {
       const nx = curr.x + dir.dx;
       const ny = curr.y + dir.dy;
@@ -349,7 +495,7 @@ function findAStarPath3D(
 
       const hasTurned = (curr.dir.dx !== 0 || curr.dir.dy !== 0) && (curr.dir.dx !== dir.dx || curr.dir.dy !== dir.dy);
       if (hasTurned) {
-        stepCost += 1.5; // Turn penalty (15px equivalent)
+        stepCost += 1.5;
       }
 
       if (channelOccupancyMap) {
@@ -363,13 +509,12 @@ function findAStarPath3D(
           if (dir.dy !== 0 && (dirs & 12)) isCrossing = true;
 
           if (isCrossing) {
-            stepCost += 10.0; // Crossing penalty
+            stepCost += 10.0;
           } else {
             stepCost += count * 0.8;
           }
         }
 
-        // Parallel alignment bias (Bus Bundling)
         let sideKeys: string[] = [];
         if (dir.dx !== 0 && dir.dy === 0) {
           sideKeys.push(`${nx},${ny - 1}`, `${nx},${ny + 1}`);
@@ -388,7 +533,7 @@ function findAStarPath3D(
             else if (dir.dx === 1 && dir.dy === 0 && (sDirs & 8)) matchingDir = true;
 
             if (matchingDir) {
-              stepCost -= 0.04; // Parallel bonus
+              stepCost -= 0.04;
               break;
             }
           }
@@ -404,14 +549,13 @@ function findAStarPath3D(
       });
     }
 
-    // Layer switch (Via)
     const isTerminal = (curr.x === startGridX && curr.y === startGridY) || (curr.x === endGridX && curr.y === endGridY);
     if (!isTerminal) {
       neighbors.push({
         nx: curr.x,
         ny: curr.y,
         nLayer: 1 - curr.layer,
-        stepCost: 3.0, // Via cost
+        stepCost: 3.0,
         dir: { dx: 0, dy: 0 }
       });
     }
@@ -426,7 +570,7 @@ function findAStarPath3D(
       const hScore = Math.abs(neighbor.nx - endGridX) + Math.abs(neighbor.ny - endGridY) + (neighbor.nLayer !== 0 ? 3.0 : 0);
       const fScore = gScore + hScore;
 
-      let existingNode = openList.find(n => n.x === neighbor.nx && n.y === neighbor.ny && n.layer === neighbor.nLayer);
+      const existingNode = openSet.get(nKey);
       if (!existingNode) {
         const nNode = new AStarNode3D(neighbor.nx, neighbor.ny, neighbor.nLayer);
         nNode.g = gScore;
@@ -434,12 +578,14 @@ function findAStarPath3D(
         nNode.f = fScore;
         nNode.parent = curr;
         nNode.dir = neighbor.dir;
-        openList.push(nNode);
+        openHeap.push(nNode);
+        openSet.set(nKey, nNode);
       } else if (gScore < existingNode.g) {
         existingNode.g = gScore;
         existingNode.f = fScore;
         existingNode.parent = curr;
         existingNode.dir = neighbor.dir;
+        openHeap.update(existingNode);
       }
     }
   }
@@ -479,10 +625,10 @@ export function generateFallbackOrthogonalPath(
   lane: number
 ): Point[] {
   const extDist = 15 + lane * 5;
-  const boardLeft = 310;
-  const boardRight = 490;
-  const boardTop = 130;
-  const boardBottom = 330;
+  const boardLeft = boardDescriptor.x;
+  const boardRight = boardDescriptor.x + boardDescriptor.width;
+  const boardTop = boardDescriptor.y;
+  const boardBottom = boardDescriptor.y + boardDescriptor.height;
 
   const p1 = { x: start.x, y: start.y };
   if (startDir === 'left') p1.x -= extDist;
@@ -507,7 +653,7 @@ export function generateFallbackOrthogonalPath(
     points.push({ x: xChan, y: p1.y });
     points.push({ x: xChan, y: p2.y });
   } else {
-    const bypassY = start.y < 200
+    const bypassY = start.y < (boardTop + boardBottom) / 2
       ? boardTop - 30 - lane * 5
       : boardBottom + 30 + lane * 5;
     const xLeft = boardLeft - 25 - lane * 5;

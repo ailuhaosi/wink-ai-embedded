@@ -536,7 +536,8 @@ import {
   availableGPIOs,
   powerOptions,
   PinConnectionValue,
-  generateSmartOrthogonalPath
+  generateSmartOrthogonalPath,
+  Obstacle
 } from '../types/peripheral-pins';
 
 // Local Types
@@ -805,7 +806,7 @@ function getComponentWidth(comp: ComponentInstance): number {
     led: { width: 50, height: 60 },
     button: { width: 80, height: 60 },
     oled: { width: 128, height: 64 },
-    ultrasonic: { width: 45, height: 110 },
+    ultrasonic: { width: 140, height: 80 },
   };
   return sizes[comp.type]?.width ?? 80;
 }
@@ -815,7 +816,7 @@ function getComponentHeight(comp: ComponentInstance): number {
     led: { width: 50, height: 60 },
     button: { width: 80, height: 60 },
     oled: { width: 128, height: 64 },
-    ultrasonic: { width: 45, height: 110 },
+    ultrasonic: { width: 140, height: 80 },
   };
   return sizes[comp.type]?.height ?? 60;
 }
@@ -915,7 +916,12 @@ function getWireLane(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'v
   return index >= 0 ? index : 0;
 }
 
-function getWirePath(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary'): string {
+function getWirePath(
+  comp: ComponentInstance,
+  mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary',
+  obstacles?: Obstacle[],
+  channelOccupancyMap?: Map<string, number>
+): string {
   const pts = getWirePoints(comp, mode);
   if (!pts) return '';
 
@@ -934,11 +940,15 @@ function getWirePath(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'v
   if (comp.type === 'button') {
     if (pinName.endsWith('.l')) startDir = 'left';
     else if (pinName.endsWith('.r')) startDir = 'right';
+  } else if (comp.type === 'oled') {
+    startDir = 'left';
+  } else if (comp.type === 'led' || comp.type === 'ultrasonic') {
+    startDir = 'down';
   }
 
   const endDir = pts.end.x < 400 ? 'left' : 'right';
 
-  return generateSmartOrthogonalPath(pts.start, pts.end, startDir, endDir, lane);
+  return generateSmartOrthogonalPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap);
 }
 
 const wiresToRender = computed(() => {
@@ -949,6 +959,23 @@ const wiresToRender = computed(() => {
     start: { x: number; y: number };
     end: { x: number; y: number };
   }> = [];
+
+  // Gather obstacles (ESP32 board + active components)
+  const obstacles: Obstacle[] = [
+    { x: 310, y: 130, width: 180, height: 200 } // ESP32 board
+  ];
+  activeComponents.value.forEach(comp => {
+    obstacles.push({
+      x: getCanvasX(comp),
+      y: getCanvasY(comp),
+      width: getComponentWidth(comp),
+      height: getComponentHeight(comp)
+    });
+  });
+
+
+  // Track grid channel occupancy dynamically to avoid wire overlaps
+  const channelOccupancyMap = new Map<string, number>();
 
   activeComponents.value.forEach(comp => {
     const modes: Array<'primary' | 'secondary' | 'vcc' | 'gnd'> = ['primary', 'gnd'];
@@ -972,7 +999,7 @@ const wiresToRender = computed(() => {
       const pts = getWirePoints(comp, mode);
       if (!pts) return;
 
-      const path = getWirePath(comp, mode);
+      const path = getWirePath(comp, mode, obstacles, channelOccupancyMap);
       if (!path) return;
 
       // Color mapping

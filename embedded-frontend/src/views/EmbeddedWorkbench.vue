@@ -42,6 +42,27 @@
             <option value="curved">Fritzing Curved</option>
           </select>
         </div>
+        <div class="control-group">
+          <label>Routing Mode:</label>
+          <div class="mode-switch">
+            <button 
+              @click="setRoutingMode('auto')" 
+              class="mode-btn" 
+              :class="{ active: routingMode === 'auto' }"
+            >
+              <Zap class="mode-icon" />
+              <span>Auto</span>
+            </button>
+            <button 
+              @click="setRoutingMode('manual')" 
+              class="mode-btn" 
+              :class="{ active: routingMode === 'manual' }"
+            >
+              <MousePointer2 class="mode-icon" />
+              <span>Manual</span>
+            </button>
+          </div>
+        </div>
 
         <div class="control-group">
           <label>Time:</label>
@@ -188,7 +209,7 @@
               </g>
 
               <!-- Connection Wires -->
-              <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group" :class="{ 'selected-wire': selectedWireId === wire.id }">
+              <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group" :class="{ 'selected-wire': selectedWireId === wire.id, 'inactive-wire': !wire.isActive }">
                 <!-- 0. Teardrops (Pads transitions) -->
                 <path 
                   v-for="(td, idx) in wire.teardrops" 
@@ -239,7 +260,7 @@
                     stroke="transparent" 
                     stroke-width="12" 
                     stroke-linecap="round"
-                    style="cursor: pointer;"
+                    class="wire-click-zone"
                     @click="handleWireClick($event, wire.id)"
                   />
                 </g>
@@ -580,7 +601,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { 
-  Play, Pause, RotateCcw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash
+  Play, Pause, RotateCcw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2
 } from 'lucide-vue-next';
 import {
   initSimulation, startSimulation, pauseSimulation, resetSimulation,
@@ -648,6 +669,12 @@ const catalog = ref<CatalogItem[]>([
 ]);
 
 const wireStyle = ref<'pcb' | 'curved'>('pcb');
+const routingMode = ref<'auto' | 'manual'>('auto');
+
+function setRoutingMode(mode: 'auto' | 'manual') {
+  routingMode.value = mode;
+  inactiveWireCache.value = {};
+}
 
 const activeComponents = ref<ComponentInstance[]>([
   { 
@@ -880,6 +907,19 @@ interface Point {
   x: number;
   y: number;
 }
+interface WireRenderItem {
+  id: string;
+  path: string;
+  color: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  width: number;
+  segments: Array<{ d: string; layer: number }>;
+  vias: Array<{ x: number; y: number }>;
+  teardrops: Array<string>;
+  isActive?: boolean;
+  isDragged?: boolean;
+}
 const wireWaypoints = ref<Record<string, Point[]>>({});
 const draggedWireId = ref<string | null>(null);
 const draggingWaypoint = ref<{ wireId: string; index: number } | null>(null);
@@ -887,12 +927,16 @@ const selectedWireId = ref<string | null>(null);
 const dragThreshold = 8;
 const wireDragStart = ref({ x: 0, y: 0 });
 const pendingWaypoint = ref<{ wireId: string; x: number; y: number } | null>(null);
+const draggingSegment = ref<{ wireId: string; startIndex: number; endIndex: number; startOffset: number } | null>(null);
+const inactiveWireCache = ref<Record<string, WireRenderItem>>({});
 let clickTimer: ReturnType<typeof setTimeout> | null = null;
 let clickCount = 0;
 
 function handleWireClick(event: MouseEvent, wireId: string) {
   event.preventDefault();
   event.stopPropagation();
+  
+  draggedWireId.value = wireId;
   
   clickCount++;
   
@@ -904,6 +948,7 @@ function handleWireClick(event: MouseEvent, wireId: string) {
   if (clickCount === 2) {
     clickCount = 0;
     selectedWireId.value = selectedWireId.value === wireId ? null : wireId;
+    draggedWireId.value = null;
     return;
   }
   
@@ -914,16 +959,124 @@ function handleWireClick(event: MouseEvent, wireId: string) {
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
     
-    wireDragStart.value = {
-      x: Math.round(event.clientX - rect.left),
-      y: Math.round(event.clientY - rect.top),
-    };
+    const clickX = Math.round(event.clientX - rect.left);
+    const clickY = Math.round(event.clientY - rect.top);
     
-    pendingWaypoint.value = { wireId, x: wireDragStart.value.x, y: wireDragStart.value.y };
+    const existingWaypoints = wireWaypoints.value[wireId] || [];
+    const waypointThreshold = 12;
+    
+    let nearestWaypointIndex = -1;
+    let minDistance = waypointThreshold;
+    
+    for (let i = 0; i < existingWaypoints.length; i++) {
+      const wp = existingWaypoints[i];
+      const dx = clickX - wp.x;
+      const dy = clickY - wp.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestWaypointIndex = i;
+      }
+    }
+    
+    if (nearestWaypointIndex !== -1) {
+      startDragWaypoint(wireId, nearestWaypointIndex);
+      return;
+    }
+    
+    const pts = getWirePointsById(wireId);
+    if (pts) {
+      const segmentThreshold = 12;
+      const nearestSegment = findNearestSegment(clickX, clickY, pts);
+      
+      if (nearestSegment && nearestSegment.distance < segmentThreshold) {
+        wireDragStart.value = { x: clickX, y: clickY };
+        
+        let { startIndex, endIndex } = nearestSegment;
+        const waypoints = wireWaypoints.value[wireId] || [];
+        
+        if (startIndex === 0 && endIndex === 1 && waypoints.length === 0) {
+          const pts = getWirePointsById(wireId);
+          if (pts && pts.length >= 2) {
+            const p1 = pts[0];
+            const p2 = pts[1];
+            waypoints.push({ x: p1.x, y: clickY });
+            waypoints.push({ x: clickX, y: p2.y });
+            wireWaypoints.value[wireId] = waypoints;
+            startIndex = 1;
+            endIndex = 2;
+          }
+        } else if (startIndex === 0 && endIndex === 1) {
+          startIndex = 1;
+          endIndex = 2;
+        }
+        
+        draggingSegment.value = {
+          wireId,
+          startIndex,
+          endIndex,
+          startOffset: nearestSegment.offset
+        };
+        window.addEventListener('mousemove', handleWaypointMouseMove);
+        window.addEventListener('mouseup', handleWaypointMouseUp);
+        return;
+      }
+    }
+    
+    wireDragStart.value = { x: clickX, y: clickY };
+    pendingWaypoint.value = { wireId, x: clickX, y: clickY };
     
     window.addEventListener('mousemove', handleWaypointMouseMove);
     window.addEventListener('mouseup', handleWaypointMouseUp);
   }, 250);
+}
+
+function getWirePointsById(wireId: string): Point[] | null {
+  const [compId, mode] = wireId.split('-');
+  const comp = activeComponents.value.find(c => c.id === compId);
+  if (!comp) return null;
+  
+  const pts = getWirePoints(comp, mode as 'primary' | 'secondary' | 'vcc' | 'gnd');
+  if (!pts) return null;
+  
+  const waypoints = wireWaypoints.value[wireId] || [];
+  return [pts.start, ...waypoints, pts.end];
+}
+
+function findNearestSegment(x: number, y: number, points: Point[]): { startIndex: number; endIndex: number; distance: number; offset: number } | null {
+  if (points.length < 2) return null;
+  
+  let nearest = null;
+  let minDistance = Infinity;
+  
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    
+    if (len === 0) continue;
+    
+    const t = Math.max(0, Math.min(1, ((x - p1.x) * dx + (y - p1.y) * dy) / (len * len)));
+    const projX = p1.x + t * dx;
+    const projY = p1.y + t * dy;
+    
+    const dist = Math.sqrt((x - projX) ** 2 + (y - projY) ** 2);
+    
+    if (dist < minDistance) {
+      minDistance = dist;
+      nearest = {
+        startIndex: i,
+        endIndex: i + 1,
+        distance: dist,
+        offset: t
+      };
+    }
+  }
+  
+  return nearest;
 }
 
 function startDragWaypoint(wireId: string, index: number) {
@@ -982,6 +1135,34 @@ function handleWaypointMouseMove(event: MouseEvent) {
       wireWaypoints.value[wireId][index] = { x, y };
     }
   }
+
+  if (draggingSegment.value) {
+    const { wireId, startIndex, endIndex } = draggingSegment.value;
+    const currentX = Math.round(event.clientX - rect.left);
+    const currentY = Math.round(event.clientY - rect.top);
+    
+    const deltaX = currentX - wireDragStart.value.x;
+    const deltaY = currentY - wireDragStart.value.y;
+    
+    const waypoints = wireWaypoints.value[wireId] || [];
+    
+    if (startIndex > 0 && startIndex <= waypoints.length) {
+      waypoints[startIndex - 1] = {
+        x: Math.round((waypoints[startIndex - 1].x + deltaX) / 10) * 10,
+        y: Math.round((waypoints[startIndex - 1].y + deltaY) / 10) * 10
+      };
+    }
+    
+    if (endIndex >= 2 && endIndex <= waypoints.length + 1) {
+      waypoints[endIndex - 2] = {
+        x: Math.round((waypoints[endIndex - 2].x + deltaX) / 10) * 10,
+        y: Math.round((waypoints[endIndex - 2].y + deltaY) / 10) * 10
+      };
+    }
+    
+    wireWaypoints.value[wireId] = waypoints;
+    wireDragStart.value = { x: currentX, y: currentY };
+  }
 }
 
 function handleWaypointMouseUp() {
@@ -1000,7 +1181,9 @@ function handleWaypointMouseUp() {
   }
   
   draggingWaypoint.value = null;
+  draggingSegment.value = null;
   draggedWireId.value = null;
+  inactiveWireCache.value = {};
   
   window.removeEventListener('mousemove', handleWaypointMouseMove);
   window.removeEventListener('mouseup', handleWaypointMouseUp);
@@ -1229,6 +1412,7 @@ const wiresToRender = computed(() => {
     comp: ComponentInstance;
     mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
     color: string;
+    signalType: 'digital' | 'i2c' | 'power';
   }
   const requests: NetRequest[] = [];
 
@@ -1250,25 +1434,31 @@ const wiresToRender = computed(() => {
         color = getWireColor(comp);
       }
 
+      const signalType = net.signalType || 'digital';
+
       requests.push({
         compId: comp.id,
         comp,
         mode: net.mode,
-        color
+        color,
+        signalType
       });
     });
   });
 
-  // Sort requests so that the dragged wire gets routed first (Drag Priority Shoving)
-  if (draggedWireId.value) {
-    requests.sort((a, b) => {
-      const aId = `${a.compId}-${a.mode}`;
-      const bId = `${b.compId}-${b.mode}`;
+  const priorityOrder = { power: 0, i2c: 1, digital: 2 };
+  
+  requests.sort((a, b) => {
+    const aId = `${a.compId}-${a.mode}`;
+    const bId = `${b.compId}-${b.mode}`;
+    
+    if (draggedWireId.value) {
       if (aId === draggedWireId.value) return -1;
       if (bId === draggedWireId.value) return 1;
-      return 0;
-    });
-  }
+    }
+    
+    return priorityOrder[a.signalType] - priorityOrder[b.signalType];
+  });
 
   // Route each net and populate lists
   const list: Array<{
@@ -1281,6 +1471,8 @@ const wiresToRender = computed(() => {
     segments: Array<{ d: string; layer: number }>;
     vias: Array<{ x: number; y: number }>;
     teardrops: Array<string>;
+    isActive?: boolean;
+    isDragged?: boolean;
   }> = [];
 
   const channelOccupancyMap = new Map<string, number>();
@@ -1291,7 +1483,54 @@ const wiresToRender = computed(() => {
 
     const wireId = `${req.compId}-${req.mode}`;
     const waypoints = wireWaypoints.value[wireId] || [];
-    const pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
+    
+    const isActive = !(routingMode.value === 'manual' && draggedWireId.value && wireId !== draggedWireId.value);
+    const isDragged = wireId === draggedWireId.value;
+    
+    let pcbResult: WirePathResult | null = null;
+    let cachedWire: WireRenderItem | undefined;
+    
+    if (isActive) {
+      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
+      if (pcbResult && !isDragged) {
+        inactiveWireCache.value[wireId] = {
+          id: wireId,
+          path: pcbResult.path,
+          color: req.color,
+          start: pts.start,
+          end: pts.end,
+          width: pcbResult.width,
+          segments: pcbResult.segments,
+          vias: pcbResult.vias,
+          teardrops: pcbResult.teardrops,
+          isActive: true,
+          isDragged: false
+        };
+      }
+    } else {
+      cachedWire = inactiveWireCache.value[wireId];
+      if (cachedWire) {
+        list.push({ ...cachedWire, isActive: false, isDragged: false });
+        return;
+      }
+      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, undefined, waypoints);
+      if (pcbResult) {
+        inactiveWireCache.value[wireId] = {
+          id: wireId,
+          path: pcbResult.path,
+          color: req.color,
+          start: pts.start,
+          end: pts.end,
+          width: pcbResult.width,
+          segments: pcbResult.segments,
+          vias: pcbResult.vias,
+          teardrops: pcbResult.teardrops,
+          isActive: false,
+          isDragged: false
+        };
+      }
+    }
+    
     if (!pcbResult) return;
 
     list.push({
@@ -1303,7 +1542,9 @@ const wiresToRender = computed(() => {
       width: pcbResult.width,
       segments: pcbResult.segments,
       vias: pcbResult.vias,
-      teardrops: pcbResult.teardrops
+      teardrops: pcbResult.teardrops,
+      isActive,
+      isDragged
     });
   });
 
@@ -1376,12 +1617,45 @@ onMounted(() => {
   transition: filter 0.15s ease;
 }
 
+.smart-wire-group.inactive-wire {
+  opacity: 0.15;
+  pointer-events: none;
+}
+
 .smart-wire-group.selected-wire {
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.8));
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 1)) drop-shadow(0 0 12px rgba(56, 189, 248, 0.8)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.5));
+  animation: wirePulse 1.5s ease-in-out infinite;
 }
 
 .smart-wire-group.selected-wire path {
-  stroke-width: calc(var(--wire-width, 2) + 1);
+  stroke-width: calc(var(--wire-width, 2) + 2);
+}
+
+.wire-click-zone {
+  cursor: copy;
+}
+
+.waypoint-handle {
+  cursor: grab;
+  transition: r 0.15s ease, fill 0.15s ease;
+}
+
+.waypoint-handle:hover {
+  r: 7;
+  fill: #fbbf24;
+}
+
+.waypoint-handle:active {
+  cursor: grabbing;
+}
+
+@keyframes wirePulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(56, 189, 248, 1)) drop-shadow(0 0 12px rgba(56, 189, 248, 0.8)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 1)) drop-shadow(0 0 18px rgba(56, 189, 248, 0.9)) drop-shadow(0 0 30px rgba(56, 189, 248, 0.7));
+  }
 }
 
 .workbench {
@@ -1433,6 +1707,38 @@ onMounted(() => {
   gap: 8px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+.mode-switch {
+  display: flex;
+  background: #050b11;
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid var(--border-color);
+}
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.mode-btn:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+.mode-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+.mode-icon {
+  width: 14px;
+  height: 14px;
 }
 .time-display {
   background: #050b11;

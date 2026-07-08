@@ -495,7 +495,7 @@ function findAStarPath3D(
 
       const hasTurned = (curr.dir.dx !== 0 || curr.dir.dy !== 0) && (curr.dir.dx !== dir.dx || curr.dir.dy !== dir.dy);
       if (hasTurned) {
-        stepCost += 1.5;
+        stepCost += 3.0;
       }
 
       if (channelOccupancyMap) {
@@ -689,8 +689,19 @@ export function generateSmartPCBPath(
   waypoints?: Point[],
   wireStyle: 'pcb' | 'curved' = 'pcb'
 ): WirePathResult {
-  const isPower = signalType === 'power';
-  const width = isPower ? 4.0 : 2.2;
+  let width = 2.2;
+  switch (signalType) {
+    case 'power':
+      width = 3.5;
+      break;
+    case 'i2c':
+      width = 1.5;
+      break;
+    case 'digital':
+    default:
+      width = 2.0;
+      break;
+  }
 
   const extDistStart = obstacles ? (25 + lane * 5) : (15 + lane * 4);
   const extDistEnd = 15 + lane * 4;

@@ -1159,16 +1159,25 @@ const wiresToRender = computed(() => {
     });
   });
 
-  // Sort requests so that the dragged wire gets routed first (Drag Priority Shoving)
-  if (draggedWireId.value) {
-    requests.sort((a, b) => {
-      const aId = `${a.compId}-${a.mode}`;
-      const bId = `${b.compId}-${b.mode}`;
-      if (aId === draggedWireId.value) return -1;
-      if (bId === draggedWireId.value) return 1;
-      return 0;
-    });
-  }
+  // Sort requests by priority (Net Priority Routing):
+  // 1. Dragged wire gets absolute priority (-1000) for real-time shoving response.
+  // 2. Sensitive I2C bus lines get high priority (10) to obtain clean top-layer paths.
+  // 3. General digital GPIO lines get medium priority (20).
+  // 4. Power and Ground rails get lowest priority (30) to route around signal lines.
+  requests.sort((a, b) => {
+    const aId = `${a.compId}-${a.mode}`;
+    const bId = `${b.compId}-${b.mode}`;
+
+    const getPriority = (req: typeof a, id: string) => {
+      if (id === draggedWireId.value) return -1000;
+      const isI2CBus = (req.mode as string) === 'secondary' || (req.comp.type === 'oled' && ((req.mode as string) === 'primary' || (req.mode as string) === 'secondary'));
+      if (isI2CBus) return 10;
+      if (req.mode === 'vcc' || req.mode === 'gnd') return 30;
+      return 20;
+    };
+
+    return getPriority(a, aId) - getPriority(b, bId);
+  });
 
   // Route each net and populate lists
   const list: Array<{

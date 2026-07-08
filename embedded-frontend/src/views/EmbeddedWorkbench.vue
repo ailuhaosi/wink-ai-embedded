@@ -181,34 +181,84 @@
 
               <!-- Connection Wires -->
               <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group">
-                <!-- 1. Neon Glow Underlying -->
+                <!-- 0. Teardrops (Pads transitions) -->
                 <path 
-                  :d="wire.path" 
-                  fill="none" 
-                  :stroke="wire.color" 
-                  stroke-width="5" 
-                  opacity="0.15"
-                  filter="url(#neon-glow)"
+                  v-for="(td, idx) in wire.teardrops" 
+                  :key="'td-' + idx" 
+                  :d="td" 
+                  :fill="wire.color" 
+                  opacity="0.8" 
                 />
-                <!-- 2. Dark outline for wire crossing effect -->
-                <path 
-                  :d="wire.path" 
-                  fill="none" 
+
+                <!-- Wire Segments (Top / Bottom Layers) -->
+                <g v-for="(seg, idx) in wire.segments" :key="'seg-' + idx">
+                  <!-- Neon Glow Underlying -->
+                  <path 
+                    :d="seg.d" 
+                    fill="none" 
+                    :stroke="seg.layer === 0 ? wire.color : '#3b82f6'" 
+                    :stroke-width="wire.width + 3" 
+                    :opacity="seg.layer === 0 ? 0.15 : 0.08"
+                    :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
+                    filter="url(#neon-glow)"
+                  />
+                  <!-- Dark outline for crossings -->
+                  <path 
+                    :d="seg.d" 
+                    fill="none" 
+                    stroke="#080c14" 
+                    :stroke-width="wire.width + 2" 
+                    stroke-linecap="round"
+                    :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
+                  />
+                  <!-- Visible wire segment -->
+                  <path 
+                    :d="seg.d" 
+                    fill="none" 
+                    :stroke="seg.layer === 0 ? wire.color : '#3b82f6'" 
+                    :stroke-width="wire.width" 
+                    stroke-linecap="round"
+                    :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
+                  />
+                  <!-- Thick transparent path for click strike zone -->
+                  <path 
+                    :d="seg.d" 
+                    fill="none" 
+                    stroke="transparent" 
+                    stroke-width="12" 
+                    stroke-linecap="round"
+                    style="cursor: pointer;"
+                    @click="addWaypoint($event, wire.id)"
+                  />
+                </g>
+
+                <!-- Vias (Transitions Layer 0 <-> Layer 1) -->
+                <g v-for="(via, idx) in wire.vias" :key="'via-' + idx">
+                  <!-- Outer copper ring -->
+                  <circle :cx="via.x" :cy="via.y" r="5.5" fill="#e2e8f0" stroke="#d97706" stroke-width="1.2" />
+                  <!-- Inner drill hole -->
+                  <circle :cx="via.x" :cy="via.y" r="2.5" fill="#1e293b" />
+                </g>
+
+                <!-- Start & End connection dots -->
+                <circle :cx="wire.start.x" :cy="wire.start.y" :r="wire.width + 1.2" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
+                <circle :cx="wire.end.x" :cy="wire.end.y" :r="wire.width + 1.2" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
+
+                <!-- Waypoint draggable handles -->
+                <circle 
+                  v-for="(wp, wpIdx) in (wireWaypoints[wire.id] || [])" 
+                  :key="'wp-' + wpIdx"
+                  :cx="wp.x" 
+                  :cy="wp.y" 
+                  r="5.5" 
+                  fill="#f59e0b" 
                   stroke="#080c14" 
-                  stroke-width="4.5" 
-                  stroke-linecap="round"
+                  stroke-width="1.5"
+                  class="waypoint-handle"
+                  style="cursor: move;"
+                  @mousedown="startDragWaypoint($event, wire.id, wpIdx)"
+                  @dblclick.stop="removeWaypoint(wire.id, wpIdx)"
                 />
-                <!-- 3. Visible wire -->
-                <path 
-                  :d="wire.path" 
-                  fill="none" 
-                  :stroke="wire.color" 
-                  stroke-width="2" 
-                  stroke-linecap="round"
-                />
-                <!-- 4. Start & End connection dots -->
-                <circle :cx="wire.start.x" :cy="wire.start.y" r="3.5" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
-                <circle :cx="wire.end.x" :cy="wire.end.y" r="3.5" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
               </g>
             </svg>
 
@@ -537,7 +587,9 @@ import {
   powerOptions,
   PinConnectionValue,
   generateSmartOrthogonalPath,
-  Obstacle
+  generateSmartPCBPath,
+  Obstacle,
+  WirePathResult
 } from '../types/peripheral-pins';
 
 // Local Types
@@ -780,6 +832,83 @@ function toggleWireBreak() {
   }
 }
 
+// Waypoint Routing & Drag-Priority Shoving State
+interface Point {
+  x: number;
+  y: number;
+}
+const wireWaypoints = ref<Record<string, Point[]>>({});
+const draggedWireId = ref<string | null>(null);
+const draggingWaypoint = ref<{ wireId: string; index: number } | null>(null);
+
+function addWaypoint(event: MouseEvent, wireId: string) {
+  const svg = document.querySelector('.circuit-svg');
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  const x = Math.round(event.clientX - rect.left);
+  const y = Math.round(event.clientY - rect.top);
+  
+  if (!wireWaypoints.value[wireId]) {
+    wireWaypoints.value[wireId] = [];
+  }
+  
+  const index = wireWaypoints.value[wireId].length;
+  wireWaypoints.value[wireId].push({ x, y });
+  
+  draggedWireId.value = wireId;
+  event.stopPropagation();
+  
+  startDragWaypoint(event, wireId, index);
+}
+
+function startDragWaypoint(event: MouseEvent, wireId: string, index: number) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  draggingWaypoint.value = { wireId, index };
+  draggedWireId.value = wireId;
+
+  window.addEventListener('mousemove', handleWaypointMouseMove);
+  window.addEventListener('mouseup', handleWaypointMouseUp);
+}
+
+function handleWaypointMouseMove(event: MouseEvent) {
+  if (!draggingWaypoint.value) return;
+  const { wireId, index } = draggingWaypoint.value;
+
+  const svg = document.querySelector('.circuit-svg');
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+
+  // Constrain coordinates to canvas bounds
+  let x = Math.round(event.clientX - rect.left);
+  let y = Math.round(event.clientY - rect.top);
+
+  x = Math.max(10, Math.min(790, x));
+  y = Math.max(10, Math.min(570, y));
+
+  // Snap to 10px grid
+  x = Math.round(x / 10) * 10;
+  y = Math.round(y / 10) * 10;
+
+  if (wireWaypoints.value[wireId] && wireWaypoints.value[wireId][index]) {
+    wireWaypoints.value[wireId][index] = { x, y };
+  }
+}
+
+function handleWaypointMouseUp() {
+  draggingWaypoint.value = null;
+  draggedWireId.value = null;
+  window.removeEventListener('mousemove', handleWaypointMouseMove);
+  window.removeEventListener('mouseup', handleWaypointMouseUp);
+}
+
+function removeWaypoint(wireId: string, index: number) {
+  if (wireWaypoints.value[wireId]) {
+    wireWaypoints.value[wireId].splice(index, 1);
+  }
+}
+
 // Canvas layouts helpers - Using SVG viewBox coordinate system (0-800, 0-500)
 function getCanvasX(comp: ComponentInstance): number {
   const positions: Record<string, { x: number; y: number }> = {
@@ -916,14 +1045,15 @@ function getWireLane(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'v
   return index >= 0 ? index : 0;
 }
 
-function getWirePath(
+function getWirePCBPath(
   comp: ComponentInstance,
   mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary',
   obstacles?: Obstacle[],
-  channelOccupancyMap?: Map<string, number>
-): string {
+  channelOccupancyMap?: Map<string, number>,
+  waypoints?: Point[]
+): WirePathResult | null {
   const pts = getWirePoints(comp, mode);
-  if (!pts) return '';
+  if (!pts) return null;
 
   const pinMap: Record<string, string> = {
     led: { primary: 'A', gnd: 'C' },
@@ -948,18 +1078,12 @@ function getWirePath(
 
   const endDir = pts.end.x < 400 ? 'left' : 'right';
 
-  return generateSmartOrthogonalPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap);
+  const signalType = (mode === 'vcc' || mode === 'gnd') ? 'power' : (mode === 'secondary' ? 'i2c' : 'digital');
+
+  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints);
 }
 
 const wiresToRender = computed(() => {
-  const list: Array<{
-    id: string;
-    path: string;
-    color: string;
-    start: { x: number; y: number };
-    end: { x: number; y: number };
-  }> = [];
-
   // Gather obstacles (ESP32 board + active components)
   const obstacles: Obstacle[] = [
     { x: 310, y: 130, width: 180, height: 200 } // ESP32 board
@@ -973,9 +1097,14 @@ const wiresToRender = computed(() => {
     });
   });
 
-
-  // Track grid channel occupancy dynamically to avoid wire overlaps
-  const channelOccupancyMap = new Map<string, number>();
+  // Collect all nets/wires that need to be routed
+  interface NetRequest {
+    compId: string;
+    comp: ComponentInstance;
+    mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
+    color: string;
+  }
+  const requests: NetRequest[] = [];
 
   activeComponents.value.forEach(comp => {
     const modes: Array<'primary' | 'secondary' | 'vcc' | 'gnd'> = ['primary', 'gnd'];
@@ -996,13 +1125,6 @@ const wiresToRender = computed(() => {
         return;
       }
 
-      const pts = getWirePoints(comp, mode);
-      if (!pts) return;
-
-      const path = getWirePath(comp, mode, obstacles, channelOccupancyMap);
-      if (!path) return;
-
-      // Color mapping
       let color = '#ffffff';
       if (mode === 'vcc') {
         color = '#ef4444'; // Red for VCC
@@ -1014,13 +1136,60 @@ const wiresToRender = computed(() => {
         color = getWireColor(comp);
       }
 
-      list.push({
-        id: `${comp.id}-${mode}`,
-        path,
-        color,
-        start: pts.start,
-        end: pts.end
+      requests.push({
+        compId: comp.id,
+        comp,
+        mode,
+        color
       });
+    });
+  });
+
+  // Sort requests so that the dragged wire gets routed first (Drag Priority Shoving)
+  if (draggedWireId.value) {
+    requests.sort((a, b) => {
+      const aId = `${a.compId}-${a.mode}`;
+      const bId = `${b.compId}-${b.mode}`;
+      if (aId === draggedWireId.value) return -1;
+      if (bId === draggedWireId.value) return 1;
+      return 0;
+    });
+  }
+
+  // Route each net and populate lists
+  const list: Array<{
+    id: string;
+    path: string;
+    color: string;
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    width: number;
+    segments: Array<{ d: string; layer: number }>;
+    vias: Array<{ x: number; y: number }>;
+    teardrops: Array<string>;
+  }> = [];
+
+  const channelOccupancyMap = new Map<string, number>();
+
+  requests.forEach(req => {
+    const pts = getWirePoints(req.comp, req.mode);
+    if (!pts) return;
+
+    const wireId = `${req.compId}-${req.mode}`;
+    const waypoints = wireWaypoints.value[wireId] || [];
+    const pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
+    if (!pcbResult) return;
+
+    list.push({
+      id: wireId,
+      path: pcbResult.path,
+      color: req.color,
+      start: pts.start,
+      end: pts.end,
+      width: pcbResult.width,
+      segments: pcbResult.segments,
+      vias: pcbResult.vias,
+      teardrops: pcbResult.teardrops
     });
   });
 
@@ -1072,6 +1241,15 @@ onMounted(() => {
 .selected-peripheral {
   outline: 2px solid var(--color-highlight);
   box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+}
+
+.waypoint-handle {
+  transition: transform 0.15s ease, r 0.15s ease, fill 0.15s ease;
+}
+.waypoint-handle:hover {
+  r: 8px;
+  fill: #fbbf24;
+  filter: drop-shadow(0 0 4px #fbbf24);
 }
 
 .workbench {

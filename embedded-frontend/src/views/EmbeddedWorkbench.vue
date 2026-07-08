@@ -151,12 +151,12 @@
 
         <div class="workspace-content">
           <!-- Canvas Tab -->
-          <div v-show="activeTab === 'canvas'" class="canvas-container">
-            <svg class="circuit-svg" width="800" height="580" viewBox="0 0 800 580" @click="handleCanvasClick">
+          <div v-show="activeTab === 'canvas'" class="canvas-container" ref="canvasContainerRef">
+            <svg class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none" @click="handleCanvasClick">
               <!-- Grid background -->
               <defs>
-                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1" />
+                <pattern id="grid" :width="20" :height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
                 </pattern>
                 <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
                   <feGaussianBlur stdDeviation="3" result="blur" />
@@ -166,10 +166,10 @@
                   </feMerge>
                 </filter>
               </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
+              <rect :width="viewWidth" :height="viewHeight" fill="url(#grid)" />
 
               <!-- ESP32 Board Node -->
-              <g transform="translate(310, 130)" class="board-node">
+              <g :transform="`translate(${boardPosition.x}, ${boardPosition.y})`" class="board-node board-draggable" :class="{ 'board-dragging': isDraggingBoard }" @mousedown="startDragBoard($event)">
                 <!-- Outer board shadow and body -->
                 <rect x="0" y="0" width="180" height="200" rx="10" fill="#1e293b" stroke="#334155" stroke-width="2" />
                 <rect x="15" y="-10" width="150" height="25" rx="3" fill="#0f172a" />
@@ -296,8 +296,9 @@
             </svg>
 
             <!-- Real-time Interactive Peripherals Positioned on Canvas -->
-            <div 
-              v-for="comp in activeComponents" 
+            <div class="peripherals-layer" :style="{ transform: `scale(${peripheralScaleX}, ${peripheralScaleY})`, transformOrigin: 'top left', width: viewWidth + 'px', height: viewHeight + 'px' }">
+            <div
+              v-for="comp in activeComponents"
               :key="'canvas-comp-' + comp.id"
               :style="{
                 position: 'absolute',
@@ -335,6 +336,7 @@
               <wokwi-hc-sr04
                 v-else-if="comp.type === 'ultrasonic'"
               />
+            </div>
             </div>
           </div>
 
@@ -599,7 +601,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { 
   Play, Pause, RotateCcw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2
 } from 'lucide-vue-next';
@@ -670,10 +672,58 @@ const catalog = ref<CatalogItem[]>([
 
 const wireStyle = ref<'pcb' | 'curved'>('pcb');
 const routingMode = ref<'auto' | 'manual'>('auto');
+const canvasContainerRef = ref<HTMLElement | null>(null);
+
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 580;
+const viewWidth = ref(CANVAS_WIDTH);
+const viewHeight = ref(CANVAS_HEIGHT);
+const peripheralScaleX = ref(1);
+const peripheralScaleY = ref(1);
 
 function setRoutingMode(mode: 'auto' | 'manual') {
   routingMode.value = mode;
   inactiveWireCache.value = {};
+}
+
+function updateCanvasScale() {
+  const container = canvasContainerRef.value;
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+
+  const containerRatio = rect.width / rect.height;
+  const baseRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
+
+  if (containerRatio > baseRatio) {
+    viewHeight.value = CANVAS_HEIGHT;
+    viewWidth.value = Math.round(CANVAS_HEIGHT * containerRatio);
+  } else {
+    viewWidth.value = CANVAS_WIDTH;
+    viewHeight.value = Math.round(CANVAS_WIDTH / containerRatio);
+  }
+
+  peripheralScaleX.value = rect.width / viewWidth.value;
+  peripheralScaleY.value = rect.height / viewHeight.value;
+}
+
+function getCanvasScale() {
+  const svg = document.querySelector('.circuit-svg');
+  if (!svg) return { scale: 1, offsetX: 0, offsetY: 0 };
+  const rect = svg.getBoundingClientRect();
+  const scale = rect.width / CANVAS_WIDTH;
+  const offsetX = rect.left;
+  const offsetY = rect.top;
+  return { scale, offsetX, offsetY };
+}
+
+function clientToCanvas(clientX: number, clientY: number) {
+  const svg = document.querySelector('.circuit-svg');
+  if (!svg) return { x: clientX, y: clientY };
+  const rect = svg.getBoundingClientRect();
+  const x = (clientX - rect.left) * (viewWidth.value / rect.width);
+  const y = (clientY - rect.top) * (viewHeight.value / rect.height);
+  return { x, y };
 }
 
 const activeComponents = ref<ComponentInstance[]>([
@@ -955,12 +1005,7 @@ function handleWireClick(event: MouseEvent, wireId: string) {
   clickTimer = setTimeout(() => {
     clickCount = 0;
     
-    const svg = document.querySelector('.circuit-svg');
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    
-    const clickX = Math.round(event.clientX - rect.left);
-    const clickY = Math.round(event.clientY - rect.top);
+    const { x: clickX, y: clickY } = clientToCanvas(event.clientX, event.clientY);
     
     const existingWaypoints = wireWaypoints.value[wireId] || [];
     const waypointThreshold = 12;
@@ -1094,12 +1139,7 @@ function handleWaypointMouseMove(event: MouseEvent) {
     clickCount = 0;
   }
   
-  const svg = document.querySelector('.circuit-svg');
-  if (!svg) return;
-  const rect = svg.getBoundingClientRect();
-
-  const currentX = Math.round(event.clientX - rect.left);
-  const currentY = Math.round(event.clientY - rect.top);
+  const { x: currentX, y: currentY } = clientToCanvas(event.clientX, event.clientY);
 
   const dx = Math.abs(currentX - wireDragStart.value.x);
   const dy = Math.abs(currentY - wireDragStart.value.y);
@@ -1122,11 +1162,11 @@ function handleWaypointMouseMove(event: MouseEvent) {
   if (draggingWaypoint.value) {
     const { wireId, index } = draggingWaypoint.value;
 
-    let x = Math.round(event.clientX - rect.left);
-    let y = Math.round(event.clientY - rect.top);
+    let x = currentX;
+    let y = currentY;
 
-    x = Math.max(10, Math.min(790, x));
-    y = Math.max(10, Math.min(570, y));
+    x = Math.max(10, Math.min(viewWidth.value - 10, x));
+    y = Math.max(10, Math.min(viewHeight.value - 10, y));
 
     x = Math.round(x / 10) * 10;
     y = Math.round(y / 10) * 10;
@@ -1138,8 +1178,6 @@ function handleWaypointMouseMove(event: MouseEvent) {
 
   if (draggingSegment.value) {
     const { wireId, startIndex, endIndex } = draggingSegment.value;
-    const currentX = Math.round(event.clientX - rect.left);
-    const currentY = Math.round(event.clientY - rect.top);
     
     const deltaX = currentX - wireDragStart.value.x;
     const deltaY = currentY - wireDragStart.value.y;
@@ -1202,6 +1240,64 @@ function removeWaypoint(wireId: string, index: number) {
   }
 }
 
+// Board Drag State
+const boardPosition = ref({ x: boardDescriptor.x, y: boardDescriptor.y });
+const isDraggingBoard = ref(false);
+const boardDragOffset = ref({ x: 0, y: 0 });
+
+const boardPinOffsets: Record<number, { x: number; y: number }> = {
+  12: { x: boardDescriptor.pins[12].x - boardDescriptor.x, y: boardDescriptor.pins[12].y - boardDescriptor.y },
+  13: { x: boardDescriptor.pins[13].x - boardDescriptor.x, y: boardDescriptor.pins[13].y - boardDescriptor.y },
+  14: { x: boardDescriptor.pins[14].x - boardDescriptor.x, y: boardDescriptor.pins[14].y - boardDescriptor.y },
+  21: { x: boardDescriptor.pins[21].x - boardDescriptor.x, y: boardDescriptor.pins[21].y - boardDescriptor.y },
+  22: { x: boardDescriptor.pins[22].x - boardDescriptor.x, y: boardDescriptor.pins[22].y - boardDescriptor.y },
+};
+const boardPowerPinOffsets: Record<string, { x: number; y: number }> = {
+  VCC: { x: boardDescriptor.powerPins.VCC.x - boardDescriptor.x, y: boardDescriptor.powerPins.VCC.y - boardDescriptor.y },
+  '3V3': { x: boardDescriptor.powerPins['3V3'].x - boardDescriptor.x, y: boardDescriptor.powerPins['3V3'].y - boardDescriptor.y },
+  GND: { x: boardDescriptor.powerPins.GND.x - boardDescriptor.x, y: boardDescriptor.powerPins.GND.y - boardDescriptor.y },
+};
+
+function startDragBoard(event: MouseEvent) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const { x: mouseX, y: mouseY } = clientToCanvas(event.clientX, event.clientY);
+  boardDragOffset.value = {
+    x: mouseX - boardPosition.value.x,
+    y: mouseY - boardPosition.value.y,
+  };
+  isDraggingBoard.value = true;
+  window.addEventListener('mousemove', handleBoardMouseMove);
+  window.addEventListener('mouseup', handleBoardMouseUp);
+}
+
+function handleBoardMouseMove(event: MouseEvent) {
+  if (!isDraggingBoard.value) return;
+
+  const { x: mouseX, y: mouseY } = clientToCanvas(event.clientX, event.clientY);
+
+  let x = Math.round(mouseX - boardDragOffset.value.x);
+  let y = Math.round(mouseY - boardDragOffset.value.y);
+
+  const maxX = viewWidth.value - boardDescriptor.width - 10;
+  const maxY = viewHeight.value - boardDescriptor.height - 10;
+  x = Math.max(10, Math.min(maxX, x));
+  y = Math.max(10, Math.min(maxY, y));
+
+  x = Math.round(x / 10) * 10;
+  y = Math.round(y / 10) * 10;
+
+  boardPosition.value = { x, y };
+}
+
+function handleBoardMouseUp() {
+  isDraggingBoard.value = false;
+  window.removeEventListener('mousemove', handleBoardMouseMove);
+  window.removeEventListener('mouseup', handleBoardMouseUp);
+}
+
 // Component Drag State
 const draggedCompId = ref<string | null>(null);
 const dragOffset = ref({ x: 0, y: 0 });
@@ -1215,16 +1311,14 @@ function startDragComponent(event: MouseEvent, comp: ComponentInstance) {
   draggedCompId.value = comp.id;
   selectComponent(comp);
 
-  const svg = document.querySelector('.circuit-svg');
-  if (!svg) return;
-  const rect = svg.getBoundingClientRect();
+  const { x: mouseX, y: mouseY } = clientToCanvas(event.clientX, event.clientY);
 
   const currentX = getCanvasX(comp);
   const currentY = getCanvasY(comp);
   
   dragOffset.value = {
-    x: event.clientX - rect.left - currentX,
-    y: event.clientY - rect.top - currentY,
+    x: mouseX - currentX,
+    y: mouseY - currentY,
   };
 
   window.addEventListener('mousemove', handleComponentMouseMove);
@@ -1234,15 +1328,13 @@ function startDragComponent(event: MouseEvent, comp: ComponentInstance) {
 function handleComponentMouseMove(event: MouseEvent) {
   if (!draggedCompId.value) return;
 
-  const svg = document.querySelector('.circuit-svg');
-  if (!svg) return;
-  const rect = svg.getBoundingClientRect();
+  const { x: mouseX, y: mouseY } = clientToCanvas(event.clientX, event.clientY);
 
-  let x = Math.round(event.clientX - rect.left - dragOffset.value.x);
-  let y = Math.round(event.clientY - rect.top - dragOffset.value.y);
+  let x = Math.round(mouseX - dragOffset.value.x);
+  let y = Math.round(mouseY - dragOffset.value.y);
 
-  x = Math.max(10, Math.min(700, x));
-  y = Math.max(10, Math.min(500, y));
+  x = Math.max(10, Math.min(viewWidth.value - 100, x));
+  y = Math.max(10, Math.min(viewHeight.value - 80, y));
 
   x = Math.round(x / 10) * 10;
   y = Math.round(y / 10) * 10;
@@ -1303,11 +1395,19 @@ function getWireColor(comp: ComponentInstance): string {
 }
 
 function getPinPosition(pin: number): { x: number; y: number } {
-  return boardDescriptor.pins[pin] || { x: boardDescriptor.x + 7, y: boardDescriptor.y + 122 };
+  const offset = boardPinOffsets[pin];
+  if (offset) {
+    return { x: boardPosition.value.x + offset.x, y: boardPosition.value.y + offset.y };
+  }
+  return { x: boardPosition.value.x + 7, y: boardPosition.value.y + 122 };
 }
 
 function getPowerPinPosition(powerType: string): { x: number; y: number } {
-  return boardDescriptor.powerPins[powerType] || { x: boardDescriptor.x + 7, y: boardDescriptor.y + 122 };
+  const offset = boardPowerPinOffsets[powerType];
+  if (offset) {
+    return { x: boardPosition.value.x + offset.x, y: boardPosition.value.y + offset.y };
+  }
+  return { x: boardPosition.value.x + 7, y: boardPosition.value.y + 122 };
 }
 
 function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x: number; y: number } {
@@ -1396,7 +1496,7 @@ function getWirePCBPath(
 
 const wiresToRender = computed(() => {
   const obstacles: Obstacle[] = [
-    { x: boardDescriptor.x, y: boardDescriptor.y, width: boardDescriptor.width, height: boardDescriptor.height }
+    { x: boardPosition.value.x, y: boardPosition.value.y, width: boardDescriptor.width, height: boardDescriptor.height }
   ];
   activeComponents.value.forEach(comp => {
     obstacles.push({
@@ -1579,10 +1679,36 @@ function getTraceClass(type: number): string {
 // Initialize on mount
 onMounted(() => {
   initSimulation();
+  updateCanvasScale();
+  window.addEventListener('resize', handleWindowResize);
 });
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleWindowResize);
+});
+
+let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+function handleWindowResize() {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    updateCanvasScale();
+    inactiveWireCache.value = {};
+  }, 100);
+}
 </script>
 
 <style scoped>
+.board-draggable {
+  cursor: grab;
+  transition: filter 0.15s ease;
+}
+.board-draggable:hover {
+  filter: brightness(1.08) drop-shadow(0 0 6px rgba(56, 189, 248, 0.35));
+}
+.board-dragging {
+  cursor: grabbing;
+  filter: brightness(1.12) drop-shadow(0 0 10px rgba(56, 189, 248, 0.55));
+}
 .canvas-peripheral-wrapper {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
@@ -1953,20 +2079,28 @@ onMounted(() => {
 .workspace-content {
   flex: 1;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   background: #080c14;
 }
 .canvas-container {
-  width: 800px;
-  height: 580px;
+  width: 100%;
+  height: 100%;
   position: relative;
-  margin: 0 auto;
 }
 .circuit-svg {
   display: block;
   position: absolute;
   top: 0;
   left: 0;
+}
+.peripherals-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.peripherals-layer > .canvas-peripheral-wrapper {
+  pointer-events: auto;
 }
 .sim-grid-container {
   padding: 20px;

@@ -1,9 +1,11 @@
 <template>
   <div class="virtual-button">
-    <div class="component-label">Button (Pin {{ pin }})</div>
+    <div class="component-label">Button ({{ pinLabel }})</div>
     <div class="btn-wrapper">
       <wokwi-pushbutton
         :color="color"
+        :label="label"
+        :xray="xray"
         @button-press="handlePress"
         @button-release="handleRelease"
       />
@@ -13,23 +15,42 @@
 
 <script setup lang="ts">
 import '@wokwi/elements';
+import { computed } from 'vue';
 import { setPinIdeal } from '../services/simulation-client';
 
+import type { PinConnectionValue } from '../types/peripheral-pins';
+
 const props = defineProps<{
-  pin: number;
+  pinConnections: Record<string, PinConnectionValue>;
   color: 'red' | 'green' | 'blue' | 'yellow' | 'white' | 'black';
-  activeLow?: boolean; // If true, pressing button drives pin LOW, releasing drives HIGH (typical pull-up button)
+  label: string;
+  xray: boolean;
+  activeLow: boolean;
 }>();
 
+const signalPin = computed(() => {
+  const pin = props.pinConnections['1.l'];
+  return typeof pin === 'number' ? pin : null;
+});
+
+const pinLabel = computed(() => {
+  const left1 = props.pinConnections['1.l'];
+  const left2 = props.pinConnections['2.l'];
+  const right1 = props.pinConnections['1.r'];
+  const right2 = props.pinConnections['2.r'];
+  return `1.l:${left1}, 2.l:${left2}, 1.r:${right1}, 2.r:${right2}`;
+});
+
 function handlePress() {
-  // Active low button drives pin LOW (false) on press, otherwise HIGH (true)
+  if (signalPin.value === null) return;
   const level = props.activeLow ? false : true;
-  setPinIdeal(props.pin, level);
+  setPinIdeal(signalPin.value, level);
 }
 
 function handleRelease() {
+  if (signalPin.value === null) return;
   const level = props.activeLow ? true : false;
-  setPinIdeal(props.pin, level);
+  setPinIdeal(signalPin.value, level);
 }
 </script>
 

@@ -1,6 +1,6 @@
 <template>
   <div class="virtual-oled">
-    <div class="component-label">SSD1306 OLED (I2C 0x3C)</div>
+    <div class="component-label">SSD1306 (SDA:{{ sdaPin }}, SCL:{{ sclPin }})</div>
     <div class="oled-wrapper">
       <wokwi-ssd1306 ref="oledRef" />
     </div>
@@ -9,13 +9,26 @@
 
 <script setup lang="ts">
 import '@wokwi/elements';
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
+
+import type { PinConnectionValue } from '../types/peripheral-pins';
 
 const props = defineProps<{
+  pinConnections: Record<string, PinConnectionValue>;
   framebuffer: Uint8Array | null;
 }>();
 
 const oledRef = ref<any>(null);
+
+const sdaPin = computed(() => {
+  const pin = props.pinConnections.DATA;
+  return typeof pin === 'number' ? pin : 'N/A';
+});
+
+const sclPin = computed(() => {
+  const pin = props.pinConnections.CLK;
+  return typeof pin === 'number' ? pin : 'N/A';
+});
 
 watch(() => props.framebuffer, (newFb) => {
   if (!oledRef.value) return;
@@ -33,7 +46,6 @@ watch(() => props.framebuffer, (newFb) => {
   const px = imgData.data;
   
   if (newFb && newFb.length === 1024) {
-    // Unpack 1-bit vertical page addressing GDDRAM to RGBA canvas
     for (let page = 0; page < 8; page++) {
       for (let col = 0; col < 128; col++) {
         const byte = newFb[page * 128 + col];
@@ -42,19 +54,17 @@ watch(() => props.framebuffer, (newFb) => {
           const lit = (byte >> bit) & 1;
           const idx = (row * 128 + col) * 4;
           
-          // Use vibrant cyan glow pixels when lit, and a dark obsidian base when unlit
-          px[idx]     = lit ? 0   : 8;   // R
-          px[idx + 1] = lit ? 210 : 12;  // G
-          px[idx + 2] = lit ? 255 : 24;  // B
-          px[idx + 3] = 255;             // A
+          px[idx]     = lit ? 0   : 8;
+          px[idx + 1] = lit ? 210 : 12;
+          px[idx + 2] = lit ? 255 : 24;
+          px[idx + 3] = 255;
         }
       }
     }
   } else {
-    // Draw clear black screen when no framebuffer or reset
     px.fill(0);
     for (let i = 3; i < px.length; i += 4) {
-      px[i] = 255; // Alpha
+      px[i] = 255;
     }
   }
   

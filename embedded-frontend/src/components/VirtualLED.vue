@@ -1,20 +1,39 @@
 <template>
   <div class="virtual-led">
-    <div class="component-label">LED (Pin {{ pin }})</div>
+    <div class="component-label">LED ({{ pinLabel }})</div>
     <div class="led-wrapper">
-      <wokwi-led :color="color" :value="level" />
+      <wokwi-led 
+        :pin="typeof pinConnections.A === 'number' ? pinConnections.A : 1"
+        :color="color" 
+        :value="level" 
+        :brightness="brightness"
+        :label="label"
+        :flip="flip"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import '@wokwi/elements';
+import { computed } from 'vue';
 
-defineProps<{
-  pin: number;
-  color: 'red' | 'green' | 'blue' | 'yellow' | 'white' | 'orange';
+import type { PinConnectionValue } from '../types/peripheral-pins';
+
+const props = defineProps<{
+  pinConnections: Record<string, PinConnectionValue>;
+  color: 'red' | 'green' | 'blue' | 'yellow' | 'white' | 'orange' | 'purple';
   level: boolean;
+  brightness: number;
+  label: string;
+  flip: boolean;
 }>();
+
+const pinLabel = computed(() => {
+  const anode = props.pinConnections.A;
+  const cathode = props.pinConnections.C;
+  return `A:${anode}, C:${cathode}`;
+});
 </script>
 
 <style scoped>

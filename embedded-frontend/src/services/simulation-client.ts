@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import WasmWorker from '../workers/wasm-simulation.worker?worker';
+import { PinConnectionValue } from '../types/peripheral-pins';
 
 export interface SimFaultsConfig {
   bounce_us: number;
@@ -9,6 +10,11 @@ export interface SimFaultsConfig {
   rc_tau_s: number;
   i2c_drop_permil: number;
   prng_seed: number;
+}
+
+export interface PeripheralConfig {
+  type: string;
+  pinConnections: Record<string, PinConnectionValue>;
 }
 
 export const isInitialized = ref(false);
@@ -115,20 +121,38 @@ export function setPinIdeal(pin: number, level: boolean) {
   }
 }
 
-export function setUltrasonicDistance(pin: number, distanceCm: number) {
+export function setUltrasonicDistance(trigPin: number, echoPin: number, distanceCm: number) {
   if (worker) {
     worker.postMessage({
       type: 'SET_ULTRASONIC_DISTANCE',
-      payload: { pin, distanceCm }
+      payload: { trigPin, echoPin, distanceCm }
     });
   }
 }
 
-export function observePins(pins: number[], oled: boolean) {
+export function observePins(pins: number[], peripherals: PeripheralConfig[]) {
   if (worker) {
+    const oledPeripheral = peripherals.find(p => p.type === 'oled');
+    const ultrasonicPeripheral = peripherals.find(p => p.type === 'ultrasonic');
+    
+    const oledConfig = oledPeripheral ? {
+      sda: oledPeripheral.pinConnections.DATA,
+      scl: oledPeripheral.pinConnections.CLK
+    } : null;
+    
+    const ultrasonicConfig = ultrasonicPeripheral ? {
+      trig: ultrasonicPeripheral.pinConnections.TRIG,
+      echo: ultrasonicPeripheral.pinConnections.ECHO
+    } : null;
+    
     worker.postMessage({
       type: 'OBSERVE_PINS',
-      payload: { pins, oled }
+      payload: { 
+        pins, 
+        oled: !!oledPeripheral, 
+        oledConfig,
+        ultrasonicConfig 
+      }
     });
   }
 }

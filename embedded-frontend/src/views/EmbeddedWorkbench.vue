@@ -123,7 +123,7 @@
         <div class="workspace-content">
           <!-- Canvas Tab -->
           <div v-show="activeTab === 'canvas'" class="canvas-container">
-            <svg class="circuit-svg" width="100%" height="100%" viewBox="0 0 800 500">
+            <svg class="circuit-svg" width="800" height="580" viewBox="0 0 800 580">
               <!-- Grid background -->
               <defs>
                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -140,7 +140,7 @@
               <rect width="100%" height="100%" fill="url(#grid)" />
 
               <!-- ESP32 Board Node -->
-              <g transform="translate(300, 150)" class="board-node">
+              <g transform="translate(310, 130)" class="board-node">
                 <!-- Outer board shadow and body -->
                 <rect x="0" y="0" width="180" height="200" rx="10" fill="#1e293b" stroke="#334155" stroke-width="2" />
                 <rect x="15" y="-10" width="150" height="25" rx="3" fill="#0f172a" />
@@ -180,41 +180,35 @@
               </g>
 
               <!-- Connection Wires -->
-              <g v-for="comp in activeComponents" :key="'wire-' + comp.id">
-                <!-- Primary / signal wire -->
+              <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group">
+                <!-- 1. Neon Glow Underlying -->
                 <path 
-                  :d="getWirePath(comp, 'primary')" 
+                  :d="wire.path" 
                   fill="none" 
-                  :stroke="getWireColor(comp)" 
-                  stroke-width="2.5" 
+                  :stroke="wire.color" 
+                  stroke-width="5" 
+                  opacity="0.15"
                   filter="url(#neon-glow)"
                 />
-                <!-- SCL wire (for OLED only) -->
+                <!-- 2. Dark outline for wire crossing effect -->
                 <path 
-                  v-if="comp.type === 'oled'"
-                  :d="getWirePath(comp, 'secondary')" 
+                  :d="wire.path" 
                   fill="none" 
-                  stroke="#c084fc" 
-                  stroke-width="2.5" 
-                  filter="url(#neon-glow)"
+                  stroke="#080c14" 
+                  stroke-width="4.5" 
+                  stroke-linecap="round"
                 />
-                <!-- VCC Power wires (for OLED and Ultrasonic) -->
+                <!-- 3. Visible wire -->
                 <path 
-                  v-if="comp.type === 'oled' || comp.type === 'ultrasonic'"
-                  :d="getWirePath(comp, 'vcc')" 
+                  :d="wire.path" 
                   fill="none" 
-                  stroke="#ef4444" 
-                  stroke-width="2.5" 
-                  filter="url(#neon-glow)"
+                  :stroke="wire.color" 
+                  stroke-width="2" 
+                  stroke-linecap="round"
                 />
-                <!-- GND Ground wires (for all peripherals) -->
-                <path 
-                  :d="getWirePath(comp, 'gnd')" 
-                  fill="none" 
-                  stroke="#475569" 
-                  stroke-width="2.5" 
-                  filter="url(#neon-glow)"
-                />
+                <!-- 4. Start & End connection dots -->
+                <circle :cx="wire.start.x" :cy="wire.start.y" r="3.5" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
+                <circle :cx="wire.end.x" :cy="wire.end.y" r="3.5" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
               </g>
             </svg>
 
@@ -235,14 +229,20 @@
               <!-- Raw visual components on the Canvas -->
               <wokwi-led 
                 v-if="comp.type === 'led'"
-                :color="comp.color"
-                :value="pinStates[comp.pin] || false"
+                :pin="typeof comp.pinConnections.A === 'number' ? comp.pinConnections.A : 1"
+                :color="comp.props.color"
+                :value="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
+                :brightness="comp.props.brightness"
+                :label="comp.props.label"
+                :flip="comp.props.flip"
               />
               <wokwi-pushbutton
                 v-else-if="comp.type === 'button'"
-                :color="comp.color"
-                @button-press="setPinIdeal(comp.pin, comp.activeLow ? false : true)"
-                @button-release="setPinIdeal(comp.pin, comp.activeLow ? true : false)"
+                :color="comp.props.color"
+                :label="comp.props.label"
+                :xray="comp.props.xray"
+                @button-press="handleButtonPress(comp)"
+                @button-release="handleButtonRelease(comp)"
               />
               <wokwi-ssd1306
                 v-else-if="comp.type === 'oled'"
@@ -265,23 +265,30 @@
                 <div class="card-body">
                   <VirtualLED 
                     v-if="comp.type === 'led'"
-                    :pin="comp.pin"
-                    :color="(comp.color as any)"
-                    :level="pinStates[comp.pin] || false"
+                    :pin-connections="comp.pinConnections"
+                    :color="comp.props.color"
+                    :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
+                    :brightness="comp.props.brightness"
+                    :label="comp.props.label"
+                    :flip="comp.props.flip"
                   />
                   <VirtualButton
                     v-else-if="comp.type === 'button'"
-                    :pin="comp.pin"
-                    :color="(comp.color as any)"
-                    :activeLow="comp.activeLow"
+                    :pin-connections="comp.pinConnections"
+                    :color="comp.props.color"
+                    :label="comp.props.label"
+                    :xray="comp.props.xray"
+                    :active-low="comp.props.activeLow"
                   />
                   <VirtualOLED
                     v-else-if="comp.type === 'oled'"
+                    :pin-connections="comp.pinConnections"
                     :framebuffer="oledFb"
                   />
                   <VirtualUltrasonic
                     v-else-if="comp.type === 'ultrasonic'"
-                    :pin="comp.pin"
+                    :pin-connections="comp.pinConnections"
+                    :distance="comp.props.distance"
                   />
                 </div>
               </div>
@@ -312,80 +319,72 @@
                 <input type="text" v-model="selectedComp.name" class="input" />
               </div>
 
-              <!-- LED properties -->
-              <template v-if="selectedComp.type === 'led'">
-                <div class="form-group">
-                  <label>GPIO Pin</label>
-                  <select v-model.number="selectedComp.pin" class="select font-mono">
-                    <option :value="13">IO13 (Recommended)</option>
-                    <option :value="12">IO12</option>
-                    <option :value="14">IO14</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Color</label>
-                  <select v-model="selectedComp.color" class="select">
-                    <option value="red">Red</option>
-                    <option value="green">Green</option>
-                    <option value="blue">Blue</option>
-                    <option value="yellow">Yellow</option>
-                    <option value="white">White</option>
-                    <option value="orange">Orange</option>
-                  </select>
-                </div>
-              </template>
+              <!-- Dynamic Pin Configuration -->
+              <div class="section-title">Pin Connections</div>
+              <div 
+                v-for="pinDef in peripheralConfigs[selectedComp.type]?.pins" 
+                :key="pinDef.name"
+                class="form-group"
+              >
+                <label>{{ pinDef.name }} - {{ pinDef.description }}</label>
+                <select 
+                  v-model="selectedComp.pinConnections[pinDef.name]" 
+                  class="select font-mono"
+                >
+                  <option v-if="!pinDef.required" :value="null">Not Connected</option>
+                  <template v-if="pinDef.signalType === 'power' || pinDef.signalType === 'i2c'">
+                    <option v-for="opt in powerOptions" :key="opt" :value="opt">{{ opt }}</option>
+                  </template>
+                  <template v-if="pinDef.signalType === 'digital' || pinDef.signalType === 'i2c'">
+                    <option v-for="gpio in availableGPIOs" :key="gpio" :value="gpio">IO{{ gpio }}</option>
+                  </template>
+                </select>
+              </div>
 
-              <!-- Button properties -->
-              <template v-if="selectedComp.type === 'button'">
-                <div class="form-group">
-                  <label>GPIO Pin</label>
-                  <select v-model.number="selectedComp.pin" class="select font-mono">
-                    <option :value="14">IO14 (Recommended)</option>
-                    <option :value="12">IO12</option>
-                    <option :value="13">IO13</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Button Cap Color</label>
-                  <select v-model="selectedComp.color" class="select">
-                    <option value="red">Red</option>
-                    <option value="green">Green</option>
-                    <option value="blue">Blue</option>
-                    <option value="yellow">Yellow</option>
-                    <option value="white">White</option>
-                    <option value="black">Black</option>
-                  </select>
-                </div>
-                <div class="form-group checkbox-group">
-                  <input type="checkbox" v-model="selectedComp.activeLow" id="activeLow" />
-                  <label for="activeLow">Active Low (Pull-Up)</label>
-                </div>
-              </template>
+              <!-- Dynamic Properties -->
+              <div class="section-title">Properties</div>
+              <div 
+                v-for="(propDef, propKey) in peripheralConfigs[selectedComp.type]?.props" 
+                :key="propKey"
+                class="form-group"
+              >
+                <label>{{ propDef.description }}</label>
+                <select v-if="propDef.options" v-model="selectedComp.props[propKey]" class="select">
+                  <option v-for="opt in propDef.options" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+                <input 
+                  v-else-if="propDef.type === 'number'" 
+                  type="number" 
+                  v-model.number="selectedComp.props[propKey]" 
+                  class="input font-mono"
+                />
+                <input 
+                  v-else-if="propDef.type === 'boolean'" 
+                  type="checkbox" 
+                  v-model="selectedComp.props[propKey]" 
+                />
+                <input 
+                  v-else 
+                  type="text" 
+                  v-model="selectedComp.props[propKey]" 
+                  class="input"
+                />
+              </div>
 
-              <!-- Ultrasonic properties -->
-              <template v-if="selectedComp.type === 'ultrasonic'">
-                <div class="form-group">
-                  <label>Trig/Echo Pin</label>
-                  <select v-model.number="selectedComp.pin" class="select font-mono">
-                    <option :value="12">IO12 (Recommended)</option>
-                    <option :value="13">IO13</option>
-                    <option :value="14">IO14</option>
-                  </select>
+              <!-- Ultrasonic distance slider (special handling) -->
+              <div v-if="selectedComp.type === 'ultrasonic'" class="form-group">
+                <div class="slider-label">
+                  <span>Distance (cm):</span>
+                  <span class="val">{{ ultrasonicDistance }} cm</span>
                 </div>
-                <div class="form-group">
-                  <div class="slider-label">
-                    <span>Distance (cm):</span>
-                    <span class="val">{{ ultrasonicDistance }} cm</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="2" 
-                    max="400" 
-                    v-model.number="ultrasonicDistance" 
-                    class="slider" 
-                  />
-                </div>
-              </template>
+                <input 
+                  type="range" 
+                  min="2" 
+                  max="400" 
+                  v-model.number="ultrasonicDistance" 
+                  class="slider" 
+                />
+              </div>
             </div>
           </div>
 
@@ -530,6 +529,15 @@ import VirtualLED from '../components/VirtualLED.vue';
 import VirtualButton from '../components/VirtualButton.vue';
 import VirtualOLED from '../components/VirtualOLED.vue';
 import VirtualUltrasonic from '../components/VirtualUltrasonic.vue';
+import { 
+  peripheralConfigs, 
+  getDefaultPinConnections, 
+  getDefaultProps, 
+  availableGPIOs,
+  powerOptions,
+  PinConnectionValue,
+  generateSmartOrthogonalPath
+} from '../types/peripheral-pins';
 
 // Local Types
 interface CatalogItem {
@@ -542,9 +550,8 @@ interface ComponentInstance {
   id: string;
   type: string;
   name: string;
-  pin: number;
-  color?: string;
-  activeLow?: boolean;
+  pinConnections: Record<string, PinConnectionValue>;
+  props: Record<string, any>;
 }
 
 // Scaffolding components list
@@ -556,10 +563,34 @@ const catalog = ref<CatalogItem[]>([
 ]);
 
 const activeComponents = ref<ComponentInstance[]>([
-  { id: 'led1', type: 'led', name: 'Virtual LED', pin: 13, color: 'red' },
-  { id: 'btn1', type: 'button', name: 'Push Button', pin: 14, color: 'green', activeLow: true },
-  { id: 'oled1', type: 'oled', name: 'SSD1306 Display', pin: 21 }, // Maps to SDA=21, SCL=22
-  { id: 'sonar1', type: 'ultrasonic', name: 'HC-SR04 Sensor', pin: 12 } // echo pin 12
+  { 
+    id: 'led1', 
+    type: 'led', 
+    name: 'Virtual LED', 
+    pinConnections: { A: 13, C: 'GND' },
+    props: { color: 'red', brightness: 1.0, label: '', flip: false }
+  },
+  { 
+    id: 'btn1', 
+    type: 'button', 
+    name: 'Push Button', 
+    pinConnections: { '1.l': 14, '2.l': 'VCC', '1.r': 'GND', '2.r': null },
+    props: { color: 'green', label: '', xray: false, activeLow: true }
+  },
+  { 
+    id: 'oled1', 
+    type: 'oled', 
+    name: 'SSD1306 Display', 
+    pinConnections: { DATA: 21, CLK: 22, DC: null, RST: null, CS: null, '3V3': '3V3', VIN: null, GND: 'GND' },
+    props: {}
+  },
+  { 
+    id: 'sonar1', 
+    type: 'ultrasonic', 
+    name: 'HC-SR04 Sensor', 
+    pinConnections: { VCC: 'VCC', TRIG: 12, ECHO: 13, GND: 'GND' },
+    props: { distance: 25 }
+  }
 ]);
 
 const selectedCompId = ref<string>('led1');
@@ -632,32 +663,25 @@ watch(oledFb, (newFb) => {
 watch([ultrasonicDistance, activeComponents], ([dist, comps]) => {
   const sonar = (comps as ComponentInstance[]).find(c => c.type === 'ultrasonic');
   if (sonar) {
-    setUltrasonicDistance(sonar.pin, dist as number);
+    const trigPin = sonar.pinConnections.TRIG;
+    const echoPin = sonar.pinConnections.ECHO;
+    if (typeof trigPin === 'number' && typeof echoPin === 'number') {
+      setUltrasonicDistance(trigPin, echoPin, dist as number);
+    }
   }
 }, { deep: true, immediate: true });
 
 // Component management
 function addComponent(item: CatalogItem) {
   const newId = `${item.type}_${Date.now()}`;
-  let pin = 12;
-  
-  if (item.type === 'led') pin = 13;
-  else if (item.type === 'button') pin = 14;
-  else if (item.type === 'oled') pin = 21;
   
   const newItem: ComponentInstance = {
     id: newId,
     type: item.type,
     name: item.name,
-    pin
+    pinConnections: getDefaultPinConnections(item.type),
+    props: getDefaultProps(item.type)
   };
-  
-  if (item.type === 'led' || item.type === 'button') {
-    newItem.color = 'red';
-  }
-  if (item.type === 'button') {
-    newItem.activeLow = true;
-  }
   
   activeComponents.value.push(newItem);
   selectedCompId.value = newId;
@@ -674,24 +698,42 @@ function selectComponent(comp: ComponentInstance) {
   selectedCompId.value = comp.id;
 }
 
+function handleButtonPress(comp: ComponentInstance) {
+  const signalPin = comp.pinConnections['1.l'];
+  if (typeof signalPin === 'number') {
+    setPinIdeal(signalPin, comp.props.activeLow ? false : true);
+  }
+}
+
+function handleButtonRelease(comp: ComponentInstance) {
+  const signalPin = comp.pinConnections['1.l'];
+  if (typeof signalPin === 'number') {
+    setPinIdeal(signalPin, comp.props.activeLow ? true : false);
+  }
+}
+
 function getPinLabel(comp: ComponentInstance) {
-  if (comp.type === 'oled') return 'SDA:21/SCL:22';
-  return comp.pin.toString();
+  const connections = comp.pinConnections;
+  const digitalPins = Object.entries(connections)
+    .filter(([, val]) => typeof val === 'number')
+    .map(([name, val]) => `${name}:${val}`);
+  if (digitalPins.length === 0) return 'No GPIO';
+  return digitalPins.join(', ');
 }
 
 // Watch active components to register them in worker
 watch(activeComponents, (comps) => {
   const pins: number[] = [];
-  let oledActive = false;
   
   comps.forEach(c => {
-    if (c.type === 'led') pins.push(c.pin);
-    if (c.type === 'button') pins.push(c.pin);
-    if (c.type === 'ultrasonic') pins.push(c.pin);
-    if (c.type === 'oled') oledActive = true;
+    Object.values(c.pinConnections).forEach(val => {
+      if (typeof val === 'number') {
+        pins.push(val);
+      }
+    });
   });
   
-  observePins(pins, oledActive);
+  observePins(pins, comps);
 }, { deep: true, immediate: true });
 
 // Simulation handlers
@@ -706,16 +748,15 @@ function toggleSimulation() {
 function handleReset() {
   resetSimulation();
   setTimeout(() => {
-    // Re-register components and restart
     const pins: number[] = [];
-    let oledActive = false;
     activeComponents.value.forEach(c => {
-      if (c.type === 'led') pins.push(c.pin);
-      if (c.type === 'button') pins.push(c.pin);
-      if (c.type === 'ultrasonic') pins.push(c.pin);
-      if (c.type === 'oled') oledActive = true;
+      Object.values(c.pinConnections).forEach(val => {
+        if (typeof val === 'number') {
+          pins.push(val);
+        }
+      });
     });
-    observePins(pins, oledActive);
+    observePins(pins, activeComponents.value);
     injectFaults();
   }, 100);
 }
@@ -729,28 +770,54 @@ function injectFaults() {
 }
 
 function toggleWireBreak() {
-  // If wire cut, inject Hi-Z (false state) on LED pin 13 to mock cut wire
   const led = activeComponents.value.find(c => c.type === 'led');
   if (led) {
-    setPinIdeal(led.pin, !wireBroken.value);
+    const anodePin = led.pinConnections.A;
+    if (typeof anodePin === 'number') {
+      setPinIdeal(anodePin, !wireBroken.value);
+    }
   }
 }
 
-// Canvas layouts helpers
+// Canvas layouts helpers - Using SVG viewBox coordinate system (0-800, 0-500)
 function getCanvasX(comp: ComponentInstance): number {
-  if (comp.type === 'led') return 80;
-  if (comp.type === 'button') return 80;
-  if (comp.type === 'oled') return 580;
-  if (comp.type === 'ultrasonic') return 80;
-  return 50;
+  const positions: Record<string, { x: number; y: number }> = {
+    led: { x: 50, y: 60 },
+    button: { x: 50, y: 200 },
+    oled: { x: 580, y: 80 },
+    ultrasonic: { x: 50, y: 340 },
+  };
+  return positions[comp.type]?.x ?? 50;
 }
 
 function getCanvasY(comp: ComponentInstance): number {
-  if (comp.type === 'led') return 80;
-  if (comp.type === 'button') return 220;
-  if (comp.type === 'oled') return 120;
-  if (comp.type === 'ultrasonic') return 360;
-  return 50;
+  const positions: Record<string, { x: number; y: number }> = {
+    led: { x: 50, y: 60 },
+    button: { x: 50, y: 200 },
+    oled: { x: 580, y: 80 },
+    ultrasonic: { x: 50, y: 340 },
+  };
+  return positions[comp.type]?.y ?? 50;
+}
+
+function getComponentWidth(comp: ComponentInstance): number {
+  const sizes: Record<string, { width: number; height: number }> = {
+    led: { width: 50, height: 60 },
+    button: { width: 80, height: 60 },
+    oled: { width: 128, height: 64 },
+    ultrasonic: { width: 45, height: 110 },
+  };
+  return sizes[comp.type]?.width ?? 80;
+}
+
+function getComponentHeight(comp: ComponentInstance): number {
+  const sizes: Record<string, { width: number; height: number }> = {
+    led: { width: 50, height: 60 },
+    button: { width: 80, height: 60 },
+    oled: { width: 128, height: 64 },
+    ultrasonic: { width: 45, height: 110 },
+  };
+  return sizes[comp.type]?.height ?? 60;
 }
 
 function getWireColor(comp: ComponentInstance): string {
@@ -761,99 +828,177 @@ function getWireColor(comp: ComponentInstance): string {
   return '#ffffff';
 }
 
-function getWirePath(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary'): string {
-  const peripheralX = getCanvasX(comp);
-  const peripheralY = getCanvasY(comp);
-  
-  let startX = peripheralX;
-  let startY = peripheralY + 40;
-  
-  // Board input pins
-  let destX = 307;
-  let destY = 272; // default to GND
-  
-  if (comp.type === 'led') {
-    if (mode === 'primary') {
-      startX = peripheralX + 25;
-      startY = peripheralY + 42; // Anode
-      
-      const targetPin = comp.pin;
-      if (targetPin === 12) { destX = 307; destY = 182; }
-      else if (targetPin === 13) { destX = 307; destY = 212; }
-      else if (targetPin === 14) { destX = 307; destY = 242; }
-    } else if (mode === 'gnd') {
-      startX = peripheralX + 15;
-      startY = peripheralY + 42; // Cathode
-      destX = 307;
-      destY = 272; // GND
+function getPinPosition(pin: number): { x: number; y: number } {
+  const pinMap: Record<number, { x: number; y: number }> = {
+    12: { x: 317, y: 162 },
+    13: { x: 317, y: 192 },
+    14: { x: 317, y: 222 },
+    21: { x: 487, y: 162 },
+    22: { x: 487, y: 192 },
+  };
+  return pinMap[pin] || { x: 317, y: 252 };
+}
+
+function getPowerPinPosition(powerType: string): { x: number; y: number } {
+  if (powerType === 'VCC' || powerType === '3V3') {
+    return { x: 487, y: 222 };
+  }
+  return { x: 317, y: 252 };
+}
+
+function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x: number; y: number } {
+  const baseX = getCanvasX(comp);
+  const baseY = getCanvasY(comp);
+  const config = peripheralConfigs[comp.type];
+  const pinDef = config?.pins.find(p => p.name === pinName);
+  const offsetX = pinDef ? pinDef.relX : 0;
+  const offsetY = pinDef ? pinDef.relY : 0;
+  return { x: baseX + offsetX, y: baseY + offsetY };
+}
+
+function getAllWires(): Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> {
+  const allWires: Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> = [];
+  activeComponents.value.forEach(comp => {
+    const modes: Array<'primary' | 'secondary' | 'vcc' | 'gnd'> = ['primary', 'gnd'];
+    if (comp.type === 'oled' || comp.type === 'ultrasonic') {
+      modes.push('secondary', 'vcc');
     }
-  } 
+    modes.forEach(mode => {
+      const pinMap: Record<string, string> = {
+        led: { primary: 'A', gnd: 'C' },
+        button: { primary: '1.l', gnd: '1.r' },
+        oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
+        ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
+      }[comp.type] || {};
+      const pinName = pinMap[mode];
+      if (pinName && comp.pinConnections[pinName] !== null) {
+        allWires.push({ comp, mode });
+      }
+    });
+  });
+  return allWires;
+}
+
+function getWirePoints(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd'): { start: { x: number; y: number }, end: { x: number; y: number } } | null {
+  const pinMap: Record<string, string> = {
+    led: { primary: 'A', gnd: 'C' },
+    button: { primary: '1.l', gnd: '1.r' },
+    oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
+    ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
+  }[comp.type] || {};
   
-  else if (comp.type === 'button') {
-    if (mode === 'primary') {
-      startX = peripheralX + 67;
-      startY = peripheralY + 13; // Right pin (1.r)
-      
-      const targetPin = comp.pin;
-      if (targetPin === 12) { destX = 307; destY = 182; }
-      else if (targetPin === 13) { destX = 307; destY = 212; }
-      else if (targetPin === 14) { destX = 307; destY = 242; }
-    } else if (mode === 'gnd') {
-      startX = peripheralX + 0;
-      startY = peripheralY + 13; // Left pin (1.l)
-      destX = 307;
-      destY = 272; // GND
-    }
-  } 
+  const pinName = pinMap[mode];
+  if (!pinName) return null;
   
-  else if (comp.type === 'oled') {
-    if (mode === 'primary') {
-      startX = peripheralX + 36.5;
-      startY = peripheralY + 12.5; // SDA
-      destX = 477;
-      destY = 182; // IO21
-    } else if (mode === 'secondary') {
-      startX = peripheralX + 45.5;
-      startY = peripheralY + 12.5; // SCL
-      destX = 477;
-      destY = 212; // IO22
-    } else if (mode === 'vcc') {
-      startX = peripheralX + 83.5;
-      startY = peripheralY + 12.5; // 3V3
-      destX = 477;
-      destY = 242; // 3V3
-    } else if (mode === 'gnd') {
-      startX = peripheralX + 103.5;
-      startY = peripheralY + 12; // GND
-      destX = 307;
-      destY = 272; // GND
-    }
-  } 
+  const connection = comp.pinConnections[pinName];
+  if (connection === null || connection === undefined) return null;
+
+  const start = getPeripheralPinPosition(comp, pinName);
+  let end = { x: 307, y: 272 };
   
-  else if (comp.type === 'ultrasonic') {
-    if (mode === 'primary') {
-      startX = peripheralX + 91.3;
-      startY = peripheralY + 94.5; // Echo
-      
-      const targetPin = comp.pin;
-      if (targetPin === 12) { destX = 307; destY = 182; }
-      else if (targetPin === 13) { destX = 307; destY = 212; }
-      else if (targetPin === 14) { destX = 307; destY = 242; }
-    } else if (mode === 'vcc') {
-      startX = peripheralX + 71.3;
-      startY = peripheralY + 94.5; // VCC
-      destX = 477;
-      destY = 242; // 3V3
-    } else if (mode === 'gnd') {
-      startX = peripheralX + 101.3;
-      startY = peripheralY + 94.5; // GND
-      destX = 307;
-      destY = 272; // GND
-    }
+  if (typeof connection === 'number') {
+    end = getPinPosition(connection);
+  } else if (connection === 'VCC' || connection === '3V3') {
+    end = getPowerPinPosition(connection);
+  } else if (connection === 'GND') {
+    end = getPowerPinPosition('GND');
+  } else {
+    return null;
   }
   
-  return `M ${startX} ${startY} C ${(startX+destX)/2} ${startY}, ${(startX+destX)/2} ${destY}, ${destX} ${destY}`;
+  return { start, end };
 }
+
+function getWireLane(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd'): number {
+  const allWires = getAllWires();
+  const index = allWires.findIndex(w => w.comp.id === comp.id && w.mode === mode);
+  return index >= 0 ? index : 0;
+}
+
+function getWirePath(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary'): string {
+  const pts = getWirePoints(comp, mode);
+  if (!pts) return '';
+
+  const pinMap: Record<string, string> = {
+    led: { primary: 'A', gnd: 'C' },
+    button: { primary: '1.l', gnd: '1.r' },
+    oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
+    ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
+  }[comp.type] || {};
+  const pinName = pinMap[mode];
+
+  const lane = getWireLane(comp, mode);
+
+  // Exit directions
+  let startDir: 'left' | 'right' | 'up' | 'down' = 'down';
+  if (comp.type === 'button') {
+    if (pinName.endsWith('.l')) startDir = 'left';
+    else if (pinName.endsWith('.r')) startDir = 'right';
+  }
+
+  const endDir = pts.end.x < 400 ? 'left' : 'right';
+
+  return generateSmartOrthogonalPath(pts.start, pts.end, startDir, endDir, lane);
+}
+
+const wiresToRender = computed(() => {
+  const list: Array<{
+    id: string;
+    path: string;
+    color: string;
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+  }> = [];
+
+  activeComponents.value.forEach(comp => {
+    const modes: Array<'primary' | 'secondary' | 'vcc' | 'gnd'> = ['primary', 'gnd'];
+    if (comp.type === 'oled' || comp.type === 'ultrasonic') {
+      modes.push('secondary', 'vcc');
+    }
+
+    modes.forEach(mode => {
+      const pinMap: Record<string, string> = {
+        led: { primary: 'A', gnd: 'C' },
+        button: { primary: '1.l', gnd: '1.r' },
+        oled: { primary: 'DATA', secondary: 'CLK', vcc: '3V3', gnd: 'GND' },
+        ultrasonic: { primary: 'ECHO', secondary: 'TRIG', vcc: 'VCC', gnd: 'GND' },
+      }[comp.type] || {};
+      
+      const pinName = pinMap[mode];
+      if (!pinName || comp.pinConnections[pinName] === null || comp.pinConnections[pinName] === undefined) {
+        return;
+      }
+
+      const pts = getWirePoints(comp, mode);
+      if (!pts) return;
+
+      const path = getWirePath(comp, mode);
+      if (!path) return;
+
+      // Color mapping
+      let color = '#ffffff';
+      if (mode === 'vcc') {
+        color = '#ef4444'; // Red for VCC
+      } else if (mode === 'gnd') {
+        color = '#475569'; // Slate for GND
+      } else if (mode === 'secondary') {
+        color = comp.type === 'oled' ? '#c084fc' : '#f59e0b';
+      } else {
+        color = getWireColor(comp);
+      }
+
+      list.push({
+        id: `${comp.id}-${mode}`,
+        path,
+        color,
+        start: pts.start,
+        end: pts.end
+      });
+    });
+  });
+
+  return list;
+});
 
 // Helpers
 function formatTime(val: string | bigint): string {
@@ -1165,14 +1310,20 @@ onMounted(() => {
 .workspace-content {
   flex: 1;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
+  background: #080c14;
 }
 .canvas-container {
-  width: 100%;
-  height: 100%;
+  width: 800px;
+  height: 580px;
+  position: relative;
+  margin: 0 auto;
 }
 .circuit-svg {
   display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 .sim-grid-container {
   padding: 20px;

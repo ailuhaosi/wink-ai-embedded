@@ -347,13 +347,6 @@ function findAStarPath3D(
       let stepCost = dir.isDiag ? 1.414 : 1.0;
       stepCost += cCost;
 
-      // H-V Layer Direction Bias (Top layer horizontal preference, Bottom layer vertical preference)
-      if (curr.layer === 0 && dir.dy !== 0 && dir.dx === 0) {
-        stepCost += 0.3;
-      } else if (curr.layer === 1 && dir.dx !== 0 && dir.dy === 0) {
-        stepCost += 0.3;
-      }
-
       const hasTurned = (curr.dir.dx !== 0 || curr.dir.dy !== 0) && (curr.dir.dx !== dir.dx || curr.dir.dy !== dir.dy);
       if (hasTurned) {
         stepCost += 1.5; // Turn penalty (15px equivalent)

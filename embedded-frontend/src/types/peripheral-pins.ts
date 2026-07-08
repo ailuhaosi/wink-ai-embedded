@@ -540,7 +540,8 @@ export function generateSmartPCBPath(
   obstacles?: Obstacle[],
   channelOccupancyMap?: Map<string, number>,
   signalType?: 'digital' | 'i2c' | 'power',
-  waypoints?: Point[]
+  waypoints?: Point[],
+  wireStyle: 'pcb' | 'curved' = 'pcb'
 ): WirePathResult {
   const isPower = signalType === 'power';
   const width = isPower ? 4.0 : 2.2;
@@ -633,9 +634,15 @@ export function generateSmartPCBPath(
       vias.push({ x: pt.x, y: pt.y });
 
       const simplified = simplifyPath(currentPts);
-      const chamfered = chamferPathCorners(simplified, 8);
+      let d = '';
+      if (wireStyle === 'curved') {
+        d = pointsToSmoothSvgPath(simplified, 20);
+      } else {
+        const chamfered = chamferPathCorners(simplified, 8);
+        d = pointsToSvgPath(chamfered);
+      }
       segments.push({
-        d: pointsToSvgPath(chamfered),
+        d,
         layer: currentLayer
       });
 
@@ -648,9 +655,15 @@ export function generateSmartPCBPath(
 
   if (currentPts.length > 0) {
     const simplified = simplifyPath(currentPts);
-    const chamfered = chamferPathCorners(simplified, 8);
+    let d = '';
+    if (wireStyle === 'curved') {
+      d = pointsToSmoothSvgPath(simplified, 20);
+    } else {
+      const chamfered = chamferPathCorners(simplified, 8);
+      d = pointsToSvgPath(chamfered);
+    }
     segments.push({
-      d: pointsToSvgPath(chamfered),
+      d,
       layer: currentLayer
     });
   }

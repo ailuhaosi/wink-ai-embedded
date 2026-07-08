@@ -36,6 +36,14 @@
         </div>
 
         <div class="control-group">
+          <label>Wire Style:</label>
+          <select v-model="wireStyle" class="select font-mono">
+            <option value="pcb">45° PCB Trace</option>
+            <option value="curved">Fritzing Curved</option>
+          </select>
+        </div>
+
+        <div class="control-group">
           <label>Time:</label>
           <span class="time-display font-mono">{{ formatTime(clockUs) }} ms</span>
         </div>
@@ -619,6 +627,8 @@ const catalog = ref<CatalogItem[]>([
   { type: 'ultrasonic', name: 'HC-SR04 Sensor', desc: 'Ultrasonic distance range sensor.' }
 ]);
 
+const wireStyle = ref<'pcb' | 'curved'>('pcb');
+
 const activeComponents = ref<ComponentInstance[]>([
   { 
     id: 'led1', 
@@ -1084,7 +1094,7 @@ function getWirePCBPath(
 
   const signalType = (mode === 'vcc' || mode === 'gnd') ? 'power' : (mode === 'secondary' ? 'i2c' : 'digital');
 
-  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints);
+  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints, wireStyle.value);
 }
 
 const wiresToRender = computed(() => {

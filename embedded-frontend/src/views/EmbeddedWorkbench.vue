@@ -648,7 +648,6 @@ import {
   availableGPIOs,
   powerOptions,
   PinConnectionValue,
-  generateSmartOrthogonalPath,
   generateSmartPCBPath,
   rotatePinOffset,
   Obstacle,
@@ -1570,7 +1569,7 @@ function getWirePCBPath(
 
   const signalType = netDef?.signalType || 'digital';
 
-  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints, 'pcb');
+  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints);
 }
 
 const wiresToRender = computed(() => {

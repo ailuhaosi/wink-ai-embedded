@@ -436,11 +436,7 @@ function findAStarPath3D(
     { dx: 0, dy: -1, isDiag: false },
     { dx: 0, dy: 1, isDiag: false },
     { dx: -1, dy: 0, isDiag: false },
-    { dx: 1, dy: 0, isDiag: false },
-    { dx: -1, dy: -1, isDiag: true },
-    { dx: 1, dy: -1, isDiag: true },
-    { dx: -1, dy: 1, isDiag: true },
-    { dx: 1, dy: 1, isDiag: true }
+    { dx: 1, dy: 0, isDiag: false }
   ];
 
   let iterations = 0;
@@ -497,14 +493,6 @@ function findAStarPath3D(
         continue;
       }
 
-      if (dir.isDiag) {
-        const side1Key = `${curr.x + dir.dx},${curr.y}`;
-        const side2Key = `${curr.x},${curr.y + dir.dy}`;
-        if (blocked.has(side1Key) && blocked.has(side2Key)) {
-          continue;
-        }
-      }
-
       const gridKey = `${nx},${ny}`;
       if (blocked.has(gridKey) && !escapeCells.has(gridKey)) {
         continue;
@@ -515,7 +503,7 @@ function findAStarPath3D(
         continue;
       }
 
-      let stepCost = dir.isDiag ? 1.414 : 1.0;
+      let stepCost = 1.0;
       stepCost += cCost;
 
       const hasTurned = (curr.dir.dx !== 0 || curr.dir.dy !== 0) && (curr.dir.dx !== dir.dx || curr.dir.dy !== dir.dy);
@@ -649,11 +637,14 @@ export function generateFallbackOrthogonalPath(
   endDir: 'left' | 'right' | 'up' | 'down',
   lane: number
 ): Point[] {
-  const extDist = 15 + lane * 5;
+  const channelSpacing = 8;
+  const extDist = 20 + lane * channelSpacing;
   const boardLeft = boardDescriptor.x;
   const boardRight = boardDescriptor.x + boardDescriptor.width;
   const boardTop = boardDescriptor.y;
   const boardBottom = boardDescriptor.y + boardDescriptor.height;
+  const boardCenterX = boardLeft + (boardRight - boardLeft) / 2;
+  const boardCenterY = boardTop + (boardBottom - boardTop) / 2;
 
   const p1 = { x: start.x, y: start.y };
   if (startDir === 'left') p1.x -= extDist;
@@ -669,22 +660,103 @@ export function generateFallbackOrthogonalPath(
 
   const points: Point[] = [start, p1];
 
-  if (start.x < boardLeft && end.x <= boardLeft + 10) {
-    const xChan = boardLeft - 25 - lane * 5;
+  const startSide = start.x < boardCenterX ? 'left' : 'right';
+  const endSide = end.x < boardCenterX ? 'left' : 'right';
+
+  if (startSide === endSide) {
+    const channelOffset = lane * channelSpacing;
+    
+    if (startSide === 'left') {
+      const xChan = boardLeft - 30 - channelOffset;
+      points.push({ x: xChan, y: p1.y });
+      points.push({ x: xChan, y: p2.y });
+    } else {
+      const xChan = boardRight + 30 + channelOffset;
+      points.push({ x: xChan, y: p1.y });
+      points.push({ x: xChan, y: p2.y });
+    }
+  } else {
+    const startAbove = start.y < boardCenterY;
+    const bypassY = startAbove 
+      ? boardTop - 40 - lane * channelSpacing 
+      : boardBottom + 40 + lane * channelSpacing;
+    
+    if (startSide === 'left') {
+      const xLeft = boardLeft - 30;
+      const xRight = boardRight + 30;
+      points.push({ x: xLeft, y: p1.y });
+      points.push({ x: xLeft, y: bypassY });
+      points.push({ x: xRight, y: bypassY });
+      points.push({ x: xRight, y: p2.y });
+    } else {
+      const xLeft = boardLeft - 30;
+      const xRight = boardRight + 30;
+      points.push({ x: xRight, y: p1.y });
+      points.push({ x: xRight, y: bypassY });
+      points.push({ x: xLeft, y: bypassY });
+      points.push({ x: xLeft, y: p2.y });
+    }
+  }
+
+  points.push(p2);
+  points.push(end);
+  return points;
+}
+
+function generateChannelPath(
+  start: Point,
+  end: Point,
+  startDir: 'left' | 'right' | 'up' | 'down',
+  endDir: 'left' | 'right' | 'up' | 'down',
+  lane: number
+): Point[] {
+  const channelSpacing = 10;
+  const boardLeft = boardDescriptor.x;
+  const boardRight = boardDescriptor.x + boardDescriptor.width;
+  const boardTop = boardDescriptor.y;
+  const boardBottom = boardDescriptor.y + boardDescriptor.height;
+  const boardCenterX = (boardLeft + boardRight) / 2;
+  const boardCenterY = (boardTop + boardBottom) / 2;
+
+  const extDist = 25 + lane * channelSpacing;
+
+  const p1 = { x: start.x, y: start.y };
+  if (startDir === 'left') p1.x -= extDist;
+  else if (startDir === 'right') p1.x += extDist;
+  else if (startDir === 'up') p1.y -= extDist;
+  else if (startDir === 'down') p1.y += extDist;
+
+  const p2 = { x: end.x, y: end.y };
+  if (endDir === 'left') p2.x -= extDist;
+  else if (endDir === 'right') p2.x += extDist;
+  else if (endDir === 'up') p2.y -= extDist;
+  else if (endDir === 'down') p2.y += extDist;
+
+  const points: Point[] = [start, p1];
+
+  const isStartLeft = start.x < boardCenterX;
+  const isEndLeft = end.x < boardCenterX;
+  const isStartTop = start.y < boardCenterY;
+
+  const laneOffset = lane * channelSpacing;
+
+  if (isStartLeft && isEndLeft) {
+    const xChan = boardLeft - 35 - laneOffset;
     points.push({ x: xChan, y: p1.y });
     points.push({ x: xChan, y: p2.y });
-  } else if (start.x > boardRight && end.x >= boardRight - 10) {
-    const xChan = boardRight + 25 + lane * 5;
+  } else if (!isStartLeft && !isEndLeft) {
+    const xChan = boardRight + 35 + laneOffset;
     points.push({ x: xChan, y: p1.y });
     points.push({ x: xChan, y: p2.y });
   } else {
-    const bypassY = start.y < (boardTop + boardBottom) / 2
-      ? boardTop - 30 - lane * 5
-      : boardBottom + 30 + lane * 5;
-    const xLeft = boardLeft - 25 - lane * 5;
-    const xRight = boardRight + 25 + lane * 5;
+    const bypassY = isStartTop 
+      ? boardTop - 50 - laneOffset 
+      : boardBottom + 50 + laneOffset;
+    
+    const xLeft = boardLeft - 35;
+    const xRight = boardRight + 35;
 
-    if (start.x < boardLeft) {
+    if (isStartLeft) {
       points.push({ x: xLeft, y: p1.y });
       points.push({ x: xLeft, y: bypassY });
       points.push({ x: xRight, y: bypassY });
@@ -743,6 +815,68 @@ export function generateSmartPCBPath(
   else if (endDir === 'up') p2.y -= extDistEnd;
   else if (endDir === 'down') p2.y += extDistEnd;
 
+  if (wireStyle === 'curved') {
+    const channelSpacing = 6;
+    if (endDir === 'left' || endDir === 'right') {
+      const spreadY = end.y + lane * channelSpacing;
+      p2.y = spreadY;
+    } else {
+      const spreadX = end.x + lane * channelSpacing;
+      p2.x = spreadX;
+    }
+  }
+
+  if (wireStyle === 'curved') {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    const tangent = dist > 0 ? { dx: dx / dist, dy: dy / dist } : { dx: 0, dy: 1 };
+    const normal = { dx: -tangent.dy, dy: tangent.dx };
+
+    const curveStrength = Math.min(dist * 0.25, 60);
+    const fanOffset = lane * 8;
+
+    const midX = (p1.x + p2.x) / 2;
+    const midY = (p1.y + p2.y) / 2;
+
+    const offsetX = normal.dx * curveStrength + tangent.dx * fanOffset * 0.5;
+    const offsetY = normal.dy * curveStrength + tangent.dy * fanOffset * 0.5;
+
+    const controlRatio = 0.45;
+
+    const cp1: Point = {
+      x: p1.x + dx * controlRatio + normal.dx * curveStrength * 0.6,
+      y: p1.y + dy * controlRatio + normal.dy * curveStrength * 0.6
+    };
+
+    const cp2: Point = {
+      x: p2.x - dx * controlRatio + normal.dx * curveStrength * 0.6,
+      y: p2.y - dy * controlRatio + normal.dy * curveStrength * 0.6
+    };
+
+    const points: Point[] = [
+      start,
+      p1,
+      cp1,
+      cp2,
+      p2,
+      end
+    ];
+
+    const d = pointsToSmoothSvgPath(points, 12);
+
+    const teardrops: string[] = [];
+    if (points.length > 2) {
+      const tStart = generateTeardropPath(start, points[1], 5.5, 12);
+      if (tStart) teardrops.push(tStart);
+      const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
+      if (tEnd) teardrops.push(tEnd);
+    }
+
+    return { path: d, width, segments: [{ d, layer: 0 }], vias: [], teardrops };
+  }
+
   let rawPath3D: Array<{ x: number; y: number; layer: number }> = [];
 
   let initDir = { dx: 0, dy: 0 };
@@ -794,12 +928,13 @@ export function generateSmartPCBPath(
   }
 
   if (rawPath3D.length === 0) {
-    const fallback2D = generateFallbackOrthogonalPath(start, end, startDir, endDir, lane);
-    rawPath3D = fallback2D.map((p: Point) => ({ x: p.x, y: p.y, layer: 0 }));
+    const channel2D = generateChannelPath(start, end, startDir, endDir, lane);
+    rawPath3D = channel2D.map((p: Point) => ({ x: p.x, y: p.y, layer: 0 }));
   } else {
     rawPath3D = [
       { x: start.x, y: start.y, layer: 0 },
       ...rawPath3D,
+      { x: p2.x, y: p2.y, layer: 0 },
       { x: end.x, y: end.y, layer: 0 }
     ];
   }
@@ -816,13 +951,8 @@ export function generateSmartPCBPath(
       vias.push({ x: pt.x, y: pt.y });
 
       const simplified = simplifyPath(currentPts);
-      let d = '';
-      if (wireStyle === 'curved') {
-        d = pointsToSmoothSvgPath(simplified, 20);
-      } else {
-        const chamfered = chamferPathCorners(simplified, 8);
-        d = pointsToSvgPath(chamfered);
-      }
+      const chamfered = chamferPathCorners(simplified, 8);
+      const d = pointsToSvgPath(chamfered);
       segments.push({
         d,
         layer: currentLayer
@@ -837,13 +967,8 @@ export function generateSmartPCBPath(
 
   if (currentPts.length > 0) {
     const simplified = simplifyPath(currentPts);
-    let d = '';
-    if (wireStyle === 'curved') {
-      d = pointsToSmoothSvgPath(simplified, 20);
-    } else {
-      const chamfered = chamferPathCorners(simplified, 8);
-      d = pointsToSvgPath(chamfered);
-    }
+    const chamfered = chamferPathCorners(simplified, 8);
+    const d = pointsToSvgPath(chamfered);
     segments.push({
       d,
       layer: currentLayer
@@ -1178,4 +1303,183 @@ function simplifyPath(pts: Point[]): Point[] {
 export function pointsToSvgPath(pts: Point[]): string {
   if (pts.length < 2) return '';
   return `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
+}
+
+function hybridPathToSvgPath(pts: Point[], cornerRadius: number = 10): string {
+  if (pts.length < 2) return '';
+  if (pts.length === 2) {
+    return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+  }
+
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const next = pts[i + 1];
+
+    const dx1 = curr.x - prev.x;
+    const dy1 = curr.y - prev.y;
+    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+
+    const dx2 = next.x - curr.x;
+    const dy2 = next.y - curr.y;
+    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+
+    if (len1 === 0 || len2 === 0) {
+      d += ` L ${curr.x} ${curr.y}`;
+      continue;
+    }
+
+    const dot = (dx1 * dx2 + dy1 * dy2) / (len1 * len2);
+    const isOrthogonal = Math.abs(dot) < 0.1;
+
+    if (isOrthogonal) {
+      const r = Math.min(cornerRadius, len1 / 2, len2 / 2);
+
+      const xStart = curr.x - (dx1 / len1) * r;
+      const yStart = curr.y - (dy1 / len1) * r;
+      const xEnd = curr.x + (dx2 / len2) * r;
+      const yEnd = curr.y + (dy2 / len2) * r;
+
+      d += ` L ${xStart} ${yStart} Q ${curr.x} ${curr.y} ${xEnd} ${yEnd}`;
+    } else {
+      d += ` L ${curr.x} ${curr.y}`;
+    }
+  }
+
+  d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+  return d;
+}
+
+export interface HybridPathInfo {
+  path: string;
+  width: number;
+  segments: Array<{ d: string; layer: number }>;
+  vias: Array<{ x: number; y: number }>;
+  teardrops: Array<string>;
+  centerLine: Point[];
+  directionAngle: number;
+}
+
+function calculateDirectionAngle(start: Point, end: Point): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  return Math.atan2(dy, dx);
+}
+
+export function areAnglesParallel(angle1: number, angle2: number, tolerance: number = 0.3): boolean {
+  const diff = Math.abs(angle1 - angle2);
+  return diff < tolerance || Math.abs(diff - Math.PI) < tolerance;
+}
+
+export function generateHybridBusPath(
+  start: Point,
+  end: Point,
+  startDir: 'left' | 'right' | 'up' | 'down',
+  endDir: 'left' | 'right' | 'up' | 'down',
+  lane: number,
+  signalType?: 'digital' | 'i2c' | 'power',
+  channelOccupancyMap?: Map<string, number>,
+  boardCenterX?: number,
+  boardCenterY?: number,
+  cableExitX?: number,
+  cableExitY?: number,
+  convergenceX?: number,
+  convergenceY?: number,
+  componentBounds?: { x: number; y: number; width: number; height: number }
+): HybridPathInfo {
+  let width = 2.2;
+  switch (signalType) {
+    case 'power':
+      width = 3.5;
+      break;
+    case 'i2c':
+      width = 1.5;
+      break;
+    case 'digital':
+    default:
+      width = 2.0;
+      break;
+  }
+
+  const extDistStart = 25 + lane * 4;
+  const extDistEnd = 15 + lane * 4;
+
+  const p1 = { x: start.x, y: start.y };
+  if (startDir === 'left') p1.x -= extDistStart;
+  else if (startDir === 'right') p1.x += extDistStart;
+  else if (startDir === 'up') p1.y -= extDistStart;
+  else if (startDir === 'down') p1.y += extDistStart;
+
+  const p2 = { x: end.x, y: end.y };
+  if (endDir === 'left') p2.x -= extDistEnd;
+  else if (endDir === 'right') p2.x += extDistEnd;
+  else if (endDir === 'up') p2.y -= extDistEnd;
+  else if (endDir === 'down') p2.y += extDistEnd;
+
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  const tangent = dist > 0 ? { dx: dx / dist, dy: dy / dist } : { dx: 0, dy: 1 };
+  const normal = { dx: -tangent.dy, dy: tangent.dx };
+
+  const curveStrength = Math.min(dist * 0.25, 60);
+  const fanOffset = lane * 8;
+
+  const midX = (p1.x + p2.x) / 2;
+  const midY = (p1.y + p2.y) / 2;
+
+  const offsetX = normal.dx * curveStrength + tangent.dx * fanOffset * 0.5;
+  const offsetY = normal.dy * curveStrength + tangent.dy * fanOffset * 0.5;
+
+  const controlRatio = 0.45;
+
+  const cp1: Point = {
+    x: p1.x + dx * controlRatio + normal.dx * curveStrength * 0.6,
+    y: p1.y + dy * controlRatio + normal.dy * curveStrength * 0.6
+  };
+
+  const cp2: Point = {
+    x: p2.x - dx * controlRatio + normal.dx * curveStrength * 0.6,
+    y: p2.y - dy * controlRatio + normal.dy * curveStrength * 0.6
+  };
+
+  const points: Point[] = [
+    start,
+    p1,
+    cp1,
+    cp2,
+    p2,
+    end
+  ];
+
+  const centerLine: Point[] = [
+    start,
+    { x: midX + offsetX, y: midY + offsetY },
+    end
+  ];
+
+  const d = pointsToSmoothSvgPath(points, 12);
+
+  const directionAngle = calculateDirectionAngle(p1, p2);
+
+  const teardrops: string[] = [];
+  if (points.length > 2) {
+    const tStart = generateTeardropPath(start, points[1], 5.5, 12);
+    if (tStart) teardrops.push(tStart);
+    const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
+    if (tEnd) teardrops.push(tEnd);
+  }
+
+  return { 
+    path: d, 
+    width, 
+    segments: [{ d, layer: 0 }], 
+    vias: [], 
+    teardrops,
+    centerLine,
+    directionAngle
+  };
 }

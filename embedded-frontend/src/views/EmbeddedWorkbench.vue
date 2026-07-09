@@ -41,6 +41,7 @@
             <option value="pcb">45° PCB Trace</option>
             <option value="curved">Fritzing Curved</option>
             <option value="bus">Bus Strip (Parallel)</option>
+            <option value="hybrid">Hybrid Bus (Rounded)</option>
           </select>
         </div>
         <div class="control-group">
@@ -655,9 +656,12 @@ import {
   generateSmartOrthogonalPath,
   generateSmartPCBPath,
   generateBusStripPath,
+  generateHybridBusPath,
+  areAnglesParallel,
   rotatePinOffset,
   Obstacle,
   WirePathResult,
+  HybridPathInfo,
   NetDefinition
 } from '../types/peripheral-pins';
 
@@ -701,7 +705,7 @@ const catalog = ref<CatalogItem[]>([
   { type: 'ultrasonic', name: 'HC-SR04 Sensor', desc: 'Ultrasonic distance range sensor.' }
 ]);
 
-const wireStyle = ref<'pcb' | 'curved' | 'bus'>('bus');
+const wireStyle = ref<'pcb' | 'curved' | 'bus' | 'hybrid'>('hybrid');
 const routingMode = ref<'auto' | 'manual'>('auto');
 const canvasContainerRef = ref<HTMLElement | null>(null);
 
@@ -1542,7 +1546,15 @@ function getWirePoints(comp: ComponentInstance, mode: 'primary' | 'secondary' | 
 function getWireLane(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd'): number {
   const allWires = getAllWires();
   const index = allWires.findIndex(w => w.comp.id === comp.id && w.mode === mode);
-  return index >= 0 ? index : 0;
+  if (index < 0) return 0;
+  
+  if (wireStyle.value === 'curved') {
+    const compWires = allWires.filter(w => w.comp.id === comp.id);
+    const localIndex = compWires.findIndex(w => w.comp.id === comp.id && w.mode === mode);
+    return localIndex >= 0 ? localIndex : 0;
+  }
+  
+  return index;
 }
 
 function getWirePCBPath(
@@ -1552,7 +1564,7 @@ function getWirePCBPath(
   channelOccupancyMap?: Map<string, number>,
   waypoints?: Point[],
   busChannel?: { cableExitX: number; cableExitY: number; convergenceX: number; convergenceY: number; baseLane: number }
-): WirePathResult | null {
+): WirePathResult | HybridPathInfo | null {
   const pts = getWirePoints(comp, mode);
   if (!pts) return null;
 
@@ -1575,6 +1587,10 @@ function getWirePCBPath(
   const endDir = pts.end.x < boardPosition.value.x + boardDescriptor.width / 2 ? 'left' : 'right';
 
   const signalType = netDef?.signalType || 'digital';
+
+  if (wireStyle.value === 'hybrid') {
+    return generateHybridBusPath(pts.start, pts.end, startDir, endDir, lane, signalType);
+  }
 
   if (wireStyle.value === 'bus' && routingMode.value === 'auto') {
     const boardCenterX = boardPosition.value.x + boardDescriptor.width / 2;
@@ -1692,12 +1708,12 @@ const wiresToRender = computed(() => {
         if (towardBoardX === 'right') {
           cableExitX = getCanvasX(comp) + getComponentWidth(comp) + 15;
           cableExitY = compCenterY;
-          convergenceX = boardCenterX - 95 + (towardBoardX === 'right' ? 1 : -1) * 18;
+          convergenceX = boardCenterX - 95 + 1 * 18;
           convergenceY = boardCenterY + nextChannel * channelSpacing;
         } else {
           cableExitX = getCanvasX(comp) - 15;
           cableExitY = compCenterY;
-          convergenceX = boardCenterX + 95 + (towardBoardX === 'right' ? 1 : -1) * 18;
+          convergenceX = boardCenterX + 95 + (-1) * 18;
           convergenceY = boardCenterY + nextChannel * channelSpacing;
         }
       } else {
@@ -1705,12 +1721,12 @@ const wiresToRender = computed(() => {
           cableExitX = compCenterX;
           cableExitY = getCanvasY(comp) + getComponentHeight(comp) + 15;
           convergenceX = boardCenterX + nextChannel * channelSpacing;
-          convergenceY = boardCenterY - 105 + (towardBoardY === 'down' ? 1 : -1) * 18;
+          convergenceY = boardCenterY - 105 + 1 * 18;
         } else {
           cableExitX = compCenterX;
           cableExitY = getCanvasY(comp) - 15;
           convergenceX = boardCenterX + nextChannel * channelSpacing;
-          convergenceY = boardCenterY + 105 + (towardBoardY === 'down' ? 1 : -1) * 18;
+          convergenceY = boardCenterY + 105 + (-1) * 18;
         }
       }
 
@@ -1743,6 +1759,252 @@ const wiresToRender = computed(() => {
 
   const channelOccupancyMap = new Map<string, number>();
 
+  if (wireStyle.value === 'hybrid') {
+    const hybridWires: Array<{
+      id: string;
+      path: string;
+      color: string;
+      start: { x: number; y: number };
+      end: { x: number; y: number };
+      width: number;
+      segments: Array<{ d: string; layer: number }>;
+      vias: Array<{ x: number; y: number }>;
+      teardrops: Array<string>;
+      isActive: boolean;
+      isDragged: boolean;
+      centerLine: Point[];
+      directionAngle: number;
+      compId: string;
+    }> = [];
+
+    requests.forEach(req => {
+      const pts = getWirePoints(req.comp, req.mode);
+      if (!pts) return;
+
+      const wireId = `${req.compId}-${req.mode}`;
+      const waypoints = wireWaypoints.value[wireId] || [];
+      
+      const isActive = !(routingMode.value === 'manual' && draggedWireId.value && wireId !== draggedWireId.value);
+      const isDragged = wireId === draggedWireId.value;
+      
+      const pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
+      if (!pcbResult) return;
+
+      if (!isDragged) {
+        inactiveWireCache.value[wireId] = {
+          id: wireId,
+          path: pcbResult.path,
+          color: req.color,
+          start: pts.start,
+          end: pts.end,
+          width: pcbResult.width,
+          segments: pcbResult.segments,
+          vias: pcbResult.vias,
+          teardrops: pcbResult.teardrops,
+          isActive: true,
+          isDragged: false
+        };
+      }
+
+      hybridWires.push({
+        id: wireId,
+        path: pcbResult.path,
+        color: req.color,
+        start: pts.start,
+        end: pts.end,
+        width: pcbResult.width,
+        segments: pcbResult.segments,
+        vias: pcbResult.vias,
+        teardrops: pcbResult.teardrops,
+        isActive,
+        isDragged,
+        centerLine: (pcbResult as HybridPathInfo).centerLine || [],
+        directionAngle: (pcbResult as HybridPathInfo).directionAngle || 0,
+        compId: req.compId
+      });
+    });
+
+    const mergedGroups: Array<typeof hybridWires> = [];
+    const groupedByComp = new Map<string, typeof hybridWires>();
+    
+    hybridWires.forEach(wire => {
+      const group = groupedByComp.get(wire.compId) || [];
+      group.push(wire);
+      groupedByComp.set(wire.compId, group);
+    });
+
+    groupedByComp.forEach(group => {
+      if (group.length < 2) {
+        mergedGroups.push(group);
+        return;
+      }
+
+      const parallelGroups: Array<typeof group> = [];
+      const used = new Set<number>();
+
+      for (let i = 0; i < group.length; i++) {
+        if (used.has(i)) continue;
+        
+        const parallelGroup: typeof group = [group[i]];
+        used.add(i);
+        
+        for (let j = i + 1; j < group.length; j++) {
+          if (used.has(j)) continue;
+          
+          if (areAnglesParallel(group[i].directionAngle, group[j].directionAngle, 0.4)) {
+            parallelGroup.push(group[j]);
+            used.add(j);
+          }
+        }
+        
+        parallelGroups.push(parallelGroup);
+      }
+
+      parallelGroups.forEach(parallelGroup => {
+        if (parallelGroup.length < 2) {
+          mergedGroups.push(parallelGroup);
+          return;
+        }
+
+        parallelGroup.sort((a, b) => {
+          const angle = parallelGroup[0].directionAngle;
+          const normalX = -Math.sin(angle);
+          const normalY = Math.cos(angle);
+          
+          const distA = a.centerLine[1]?.x * normalX + a.centerLine[1]?.y * normalY || 0;
+          const distB = b.centerLine[1]?.x * normalX + b.centerLine[1]?.y * normalY || 0;
+          return distA - distB;
+        });
+
+        const midIndex = Math.floor(parallelGroup.length / 2);
+        const centerWire = parallelGroup[midIndex];
+        
+        const totalWidth = parallelGroup.reduce((sum, w) => sum + w.width, 0);
+        const halfWidth = totalWidth / 2;
+        
+        const angle = centerWire.directionAngle;
+        const normalX = -Math.sin(angle);
+        const normalY = Math.cos(angle);
+
+        const mergeMidX = centerWire.centerLine[1]?.x || ((centerWire.start.x + centerWire.end.x) / 2);
+        const mergeMidY = centerWire.centerLine[1]?.y || ((centerWire.start.y + centerWire.end.y) / 2);
+
+        const startMidX = (parallelGroup[0].start.x + parallelGroup[parallelGroup.length - 1].start.x) / 2;
+        const startMidY = (parallelGroup[0].start.y + parallelGroup[parallelGroup.length - 1].start.y) / 2;
+        const endMidX = (parallelGroup[0].end.x + parallelGroup[parallelGroup.length - 1].end.x) / 2;
+        const endMidY = (parallelGroup[0].end.y + parallelGroup[parallelGroup.length - 1].end.y) / 2;
+
+        const startSpread = 20;
+        const endSpread = 20;
+        const mergeStartX = startMidX + normalX * startSpread;
+        const mergeStartY = startMidY + normalY * startSpread;
+        const mergeEndX = endMidX + normalX * endSpread;
+        const mergeEndY = endMidY + normalY * endSpread;
+
+        const dx = mergeEndX - mergeStartX;
+        const dy = mergeEndY - mergeStartY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        const tangent = dist > 0 ? { dx: dx / dist, dy: dy / dist } : { dx: 0, dy: 1 };
+        const perpNormal = { dx: -tangent.dy, dy: tangent.dx };
+
+        const controlRatio = 0.4;
+        
+        const cp1X = mergeStartX + dx * controlRatio + perpNormal.dx * 30;
+        const cp1Y = mergeStartY + dy * controlRatio + perpNormal.dy * 30;
+        const cp2X = mergeEndX - dx * controlRatio + perpNormal.dx * 30;
+        const cp2Y = mergeEndY - dy * controlRatio + perpNormal.dy * 30;
+
+        const mergePath = `M ${mergeStartX} ${mergeStartY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${mergeEndX} ${mergeEndY}`;
+
+        list.push({
+          id: `merged-${parallelGroup.map(w => w.id).join('-')}`,
+          path: mergePath,
+          color: '#64748b',
+          start: { x: mergeStartX, y: mergeStartY },
+          end: { x: mergeEndX, y: mergeEndY },
+          width: totalWidth + 4,
+          segments: [{ d: mergePath, layer: 0 }],
+          vias: [],
+          teardrops: [],
+          isActive: true,
+          isDragged: false
+        });
+
+        parallelGroup.forEach(wire => {
+          const stubStartX = wire.start.x;
+          const stubStartY = wire.start.y;
+          
+          const stubEndX = mergeStartX + perpNormal.dx * ((wire.centerLine[1]?.x || mergeMidX) - mergeMidX);
+          const stubEndY = mergeStartY + perpNormal.dy * ((wire.centerLine[1]?.y || mergeMidY) - mergeMidY);
+
+          const stubDx = stubEndX - stubStartX;
+          const stubDy = stubEndY - stubStartY;
+          const stubDist = Math.sqrt(stubDx * stubDx + stubDy * stubDy);
+          
+          if (stubDist > 5) {
+            const stubTangent = stubDist > 0 ? { dx: stubDx / stubDist, dy: stubDy / stubDist } : { dx: 0, dy: 1 };
+            const stubNormal = { dx: -stubTangent.dy, dy: stubTangent.dx };
+            
+            const stubCp1X = stubStartX + stubDx * 0.5 + stubNormal.dx * 10;
+            const stubCp1Y = stubStartY + stubDy * 0.5 + stubNormal.dy * 10;
+            
+            const stubPath = `M ${stubStartX} ${stubStartY} Q ${stubCp1X} ${stubCp1Y} ${stubEndX} ${stubEndY}`;
+            
+            list.push({
+              id: `${wire.id}-stub-start`,
+              path: stubPath,
+              color: wire.color,
+              start: wire.start,
+              end: { x: stubEndX, y: stubEndY },
+              width: wire.width,
+              segments: [{ d: stubPath, layer: 0 }],
+              vias: [],
+              teardrops: [],
+              isActive: wire.isActive,
+              isDragged: wire.isDragged
+            });
+          }
+
+          const exitStartX = mergeEndX + perpNormal.dx * ((wire.centerLine[1]?.x || mergeMidX) - mergeMidX);
+          const exitStartY = mergeEndY + perpNormal.dy * ((wire.centerLine[1]?.y || mergeMidY) - mergeMidY);
+          const exitEndX = wire.end.x;
+          const exitEndY = wire.end.y;
+
+          const exitDx = exitEndX - exitStartX;
+          const exitDy = exitEndY - exitStartY;
+          const exitDist = Math.sqrt(exitDx * exitDx + exitDy * exitDy);
+          
+          if (exitDist > 5) {
+            const exitTangent = exitDist > 0 ? { dx: exitDx / exitDist, dy: exitDy / exitDist } : { dx: 0, dy: 1 };
+            const exitNormal = { dx: -exitTangent.dy, dy: exitTangent.dx };
+            
+            const exitCp1X = exitStartX + exitDx * 0.5 + exitNormal.dx * 10;
+            const exitCp1Y = exitStartY + exitDy * 0.5 + exitNormal.dy * 10;
+            
+            const exitPath = `M ${exitStartX} ${exitStartY} Q ${exitCp1X} ${exitCp1Y} ${exitEndX} ${exitEndY}`;
+            
+            list.push({
+              id: `${wire.id}-stub-end`,
+              path: exitPath,
+              color: wire.color,
+              start: { x: exitStartX, y: exitStartY },
+              end: wire.end,
+              width: wire.width,
+              segments: [{ d: exitPath, layer: 0 }],
+              vias: [],
+              teardrops: [],
+              isActive: wire.isActive,
+              isDragged: wire.isDragged
+            });
+          }
+        });
+      });
+    });
+
+    return list;
+  }
+
   requests.forEach(req => {
     const pts = getWirePoints(req.comp, req.mode);
     if (!pts) return;
@@ -1758,7 +2020,7 @@ const wiresToRender = computed(() => {
     
     if (isActive) {
       const busChannel = busChannels.get(req.compId);
-      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints, busChannel);
+      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints, busChannel) as WirePathResult | null;
       if (pcbResult && !isDragged) {
         inactiveWireCache.value[wireId] = {
           id: wireId,
@@ -1780,7 +2042,7 @@ const wiresToRender = computed(() => {
         list.push({ ...cachedWire, isActive: false, isDragged: false });
         return;
       }
-      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, undefined, waypoints);
+      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, undefined, waypoints) as WirePathResult | null;
       if (pcbResult) {
         inactiveWireCache.value[wireId] = {
           id: wireId,

@@ -1,0 +1,10 @@
+export const GRID_SNAP = 4;
+export const TRACK_SPACING = 10;
+export const MAX_BUMP_COUNT = 5;
+export const STUB_BASE = 18;
+export const STUB_LANE_STEP = 4;
+export const LOCAL_THRESHOLD = 80;
+export const I2C_BUNDLE_GAP = 8;
+export const GPIO_FANOUT_SPACING = 6;
+export const ROUND_RADIUS = 6;
+export const OBSTACLE_PADDING = 8;

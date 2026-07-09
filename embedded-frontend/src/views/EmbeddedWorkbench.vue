@@ -61,6 +61,11 @@
           </div>
         </div>
 
+        <button @click="tidyRouting" class="btn btn-secondary btn-small" title="重置走线并整理布局">
+          <LayoutGrid class="icon" />
+          <span>Tidy Wires</span>
+        </button>
+
         <div class="control-group">
           <label>Time:</label>
           <span class="time-display font-mono">{{ formatTime(clockUs) }} ms</span>
@@ -165,6 +170,43 @@
               </defs>
               <rect :width="viewWidth" :height="viewHeight" fill="url(#grid)" />
 
+              <!-- Power rail (horizontal, above board — breadboard / schematic convention) -->
+              <line
+                :x1="powerBusVisual.x1"
+                :y1="powerBusVisual.y"
+                :x2="powerBusVisual.x2"
+                :y2="powerBusVisual.y"
+                stroke="rgba(100, 116, 139, 0.22)"
+                stroke-width="8"
+                stroke-linecap="round"
+              />
+              <text
+                :x="powerBusVisual.x1 - 8"
+                :y="powerBusVisual.y - 14"
+                fill="rgba(148, 163, 184, 0.45)"
+                font-size="8"
+                font-family="monospace"
+                text-anchor="end"
+              >PWR</text>
+              <line
+                :x1="routingChannels.leftBus"
+                :y1="routingChannels.topBus"
+                :x2="routingChannels.leftBus"
+                :y2="routingChannels.bottomBus"
+                stroke="rgba(56, 189, 248, 0.08)"
+                stroke-width="4"
+                stroke-linecap="round"
+              />
+              <line
+                :x1="routingChannels.rightBus"
+                :y1="routingChannels.topBus"
+                :x2="routingChannels.rightBus"
+                :y2="routingChannels.bottomBus"
+                stroke="rgba(56, 189, 248, 0.08)"
+                stroke-width="4"
+                stroke-linecap="round"
+              />
+
               <!-- ESP32 Board Node -->
               <g :transform="`translate(${boardPosition.x}, ${boardPosition.y})`" class="board-node board-draggable" :class="{ 'board-dragging': isDraggingBoard }" @mousedown="startDragBoard($event)">
                 <!-- Outer board shadow and body -->
@@ -205,50 +247,115 @@
                 </g>
               </g>
 
-              <!-- Connection Wires -->
-              <g v-for="wire in wiresToRender" :key="wire.id" class="smart-wire-group" :class="{ 'selected-wire': selectedWireId === wire.id, 'inactive-wire': !wire.isActive }">
-                <!-- 0. Teardrops (Pads transitions) -->
-                <path 
-                  v-for="(td, idx) in wire.teardrops" 
-                  :key="'td-' + idx" 
-                  :d="td" 
-                  :fill="wire.color" 
-                  opacity="0.8" 
+              <!-- HCTR debug overlay (?routing_debug=true) -->
+              <g v-if="routingDebugOverlay" class="routing-debug-overlay" pointer-events="none">
+                <line
+                  v-for="(track, idx) in routingDebugOverlay.verticalTracks"
+                  :key="'dbg-v-' + idx"
+                  :x1="track.x1"
+                  :y1="track.y1"
+                  :x2="track.x2"
+                  :y2="track.y2"
+                  :stroke="track.stroke"
+                  stroke-width="1"
+                  stroke-dasharray="4,4"
+                  opacity="0.75"
                 />
+                <line
+                  v-for="(track, idx) in routingDebugOverlay.horizontalTracks"
+                  :key="'dbg-h-' + idx"
+                  :x1="track.x1"
+                  :y1="track.y1"
+                  :x2="track.x2"
+                  :y2="track.y2"
+                  stroke="#f87171"
+                  stroke-width="1"
+                  stroke-dasharray="6,3"
+                  opacity="0.75"
+                />
+                <rect
+                  v-for="(seg, idx) in routingDebugOverlay.occupiedRects"
+                  :key="'dbg-occ-' + idx"
+                  :x="seg.x"
+                  :y="seg.y"
+                  :width="seg.width"
+                  :height="seg.height"
+                  fill="rgba(250, 204, 21, 0.22)"
+                  stroke="rgba(250, 204, 21, 0.45)"
+                  stroke-width="0.5"
+                />
+                <text
+                  v-for="(label, idx) in routingDebugOverlay.labels"
+                  :key="'dbg-lbl-' + idx"
+                  :x="label.x"
+                  :y="label.y"
+                  fill="#a5f3fc"
+                  font-size="7"
+                  font-family="monospace"
+                >{{ label.wireId }} ({{ label.topology }})</text>
+              </g>
+
+              <!-- Connection Wires -->
+              <g
+                v-for="wire in wiresToRender"
+                :key="wire.id"
+                class="smart-wire-group"
+                :class="{
+                  'selected-wire': selectedWireId === wire.id,
+                  'inactive-wire': !wire.isActive,
+                  'highlighted-wire': getWireVisual(wire).highlighted,
+                  'dimmed-wire': getWireVisual(wire).dimmed,
+                  'power-wire': wire.signalType === 'power',
+                  'i2c-wire': wire.signalType === 'i2c',
+                }"
+              >
+                <!-- Teardrops: only when wire is selected or being dragged -->
+                <template v-if="selectedWireId === wire.id || wire.isDragged">
+                  <path
+                    v-for="(td, idx) in wire.teardrops"
+                    :key="'td-' + idx"
+                    :d="td"
+                    :fill="wire.color"
+                    opacity="0.8"
+                  />
+                </template>
 
                 <!-- Wire Segments (Top / Bottom Layers) -->
                 <g v-for="(seg, idx) in wire.segments" :key="'seg-' + idx">
-                  <!-- Neon Glow Underlying -->
-                  <path 
-                    :d="seg.d" 
-                    fill="none" 
-                    :stroke="seg.layer === 0 ? wire.color : '#3b82f6'" 
-                    :stroke-width="wire.width + 3" 
-                    :opacity="seg.layer === 0 ? 0.15 : 0.08"
+                  <!-- Glow: selected wire, dragged, or highlighted component bundle -->
+                  <path
+                    v-if="selectedWireId === wire.id || wire.isDragged || getWireVisual(wire).highlighted"
+                    :d="seg.d"
+                    fill="none"
+                    :stroke="seg.layer === 0 ? wire.color : '#3b82f6'"
+                    :stroke-width="wire.width + getWireVisual(wire).widthBoost + 3"
+                    :stroke-opacity="getWireVisual(wire).opacity * (seg.layer === 0 ? 0.2 : 0.1)"
                     :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     filter="url(#neon-glow)"
                   />
                   <!-- Dark outline for crossings -->
-                  <path 
-                    :d="seg.d" 
-                    fill="none" 
-                    stroke="#080c14" 
-                    :stroke-width="wire.width + 2" 
+                  <path
+                    :d="seg.d"
+                    fill="none"
+                    stroke="#080c14"
+                    :stroke-width="wire.width + getWireVisual(wire).widthBoost + (wire.signalType === 'power' ? 1.5 : 1)"
+                    :stroke-opacity="getWireVisual(wire).opacity"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
                   />
                   <!-- Visible wire segment -->
-                  <path 
-                    :d="seg.d" 
-                    fill="none" 
-                    :stroke="seg.layer === 0 ? wire.color : '#3b82f6'" 
-                    :stroke-width="wire.width" 
+                  <path
+                    :d="seg.d"
+                    fill="none"
+                    :stroke="seg.layer === 0 ? wire.color : '#6366f1'"
+                    :stroke-width="wire.width + getWireVisual(wire).widthBoost"
+                    :stroke-opacity="getWireVisual(wire).opacity"
                     stroke-linecap="round"
                     stroke-linejoin="round"
-                    :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
+                    :stroke-dasharray="seg.layer === 1 ? '6,4' : (wire.signalType === 'i2c' ? '4,3' : undefined)"
                   />
                   <!-- Thick transparent path for click strike zone -->
                   <path 
@@ -262,17 +369,17 @@
                   />
                 </g>
 
-                <!-- Vias (Transitions Layer 0 <-> Layer 1) -->
-                <g v-for="(via, idx) in wire.vias" :key="'via-' + idx">
-                  <!-- Outer copper ring -->
-                  <circle :cx="via.x" :cy="via.y" r="5.5" fill="#e2e8f0" stroke="#d97706" stroke-width="1.2" />
-                  <!-- Inner drill hole -->
-                  <circle :cx="via.x" :cy="via.y" r="2.5" fill="#1e293b" />
-                </g>
+                <!-- Vias: only when selected or dragged -->
+                <template v-if="selectedWireId === wire.id || wire.isDragged">
+                  <g v-for="(via, idx) in wire.vias" :key="'via-' + idx">
+                    <circle :cx="via.x" :cy="via.y" r="5.5" fill="#e2e8f0" stroke="#d97706" stroke-width="1.2" />
+                    <circle :cx="via.x" :cy="via.y" r="2.5" fill="#1e293b" />
+                  </g>
+                </template>
 
                 <!-- Start & End connection dots -->
-                <circle :cx="wire.start.x" :cy="wire.start.y" :r="wire.width + 1.2" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
-                <circle :cx="wire.end.x" :cy="wire.end.y" :r="wire.width + 1.2" :fill="wire.color" stroke="#080c14" stroke-width="1.2" />
+                <circle :cx="wire.start.x" :cy="wire.start.y" :r="wire.width + getWireVisual(wire).widthBoost + 1.2" :fill="wire.color" :fill-opacity="getWireVisual(wire).opacity" stroke="#080c14" stroke-width="1.2" />
+                <circle :cx="wire.end.x" :cy="wire.end.y" :r="wire.width + getWireVisual(wire).widthBoost + 1.2" :fill="wire.color" :fill-opacity="getWireVisual(wire).opacity" stroke="#080c14" stroke-width="1.2" />
 
                 <!-- Waypoint draggable handles -->
                 <circle 
@@ -292,6 +399,52 @@
               </g>
             </svg>
 
+            <!-- Common Power Nodes -->
+            <svg class="power-nodes-layer" pointer-events="none">
+              <g v-for="(node, powerType) in commonPowerNodes" :key="node.id">
+                <circle
+                  :cx="node.x"
+                  :cy="node.y"
+                  r="18"
+                  :fill="node.color"
+                  stroke="#080c14"
+                  stroke-width="2"
+                  style="cursor: move; pointer-events: all;"
+                  @mousedown="handlePowerNodeClick($event, powerType)"
+                  :class="{ 'dragging': draggedPowerNodeId === powerType }"
+                />
+                <circle
+                  :cx="node.x"
+                  :cy="node.y"
+                  r="12"
+                  fill="#1e293b"
+                  stroke="#080c14"
+                  stroke-width="1.5"
+                />
+                <text
+                  :x="node.x"
+                  :y="node.y + 4"
+                  fill="white"
+                  font-size="9"
+                  font-weight="bold"
+                  font-family="monospace"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                  style="pointer-events: none;"
+                >{{ node.label }}</text>
+                <circle
+                  :cx="node.x"
+                  :cy="node.y"
+                  r="22"
+                  fill="transparent"
+                  stroke="transparent"
+                  stroke-width="10"
+                  style="cursor: move; pointer-events: all;"
+                  @mousedown="handlePowerNodeClick($event, powerType)"
+                />
+              </g>
+            </svg>
+
             <!-- Real-time Interactive Peripherals Positioned on Canvas -->
             <div class="peripherals-layer" :style="{ transform: `scale(${peripheralScaleX}, ${peripheralScaleY})`, transformOrigin: 'top left', width: viewWidth + 'px', height: viewHeight + 'px' }">
             <div
@@ -305,10 +458,9 @@
                 transformOrigin: `${(componentSizes[comp.type]?.width ?? 80) / 2}px ${(componentSizes[comp.type]?.height ?? 60) / 2}px`,
                 zIndex: 10
               }"
-              @click="selectComponent(comp)"
-              @mousedown="startDragComponent($event, comp)"
+              @mousedown.capture="onPeripheralMouseDown($event, comp)"
               class="canvas-peripheral-wrapper"
-              :class="{ 'selected-peripheral': selectedCompId === comp.id, 'dragging': draggedCompId === comp.id }"
+              :class="{ 'selected-peripheral': selectedCompId === comp.id, 'dragging': draggedCompId === comp.id && isComponentDragging }"
             >
               <!-- Rotation toolbar (visible when selected) -->
               <div v-if="selectedCompId === comp.id" class="rotation-toolbar" @mousedown.stop>
@@ -627,7 +779,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { 
-  Play, Pause, RotateCcw, RotateCw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2
+  Play, Pause, RotateCcw, RotateCw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2, LayoutGrid
 } from 'lucide-vue-next';
 import {
   initSimulation, startSimulation, pauseSimulation, resetSimulation,
@@ -648,12 +800,20 @@ import {
   availableGPIOs,
   powerOptions,
   PinConnectionValue,
-  generateSmartPCBPath,
+  generatePowerBusTapPath,
+  generatePowerBusTrunkPath,
+  getRoutingChannels,
+  getPowerNodeSlots,
   rotatePinOffset,
   Obstacle,
   WirePathResult,
   NetDefinition
 } from '../types/peripheral-pins';
+import { rotateCardinalDirection, resolveBoardBounds, resolveBoardPinEndDir } from '../routing/geometry';
+import { SegmentOccupancyRegistry } from '../routing/segment-occupancy';
+import { buildTrackAssignments } from '../routing/track-allocator';
+import { generateWirePath } from '../routing/wire-routing';
+import type { RoutingChannel, TrackAssignment, WireRouteRequest } from '../routing/types';
 
 // Local Types
 interface CatalogItem {
@@ -677,13 +837,18 @@ interface LayoutPosition {
 }
 
 const defaultPositions: Record<string, { x: number; y: number }> = {
-  led: { x: 50, y: 60 },
-  button: { x: 50, y: 200 },
-  oled: { x: 580, y: 80 },
-  ultrasonic: { x: 50, y: 340 },
+  led: { x: 100, y: 100 },
+  button: { x: 80, y: 240 },
+  oled: { x: 530, y: 120 },
+  ultrasonic: { x: 90, y: 360 },
 };
 
-const layoutState = ref<Record<string, LayoutPosition>>({});
+const layoutState = ref<Record<string, LayoutPosition>>({
+  led1: { x: 100, y: 100 },
+  btn1: { x: 80, y: 240 },
+  oled1: { x: 530, y: 120 },
+  sonar1: { x: 90, y: 360 },
+});
 
 const nextPositionOffset = ref<Record<string, number>>({});
 
@@ -709,6 +874,27 @@ const peripheralScaleY = ref(1);
 function setRoutingMode(mode: 'auto' | 'manual') {
   routingMode.value = mode;
   inactiveWireCache.value = {};
+}
+
+function syncPowerBusLayout(resetPositions = false) {
+  const slots = getPowerNodeSlots(boardPosition.value.x, boardPosition.value.y);
+  const powerKeys = ['VCC', '3V3', 'GND'] as const;
+  for (const key of powerKeys) {
+    const node = commonPowerNodes.value[key];
+    const pos = slots.positions[key];
+    if (!node || !pos) continue;
+    node.y = slots.railY;
+    if (resetPositions) {
+      node.x = pos.x;
+    }
+  }
+}
+
+function tidyRouting() {
+  wireWaypoints.value = {};
+  inactiveWireCache.value = {};
+  selectedWireId.value = null;
+  syncPowerBusLayout(true);
 }
 
 function updateCanvasScale() {
@@ -899,6 +1085,7 @@ function removeComponent(id: string) {
 
 function selectComponent(comp: ComponentInstance) {
   selectedCompId.value = comp.id;
+  selectedWireId.value = null;
 }
 
 function setRotation(comp: ComponentInstance, deg: number) {
@@ -1007,6 +1194,8 @@ interface WireRenderItem {
   segments: Array<{ d: string; layer: number }>;
   vias: Array<{ x: number; y: number }>;
   teardrops: Array<string>;
+  signalType: 'digital' | 'i2c' | 'power';
+  compId?: string;
   isActive?: boolean;
   isDragged?: boolean;
 }
@@ -1021,6 +1210,40 @@ const draggingSegment = ref<{ wireId: string; startIndex: number; endIndex: numb
 const inactiveWireCache = ref<Record<string, WireRenderItem>>({});
 let clickTimer: ReturnType<typeof setTimeout> | null = null;
 let clickCount = 0;
+
+function handlePowerNodeClick(event: MouseEvent, powerType: string) {
+  event.preventDefault();
+  event.stopPropagation();
+  const { x, y } = clientToCanvas(event.clientX, event.clientY);
+  draggedPowerNodeId.value = powerType;
+  wireDragStart.value = { x, y };
+  
+  window.addEventListener('mousemove', handlePowerNodeMouseMove);
+  window.addEventListener('mouseup', handlePowerNodeMouseUp);
+}
+
+function handlePowerNodeMouseMove(event: MouseEvent) {
+  if (!draggedPowerNodeId.value) return;
+
+  const { x, y } = clientToCanvas(event.clientX, event.clientY);
+  const node = commonPowerNodes.value[draggedPowerNodeId.value];
+  const slots = getPowerNodeSlots(boardPosition.value.x, boardPosition.value.y);
+  if (node) {
+    node.x = Math.max(80, Math.min(viewWidth.value - 80, x));
+    node.y = slots.railY;
+  }
+}
+
+function handlePowerNodeMouseUp() {
+  if (draggedPowerNodeId.value) {
+    const slots = getPowerNodeSlots(boardPosition.value.x, boardPosition.value.y);
+    const node = commonPowerNodes.value[draggedPowerNodeId.value];
+    if (node) node.y = slots.railY;
+  }
+  draggedPowerNodeId.value = null;
+  window.removeEventListener('mousemove', handlePowerNodeMouseMove);
+  window.removeEventListener('mouseup', handlePowerNodeMouseUp);
+}
 
 function handleWireClick(event: MouseEvent, wireId: string) {
   event.preventDefault();
@@ -1298,6 +1521,14 @@ const boardPowerPinOffsets: Record<string, { x: number; y: number }> = {
   GND: { x: boardDescriptor.powerPins.GND.x - boardDescriptor.x, y: boardDescriptor.powerPins.GND.y - boardDescriptor.y },
 };
 
+const commonPowerNodes = ref<Record<string, { x: number; y: number; id: string; label: string; color: string }>>({
+  VCC: { x: 328, y: 80, id: 'common-vcc', label: 'VCC', color: '#ef4444' },
+  '3V3': { x: 400, y: 80, id: 'common-3v3', label: '3V3', color: '#22c55e' },
+  GND: { x: 472, y: 80, id: 'common-gnd', label: 'GND', color: '#64748b' },
+});
+
+const draggedPowerNodeId = ref<string | null>(null);
+
 function startDragBoard(event: MouseEvent) {
   if (event.button !== 0) return;
   event.preventDefault();
@@ -1334,6 +1565,7 @@ function handleBoardMouseMove(event: MouseEvent) {
 
 function handleBoardMouseUp() {
   isDraggingBoard.value = false;
+  syncPowerBusLayout(true);
   window.removeEventListener('mousemove', handleBoardMouseMove);
   window.removeEventListener('mouseup', handleBoardMouseUp);
 }
@@ -1341,24 +1573,35 @@ function handleBoardMouseUp() {
 // Component Drag State
 const draggedCompId = ref<string | null>(null);
 const dragOffset = ref({ x: 0, y: 0 });
+const componentDragOrigin = ref({ x: 0, y: 0 });
+const isComponentDragging = ref(false);
+const frozenTrackAssignments = ref<Map<string, TrackAssignment> | null>(null);
 
-function startDragComponent(event: MouseEvent, comp: ComponentInstance) {
+function onPeripheralMouseDown(event: MouseEvent, comp: ComponentInstance) {
   if (event.button !== 0) return;
-  
-  event.preventDefault();
-  event.stopPropagation();
 
-  draggedCompId.value = comp.id;
   selectComponent(comp);
 
   const { x: mouseX, y: mouseY } = clientToCanvas(event.clientX, event.clientY);
+  componentDragOrigin.value = { x: mouseX, y: mouseY };
+  isComponentDragging.value = false;
+  draggedCompId.value = comp.id;
+  frozenTrackAssignments.value = buildTrackAssignmentMap(
+    activeComponents.value.flatMap((c) =>
+      getNetDefinitions(c.type)
+        .filter((net) => c.pinConnections[net.pinName] !== null && c.pinConnections[net.pinName] !== undefined)
+        .map((net) => ({
+          compId: c.id,
+          comp: c,
+          mode: net.mode,
+          signalType: (net.signalType || 'digital') as 'digital' | 'i2c' | 'power',
+        })),
+    ),
+  );
 
-  const currentX = getCanvasX(comp);
-  const currentY = getCanvasY(comp);
-  
   dragOffset.value = {
-    x: mouseX - currentX,
-    y: mouseY - currentY,
+    x: mouseX - getCanvasX(comp),
+    y: mouseY - getCanvasY(comp),
   };
 
   window.addEventListener('mousemove', handleComponentMouseMove);
@@ -1369,6 +1612,13 @@ function handleComponentMouseMove(event: MouseEvent) {
   if (!draggedCompId.value) return;
 
   const { x: mouseX, y: mouseY } = clientToCanvas(event.clientX, event.clientY);
+
+  if (!isComponentDragging.value) {
+    const dx = mouseX - componentDragOrigin.value.x;
+    const dy = mouseY - componentDragOrigin.value.y;
+    if (Math.sqrt(dx * dx + dy * dy) < dragThreshold) return;
+    isComponentDragging.value = true;
+  }
 
   let x = Math.round(mouseX - dragOffset.value.x);
   let y = Math.round(mouseY - dragOffset.value.y);
@@ -1390,6 +1640,9 @@ function handleComponentMouseMove(event: MouseEvent) {
 
 function handleComponentMouseUp() {
   draggedCompId.value = null;
+  isComponentDragging.value = false;
+  frozenTrackAssignments.value = null;
+  inactiveWireCache.value = {};
   window.removeEventListener('mousemove', handleComponentMouseMove);
   window.removeEventListener('mouseup', handleComponentMouseUp);
 }
@@ -1468,15 +1721,93 @@ function getPowerPinPosition(powerType: string): { x: number; y: number } {
   return { x: boardPosition.value.x + 7, y: boardPosition.value.y + 122 };
 }
 
-function rotateDir(
-  dir: 'left' | 'right' | 'up' | 'down',
-  rotation: number
+function resolveWireStartDir(
+  comp: ComponentInstance,
+  pinName: string,
 ): 'left' | 'right' | 'up' | 'down' {
-  const dirs = ['up', 'right', 'down', 'left'] as const;
-  const idx = dirs.indexOf(dir);
-  if (idx < 0) return dir;
-  const steps = (((Math.round(rotation / 90)) % 4) + 4) % 4;
-  return dirs[(idx + steps) % 4];
+  let baseStartDir: 'left' | 'right' | 'up' | 'down' = 'down';
+  if (comp.type === 'button') {
+    if (pinName.endsWith('.l')) baseStartDir = 'left';
+    else if (pinName.endsWith('.r')) baseStartDir = 'right';
+  } else if (comp.type === 'oled') {
+    baseStartDir = 'left';
+  } else if (comp.type === 'led' || comp.type === 'ultrasonic') {
+    baseStartDir = 'down';
+  }
+  return rotateCardinalDirection(baseStartDir, comp.rotation || 0);
+}
+
+function resolveWireEndDir(end: { x: number; y: number }): 'left' | 'right' | 'up' | 'down' {
+  const bounds = resolveBoardBounds(
+    { x: boardPosition.value.x, y: boardPosition.value.y },
+    boardDescriptor.width,
+    boardDescriptor.height,
+  );
+  return resolveBoardPinEndDir(end, bounds);
+}
+
+function buildWireRouteRequests(
+  requests: Array<{
+    compId: string;
+    comp: ComponentInstance;
+    mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
+    signalType: 'digital' | 'i2c' | 'power';
+  }>,
+): WireRouteRequest[] {
+  const priorityOrder: Record<string, number> = { power: 0, i2c: 1, digital: 2 };
+  const boardCenterX = boardPosition.value.x + boardDescriptor.width / 2;
+  const routeRequests: WireRouteRequest[] = [];
+
+  for (const req of requests) {
+    const netDef = getNetDefinitions(req.comp.type).find((n) => n.mode === req.mode);
+    if (!netDef) continue;
+    const pts = getWirePoints(req.comp, req.mode);
+    if (!pts) continue;
+
+    const startLeft = pts.start.x <= boardCenterX;
+    const endLeft = pts.end.x <= boardCenterX;
+    let channel: RoutingChannel;
+    if (startLeft && endLeft) channel = 'left';
+    else if (!startLeft && !endLeft) channel = 'right';
+    else channel = 'cross';
+
+    const wireId = `${req.compId}-${req.mode}`;
+    const bundleId =
+      req.signalType === 'i2c' && (req.mode === 'primary' || req.mode === 'secondary')
+        ? `${req.compId}-i2c`
+        : undefined;
+
+    routeRequests.push({
+      wireId,
+      start: pts.start,
+      end: pts.end,
+      startDir: resolveWireStartDir(req.comp, netDef.pinName),
+      endDir: resolveWireEndDir(pts.end),
+      priority: priorityOrder[req.signalType],
+      channel,
+      signalType: req.signalType,
+      compId: req.compId,
+      bundleId,
+    });
+  }
+
+  return routeRequests;
+}
+
+function buildTrackAssignmentMap(
+  requests: Array<{
+    compId: string;
+    comp: ComponentInstance;
+    mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
+    signalType: 'digital' | 'i2c' | 'power';
+  }>,
+): Map<string, TrackAssignment> {
+  const boardOrigin = { x: boardPosition.value.x, y: boardPosition.value.y };
+  const channels = getRoutingChannels(boardOrigin.x, boardOrigin.y);
+  const boardCenterX = boardOrigin.x + boardDescriptor.width / 2;
+  const boardCenterY = boardOrigin.y + boardDescriptor.height / 2;
+  const routeRequests = buildWireRouteRequests(requests);
+  return buildTrackAssignments(routeRequests, channels, boardCenterX, boardCenterY);
 }
 
 function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x: number; y: number } {
@@ -1497,19 +1828,21 @@ function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x
   return { x: baseX + rotated.x, y: baseY + rotated.y };
 }
 
-function getAllWires(): Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> {
-  const allWires: Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> = [];
-  activeComponents.value.forEach(comp => {
-    getNetDefinitions(comp.type).forEach(net => {
-      if (comp.pinConnections[net.pinName] !== null) {
-        allWires.push({ comp, mode: net.mode });
-      }
-    });
-  });
-  return allWires;
+function applyGpioFanout(
+  pos: { x: number; y: number },
+  fanout?: { index: number; total: number }
+): { x: number; y: number } {
+  if (!fanout || fanout.total <= 1) return pos;
+  const spread = 10;
+  const offset = (fanout.index - (fanout.total - 1) / 2) * spread;
+  return { x: pos.x, y: pos.y + offset };
 }
 
-function getWirePoints(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd'): { start: { x: number; y: number }, end: { x: number; y: number } } | null {
+function getWirePoints(
+  comp: ComponentInstance,
+  mode: 'primary' | 'secondary' | 'vcc' | 'gnd',
+  fanout?: { index: number; total: number }
+): { start: { x: number; y: number }, end: { x: number; y: number } } | null {
   const netDef = getNetDefinitions(comp.type).find(n => n.mode === mode);
   if (!netDef) return null;
   
@@ -1521,11 +1854,14 @@ function getWirePoints(comp: ComponentInstance, mode: 'primary' | 'secondary' | 
   let end = { x: 307, y: 272 };
   
   if (typeof connection === 'number') {
-    end = getPinPosition(connection);
-  } else if (connection === 'VCC' || connection === '3V3') {
-    end = getPowerPinPosition(connection);
-  } else if (connection === 'GND') {
-    end = getPowerPinPosition('GND');
+    end = applyGpioFanout(getPinPosition(connection), fanout);
+  } else if (connection === 'VCC' || connection === '3V3' || connection === 'GND') {
+    const commonNode = commonPowerNodes.value[connection];
+    if (commonNode) {
+      end = { x: commonNode.x, y: commonNode.y };
+    } else {
+      end = getPowerPinPosition(connection);
+    }
   } else {
     return null;
   }
@@ -1533,43 +1869,160 @@ function getWirePoints(comp: ComponentInstance, mode: 'primary' | 'secondary' | 
   return { start, end };
 }
 
-function getWireLane(comp: ComponentInstance, mode: 'primary' | 'secondary' | 'vcc' | 'gnd'): number {
-  const allWires = getAllWires();
-  const index = allWires.findIndex(w => w.comp.id === comp.id && w.mode === mode);
-  return index >= 0 ? index : 0;
+
+function buildGpioFanoutMap(requests: Array<{ compId: string; comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }>): Map<string, { index: number; total: number }> {
+  const groups = new Map<number, string[]>();
+
+  for (const req of requests) {
+    const netDef = getNetDefinitions(req.comp.type).find(n => n.mode === req.mode);
+    if (!netDef) continue;
+    const conn = req.comp.pinConnections[netDef.pinName];
+    if (typeof conn !== 'number') continue;
+    const wireId = `${req.compId}-${req.mode}`;
+    if (!groups.has(conn)) groups.set(conn, []);
+    groups.get(conn)!.push(wireId);
+  }
+
+  const fanoutMap = new Map<string, { index: number; total: number }>();
+  for (const ids of groups.values()) {
+    ids.sort();
+    ids.forEach((id, index) => fanoutMap.set(id, { index, total: ids.length }));
+  }
+  return fanoutMap;
+}
+
+function isWireRelatedToSelectedComp(wire: WireRenderItem, sel: string | null): boolean {
+  if (!sel) return false;
+
+  if (wire.compId === sel) return true;
+
+  if (wire.id.startsWith('common-')) {
+    const powerType = wire.id.slice('common-'.length);
+    const comp = activeComponents.value.find(c => c.id === sel);
+    if (!comp) return false;
+    return Object.values(comp.pinConnections).includes(powerType as PinConnectionValue);
+  }
+
+  return false;
+}
+
+interface WireVisualState {
+  opacity: number;
+  widthBoost: number;
+  highlighted: boolean;
+  dimmed: boolean;
+}
+
+interface NetRequest {
+  compId: string;
+  comp: ComponentInstance;
+  mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
+  color: string;
+  signalType: 'digital' | 'i2c' | 'power';
+}
+
+function buildActiveNetRequests(): NetRequest[] {
+  const requests: NetRequest[] = [];
+
+  activeComponents.value.forEach(comp => {
+    getNetDefinitions(comp.type).forEach(net => {
+      const pinName = net.pinName;
+      if (!pinName || comp.pinConnections[pinName] === null || comp.pinConnections[pinName] === undefined) {
+        return;
+      }
+
+      let color = '#94a3b8';
+      if (net.mode === 'vcc') {
+        color = '#ef4444';
+      } else if (net.mode === 'gnd') {
+        color = '#64748b';
+      } else if (net.mode === 'secondary') {
+        color = comp.type === 'oled' ? '#a78bfa' : '#f59e0b';
+      } else {
+        color = getWireColor(comp);
+      }
+
+      requests.push({
+        compId: comp.id,
+        comp,
+        mode: net.mode,
+        color,
+        signalType: net.signalType || 'digital',
+      });
+    });
+  });
+
+  return requests;
+}
+
+const DEFAULT_WIRE_VISUAL: WireVisualState = {
+  opacity: 1,
+  widthBoost: 0,
+  highlighted: false,
+  dimmed: false,
+};
+
+function buildWireVisual(wire: WireRenderItem, sel: string | null, activeWireId: string | null): WireVisualState {
+  if (activeWireId === wire.id || wire.isDragged) {
+    return DEFAULT_WIRE_VISUAL;
+  }
+  if (!sel) {
+    return DEFAULT_WIRE_VISUAL;
+  }
+  if (isWireRelatedToSelectedComp(wire, sel)) {
+    return { opacity: 1, widthBoost: 1.2, highlighted: true, dimmed: false };
+  }
+  return { opacity: 0.12, widthBoost: 0, highlighted: false, dimmed: true };
 }
 
 function getWirePCBPath(
   comp: ComponentInstance,
   mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary',
+  assignment: TrackAssignment,
   obstacles?: Obstacle[],
-  channelOccupancyMap?: Map<string, number>,
-  waypoints?: Point[]
+  occupancy?: SegmentOccupancyRegistry,
+  waypoints?: Point[],
+  fanout?: { index: number; total: number }
 ): WirePathResult | null {
-  const pts = getWirePoints(comp, mode);
+  const boardOrigin = { x: boardPosition.value.x, y: boardPosition.value.y };
+  const channels = getRoutingChannels(boardOrigin.x, boardOrigin.y);
+  const pts = getWirePoints(comp, mode, fanout);
   if (!pts) return null;
 
   const netDef = getNetDefinitions(comp.type).find(n => n.mode === mode);
   const pinName = netDef?.pinName || '';
-
-  const lane = getWireLane(comp, mode);
-
-  let baseStartDir: 'left' | 'right' | 'up' | 'down' = 'down';
-  if (comp.type === 'button') {
-    if (pinName.endsWith('.l')) baseStartDir = 'left';
-    else if (pinName.endsWith('.r')) baseStartDir = 'right';
-  } else if (comp.type === 'oled') {
-    baseStartDir = 'left';
-  } else if (comp.type === 'led' || comp.type === 'ultrasonic') {
-    baseStartDir = 'down';
-  }
-  const startDir = rotateDir(baseStartDir, comp.rotation || 0);
-
-  const endDir = pts.end.x < boardPosition.value.x + boardDescriptor.width / 2 ? 'left' : 'right';
-
+  const connection = comp.pinConnections[pinName];
   const signalType = netDef?.signalType || 'digital';
+  const wireId = `${comp.id}-${mode}`;
 
-  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints);
+  const startDir = resolveWireStartDir(comp, pinName);
+  const endDir = resolveWireEndDir(pts.end);
+
+  const isPowerToBus =
+    (netDef?.mode === 'vcc' || netDef?.mode === 'gnd' || signalType === 'power') &&
+    typeof connection === 'string' &&
+    (connection === 'VCC' || connection === '3V3' || connection === 'GND') &&
+    !(waypoints && waypoints.length > 0);
+
+  if (isPowerToBus) {
+    return generatePowerBusTapPath(pts.start, pts.end, channels.powerRailY, startDir);
+  }
+
+  return generateWirePath({
+    start: pts.start,
+    end: pts.end,
+    startDir,
+    endDir,
+    wireId,
+    signalType: signalType as 'digital' | 'i2c' | 'power',
+    assignment,
+    obstacles: obstacles ?? [],
+    occupancy: occupancy ?? new SegmentOccupancyRegistry(),
+    waypoints,
+    boardOrigin,
+    boardCenterX: boardOrigin.x + boardDescriptor.width / 2,
+    lane: 0,
+  });
 }
 
 const wiresToRender = computed(() => {
@@ -1580,87 +2033,96 @@ const wiresToRender = computed(() => {
     obstacles.push(getComponentObstacle(comp));
   });
 
-  interface NetRequest {
-    compId: string;
-    comp: ComponentInstance;
-    mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
-    color: string;
-    signalType: 'digital' | 'i2c' | 'power';
-  }
-  const requests: NetRequest[] = [];
+  const requests = buildActiveNetRequests();
 
-  activeComponents.value.forEach(comp => {
-    getNetDefinitions(comp.type).forEach(net => {
-      const pinName = net.pinName;
-      if (!pinName || comp.pinConnections[pinName] === null || comp.pinConnections[pinName] === undefined) {
-        return;
-      }
-
-      let color = '#ffffff';
-      if (net.mode === 'vcc') {
-        color = '#ef4444';
-      } else if (net.mode === 'gnd') {
-        color = '#475569';
-      } else if (net.mode === 'secondary') {
-        color = comp.type === 'oled' ? '#c084fc' : '#f59e0b';
-      } else {
-        color = getWireColor(comp);
-      }
-
-      const signalType = net.signalType || 'digital';
-
-      requests.push({
-        compId: comp.id,
-        comp,
-        mode: net.mode,
-        color,
-        signalType
-      });
+  for (const [, node] of Object.entries(commonPowerNodes.value)) {
+    obstacles.push({
+      x: node.x - 20,
+      y: node.y - 20,
+      width: 40,
+      height: 40
     });
-  });
+  }
 
   const priorityOrder = { power: 0, i2c: 1, digital: 2 };
-  
+  const gpioFanoutMap = buildGpioFanoutMap(requests);
+  const boardOrigin = { x: boardPosition.value.x, y: boardPosition.value.y };
+  const channels = getRoutingChannels(boardOrigin.x, boardOrigin.y);
+
+  let trackAssignments: Map<string, TrackAssignment>;
+  if (isComponentDragging.value) {
+    if (!frozenTrackAssignments.value) {
+      frozenTrackAssignments.value = buildTrackAssignmentMap(requests);
+    }
+    trackAssignments = frozenTrackAssignments.value;
+  } else {
+    trackAssignments = buildTrackAssignmentMap(requests);
+  }
+
   requests.sort((a, b) => {
     const aId = `${a.compId}-${a.mode}`;
     const bId = `${b.compId}-${b.mode}`;
-    
+
     if (draggedWireId.value) {
       if (aId === draggedWireId.value) return -1;
       if (bId === draggedWireId.value) return 1;
     }
-    
+
     return priorityOrder[a.signalType] - priorityOrder[b.signalType];
   });
 
-  const list: Array<{
-    id: string;
-    path: string;
-    color: string;
-    start: { x: number; y: number };
-    end: { x: number; y: number };
-    width: number;
-    segments: Array<{ d: string; layer: number }>;
-    vias: Array<{ x: number; y: number }>;
-    teardrops: Array<string>;
-    isActive?: boolean;
-    isDragged?: boolean;
-  }> = [];
+  const list: WireRenderItem[] = [];
 
-  const channelOccupancyMap = new Map<string, number>();
+  const segmentOccupancy = new SegmentOccupancyRegistry();
+
+  for (const [powerType, node] of Object.entries(commonPowerNodes.value)) {
+    const wireId = `common-${powerType}`;
+    const boardPowerPos = getPowerPinPosition(powerType);
+
+    const result = generatePowerBusTrunkPath(
+      { x: node.x, y: node.y },
+      boardPowerPos,
+      channels.powerRailY,
+      { x: boardPosition.value.x, y: boardPosition.value.y },
+      boardDescriptor.width,
+    );
+
+    list.push({
+      id: wireId,
+      path: result.path,
+      color: node.color,
+      start: { x: node.x, y: node.y },
+      end: boardPowerPos,
+      width: result.width,
+      segments: result.segments,
+      vias: result.vias,
+      teardrops: result.teardrops,
+      signalType: 'power',
+      isActive: true,
+      isDragged: false
+    });
+  }
 
   requests.forEach(req => {
-    const pts = getWirePoints(req.comp, req.mode);
+    const wireId = `${req.compId}-${req.mode}`;
+    const fanout = gpioFanoutMap.get(wireId);
+    const pts = getWirePoints(req.comp, req.mode, fanout);
     if (!pts) return;
 
-    const wireId = `${req.compId}-${req.mode}`;
     const waypoints = wireWaypoints.value[wireId] || [];
-    
+    const assignment = trackAssignments.get(wireId) ?? {
+      wireId,
+      topology: 'cross-side',
+      priority: priorityOrder[req.signalType],
+      stubLengthStart: 18,
+      stubLengthEnd: 18,
+    };
+
     const isDragged = wireId === draggedWireId.value;
     const isActive = !(routingMode.value === 'manual' && draggedWireId.value && wireId !== draggedWireId.value);
-    
+
     let pcbResult: WirePathResult | null = null;
-    
+
     if (isDragged) {
       const cachedWire = inactiveWireCache.value[wireId];
       if (cachedWire) {
@@ -1668,9 +2130,9 @@ const wiresToRender = computed(() => {
         return;
       }
     }
-    
+
     if (isActive) {
-      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
+      pcbResult = getWirePCBPath(req.comp, req.mode, assignment, obstacles, segmentOccupancy, waypoints, fanout);
       if (pcbResult) {
         inactiveWireCache.value[wireId] = {
           id: wireId,
@@ -1682,6 +2144,8 @@ const wiresToRender = computed(() => {
           segments: pcbResult.segments,
           vias: pcbResult.vias,
           teardrops: pcbResult.teardrops,
+          signalType: req.signalType,
+          compId: req.compId,
           isActive: true,
           isDragged: false
         };
@@ -1692,7 +2156,7 @@ const wiresToRender = computed(() => {
         list.push({ ...cachedWire, isActive: false, isDragged: false });
         return;
       }
-      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, undefined, waypoints);
+      pcbResult = getWirePCBPath(req.comp, req.mode, assignment, obstacles, undefined, waypoints, fanout);
       if (pcbResult) {
         inactiveWireCache.value[wireId] = {
           id: wireId,
@@ -1704,12 +2168,14 @@ const wiresToRender = computed(() => {
           segments: pcbResult.segments,
           vias: pcbResult.vias,
           teardrops: pcbResult.teardrops,
+          signalType: req.signalType,
+          compId: req.compId,
           isActive: false,
           isDragged: false
         };
       }
     }
-    
+
     if (!pcbResult) return;
 
     list.push({
@@ -1722,6 +2188,8 @@ const wiresToRender = computed(() => {
       segments: pcbResult.segments,
       vias: pcbResult.vias,
       teardrops: pcbResult.teardrops,
+      signalType: req.signalType,
+      compId: req.compId,
       isActive,
       isDragged
     });
@@ -1729,6 +2197,137 @@ const wiresToRender = computed(() => {
 
   return list;
 });
+
+const routingChannels = computed(() =>
+  getRoutingChannels(boardPosition.value.x, boardPosition.value.y)
+);
+
+const routingDebugEnabled = computed(() => {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('routing_debug') === 'true';
+});
+
+const routingDebugOverlay = computed(() => {
+  if (!routingDebugEnabled.value) return null;
+
+  const requests = buildActiveNetRequests();
+  const assignments = buildTrackAssignmentMap(requests);
+  const channels = routingChannels.value;
+  const gpioFanoutMap = buildGpioFanoutMap(requests);
+  const priorityOrder = { power: 0, i2c: 1, digital: 2 };
+
+  const obstacles: Obstacle[] = [
+    { x: boardPosition.value.x, y: boardPosition.value.y, width: boardDescriptor.width, height: boardDescriptor.height },
+  ];
+  activeComponents.value.forEach(comp => obstacles.push(getComponentObstacle(comp)));
+
+  const verticalTracks: Array<{ x1: number; y1: number; x2: number; y2: number; stroke: string }> = [];
+  const horizontalTracks: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  const labels: Array<{ wireId: string; topology: string; x: number; y: number }> = [];
+  const seenVertical = new Set<number>();
+  const seenHorizontal = new Set<number>();
+
+  for (const [wireId, assignment] of assignments) {
+    if (assignment.verticalTrackX !== undefined && !seenVertical.has(assignment.verticalTrackX)) {
+      seenVertical.add(assignment.verticalTrackX);
+      verticalTracks.push({
+        x1: assignment.verticalTrackX,
+        y1: channels.topBus,
+        x2: assignment.verticalTrackX,
+        y2: channels.bottomBus,
+        stroke: '#38bdf8',
+      });
+    }
+    if (assignment.exitTrackX !== undefined && !seenVertical.has(assignment.exitTrackX)) {
+      seenVertical.add(assignment.exitTrackX);
+      verticalTracks.push({
+        x1: assignment.exitTrackX,
+        y1: channels.topBus,
+        x2: assignment.exitTrackX,
+        y2: channels.bottomBus,
+        stroke: '#60a5fa',
+      });
+    }
+    if (assignment.horizontalTrackY !== undefined && !seenHorizontal.has(assignment.horizontalTrackY)) {
+      seenHorizontal.add(assignment.horizontalTrackY);
+      horizontalTracks.push({
+        x1: channels.leftBus - 40,
+        y1: assignment.horizontalTrackY,
+        x2: channels.rightBus + 40,
+        y2: assignment.horizontalTrackY,
+      });
+    }
+
+    const req = requests.find(r => `${r.compId}-${r.mode}` === wireId);
+    const pts = req ? getWirePoints(req.comp, req.mode, gpioFanoutMap.get(wireId)) : null;
+    labels.push({
+      wireId,
+      topology: assignment.topology,
+      x: (pts?.start.x ?? assignment.verticalTrackX ?? channels.leftBus) + 4,
+      y: (pts?.start.y ?? assignment.horizontalTrackY ?? channels.topBus) - 6,
+    });
+  }
+
+  const segmentOccupancy = new SegmentOccupancyRegistry();
+  const sortedRequests = [...requests].sort(
+    (a, b) => priorityOrder[a.signalType] - priorityOrder[b.signalType],
+  );
+  for (const req of sortedRequests) {
+    const wireId = `${req.compId}-${req.mode}`;
+    const assignment = assignments.get(wireId);
+    if (!assignment) continue;
+    getWirePCBPath(
+      req.comp,
+      req.mode,
+      assignment,
+      obstacles,
+      segmentOccupancy,
+      undefined,
+      gpioFanoutMap.get(wireId),
+    );
+  }
+
+  const occupiedRects = segmentOccupancy.getSegments().map(seg => {
+    if (seg.orientation === 'v') {
+      const lo = Math.min(seg.rangeStart, seg.rangeEnd);
+      const hi = Math.max(seg.rangeStart, seg.rangeEnd);
+      return { x: seg.fixed - 2, y: lo, width: 4, height: hi - lo, wireId: seg.wireId };
+    }
+    const lo = Math.min(seg.rangeStart, seg.rangeEnd);
+    const hi = Math.max(seg.rangeStart, seg.rangeEnd);
+    return { x: lo, y: seg.fixed - 2, width: hi - lo, height: 4, wireId: seg.wireId };
+  });
+
+  return { verticalTracks, horizontalTracks, labels, occupiedRects };
+});
+
+const powerBusVisual = computed(() => {
+  const nodes = Object.values(commonPowerNodes.value);
+  const railY = routingChannels.value.powerRailY;
+  if (nodes.length === 0) {
+    return { x1: 280, x2: 520, y: railY };
+  }
+  const xs = nodes.map(n => n.x);
+  return {
+    x1: Math.min(...xs) - 50,
+    x2: Math.max(...xs) + 50,
+    y: railY,
+  };
+});
+
+const wireVisualMap = computed(() => {
+  const sel = selectedCompId.value;
+  const activeWireId = selectedWireId.value;
+  const map = new Map<string, WireVisualState>();
+  for (const wire of wiresToRender.value) {
+    map.set(wire.id, buildWireVisual(wire, sel, activeWireId));
+  }
+  return map;
+});
+
+function getWireVisual(wire: WireRenderItem): WireVisualState {
+  return wireVisualMap.value.get(wire.id) ?? DEFAULT_WIRE_VISUAL;
+}
 
 // Helpers
 function formatTime(val: string | bigint): string {
@@ -1759,6 +2358,7 @@ function getTraceClass(type: number): string {
 onMounted(() => {
   initSimulation();
   updateCanvasScale();
+  syncPowerBusLayout(true);
   window.addEventListener('resize', handleWindowResize);
 });
 
@@ -1885,8 +2485,21 @@ function handleWindowResize() {
 }
 
 .smart-wire-group.inactive-wire {
-  opacity: 0.15;
   pointer-events: none;
+}
+
+.smart-wire-group.inactive-wire path,
+.smart-wire-group.inactive-wire circle {
+  stroke-opacity: 0.15;
+  fill-opacity: 0.15;
+}
+
+.smart-wire-group.highlighted-wire {
+  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 8px rgba(56, 189, 248, 0.45));
+}
+
+.smart-wire-group.power-wire path[stroke]:not([stroke="transparent"]) {
+  stroke-linecap: round;
 }
 
 .smart-wire-group.selected-wire {
@@ -2233,12 +2846,30 @@ function handleWindowResize() {
   position: absolute;
   top: 0;
   left: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.circuit-svg .wire-click-zone {
+  pointer-events: stroke;
+}
+.power-nodes-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 20;
+}
+.power-nodes-layer circle.dragging {
+  filter: brightness(1.3);
+  stroke-width: 3;
 }
 .peripherals-layer {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
+  z-index: 30;
 }
 .peripherals-layer > .canvas-peripheral-wrapper {
   pointer-events: auto;

@@ -1656,14 +1656,22 @@ const wiresToRender = computed(() => {
     const wireId = `${req.compId}-${req.mode}`;
     const waypoints = wireWaypoints.value[wireId] || [];
     
-    const isActive = !(routingMode.value === 'manual' && draggedWireId.value && wireId !== draggedWireId.value);
     const isDragged = wireId === draggedWireId.value;
+    const isActive = !(routingMode.value === 'manual' && draggedWireId.value && wireId !== draggedWireId.value);
     
     let pcbResult: WirePathResult | null = null;
     
+    if (isDragged) {
+      const cachedWire = inactiveWireCache.value[wireId];
+      if (cachedWire) {
+        list.push({ ...cachedWire, isActive: true, isDragged: true });
+        return;
+      }
+    }
+    
     if (isActive) {
       pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
-      if (pcbResult && !isDragged) {
+      if (pcbResult) {
         inactiveWireCache.value[wireId] = {
           id: wireId,
           path: pcbResult.path,

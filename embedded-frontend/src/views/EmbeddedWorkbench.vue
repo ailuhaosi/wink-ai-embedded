@@ -1550,7 +1550,8 @@ function getWirePCBPath(
   mode: 'primary' | 'secondary' | 'vcc' | 'gnd' = 'primary',
   obstacles?: Obstacle[],
   channelOccupancyMap?: Map<string, number>,
-  waypoints?: Point[]
+  waypoints?: Point[],
+  busChannel?: { cableExitX: number; cableExitY: number; convergenceX: number; convergenceY: number; baseLane: number }
 ): WirePathResult | null {
   const pts = getWirePoints(comp, mode);
   if (!pts) return null;
@@ -1578,7 +1579,21 @@ function getWirePCBPath(
   if (wireStyle.value === 'bus' && routingMode.value === 'auto') {
     const boardCenterX = boardPosition.value.x + boardDescriptor.width / 2;
     const boardCenterY = boardPosition.value.y + boardDescriptor.height / 2;
-    return generateBusStripPath(pts.start, pts.end, startDir, endDir, lane, signalType, channelOccupancyMap, boardCenterX, boardCenterY);
+
+    const cableExitX = busChannel?.cableExitX;
+    const cableExitY = busChannel?.cableExitY;
+    const convergenceX = busChannel?.convergenceX;
+    const convergenceY = busChannel?.convergenceY;
+    const adjustedLane = busChannel?.baseLane ?? lane;
+
+    const componentBounds = {
+      x: getCanvasX(comp),
+      y: getCanvasY(comp),
+      width: getComponentWidth(comp),
+      height: getComponentHeight(comp)
+    };
+
+    return generateBusStripPath(pts.start, pts.end, startDir, endDir, adjustedLane, signalType, channelOccupancyMap, boardCenterX, boardCenterY, cableExitX, cableExitY, convergenceX, convergenceY, componentBounds);
   }
   return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints, wireStyle.value as 'pcb' | 'curved');
 }
@@ -1644,6 +1659,73 @@ const wiresToRender = computed(() => {
     return priorityOrder[a.signalType] - priorityOrder[b.signalType];
   });
 
+  // Pre-calculate bus strip channels for each component
+  const busChannels = new Map<string, { cableExitX: number; cableExitY: number; convergenceX: number; convergenceY: number; baseLane: number }>();
+  if (wireStyle.value === 'bus' && routingMode.value === 'auto') {
+    const boardCenterX = boardPosition.value.x + boardDescriptor.width / 2;
+    const boardCenterY = boardPosition.value.y + boardDescriptor.height / 2;
+    const channelSpacing = 18;
+
+    let nextChannel = 0;
+    activeComponents.value.forEach(comp => {
+      const compCenterX = getCanvasX(comp) + getComponentWidth(comp) / 2;
+      const compCenterY = getCanvasY(comp) + getComponentHeight(comp) / 2;
+      
+      let cableExitX: number;
+      let cableExitY: number;
+      let convergenceX: number;
+      let convergenceY: number;
+      
+      const towardBoardX = compCenterX < boardCenterX ? 'right' : 'left';
+      const towardBoardY = compCenterY < boardCenterY ? 'down' : 'up';
+
+      const rotation = comp.rotation || 0;
+      const effectiveOrientation = rotation % 360;
+
+      let isHorizontalMode = Math.abs(compCenterX - boardCenterX) > Math.abs(compCenterY - boardCenterY);
+      
+      if (effectiveOrientation === 90 || effectiveOrientation === 270) {
+        isHorizontalMode = !isHorizontalMode;
+      }
+
+      if (isHorizontalMode) {
+        if (towardBoardX === 'right') {
+          cableExitX = getCanvasX(comp) + getComponentWidth(comp) + 15;
+          cableExitY = compCenterY;
+          convergenceX = boardCenterX - 95 + (towardBoardX === 'right' ? 1 : -1) * 18;
+          convergenceY = boardCenterY + nextChannel * channelSpacing;
+        } else {
+          cableExitX = getCanvasX(comp) - 15;
+          cableExitY = compCenterY;
+          convergenceX = boardCenterX + 95 + (towardBoardX === 'right' ? 1 : -1) * 18;
+          convergenceY = boardCenterY + nextChannel * channelSpacing;
+        }
+      } else {
+        if (towardBoardY === 'down') {
+          cableExitX = compCenterX;
+          cableExitY = getCanvasY(comp) + getComponentHeight(comp) + 15;
+          convergenceX = boardCenterX + nextChannel * channelSpacing;
+          convergenceY = boardCenterY - 105 + (towardBoardY === 'down' ? 1 : -1) * 18;
+        } else {
+          cableExitX = compCenterX;
+          cableExitY = getCanvasY(comp) - 15;
+          convergenceX = boardCenterX + nextChannel * channelSpacing;
+          convergenceY = boardCenterY + 105 + (towardBoardY === 'down' ? 1 : -1) * 18;
+        }
+      }
+
+      busChannels.set(comp.id, {
+        cableExitX,
+        cableExitY,
+        convergenceX,
+        convergenceY,
+        baseLane: nextChannel
+      });
+
+      nextChannel++;
+    });
+  }
+
   // Route each net and populate lists
   const list: Array<{
     id: string;
@@ -1675,7 +1757,8 @@ const wiresToRender = computed(() => {
     let cachedWire: WireRenderItem | undefined;
     
     if (isActive) {
-      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints);
+      const busChannel = busChannels.get(req.compId);
+      pcbResult = getWirePCBPath(req.comp, req.mode, obstacles, channelOccupancyMap, waypoints, busChannel);
       if (pcbResult && !isDragged) {
         inactiveWireCache.value[wireId] = {
           id: wireId,

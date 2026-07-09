@@ -879,7 +879,12 @@ export function generateBusStripPath(
   signalType?: 'digital' | 'i2c' | 'power',
   channelOccupancyMap?: Map<string, number>,
   boardCenterX?: number,
-  boardCenterY?: number
+  boardCenterY?: number,
+  cableExitX?: number,
+  cableExitY?: number,
+  convergenceX?: number,
+  convergenceY?: number,
+  componentBounds?: { x: number; y: number; width: number; height: number }
 ): WirePathResult {
   let width = 2.2;
   switch (signalType) {
@@ -895,49 +900,70 @@ export function generateBusStripPath(
       break;
   }
 
-  const horizontalPair =
-    (startDir === 'left' || startDir === 'right') &&
-    (endDir === 'left' || endDir === 'right') &&
-    startDir !== endDir;
-  const verticalPair =
-    (startDir === 'up' || startDir === 'down') &&
-    (endDir === 'up' || endDir === 'down') &&
-    startDir !== endDir;
+  const isHorizontalStart = startDir === 'left' || startDir === 'right';
+  const isHorizontalEnd = endDir === 'left' || endDir === 'right';
+  
+  const horizontalPair = isHorizontalStart || isHorizontalEnd;
+  const verticalPair = !horizontalPair;
 
   if (!horizontalPair && !verticalPair) {
     return generateSmartPCBPath(start, end, startDir, endDir, lane, undefined, undefined, signalType, undefined, 'pcb');
   }
 
   const channelSpacing = 12;
-  const baseStubLen = 18;
-  let actualLane = lane;
+  const stubLen = 18;
 
   if (horizontalPair) {
-    const deviatedEndDir = boardCenterX !== undefined
-      ? start.x < boardCenterX ? 'right' : 'left'
-      : endDir;
+    const towardBoard = startDir === 'right' ? 'right' : 'left';
+    const laneDir = towardBoard === 'right' ? 1 : -1;
 
-    const fanBaseX = deviatedEndDir === 'left' ? end.x - baseStubLen : end.x + baseStubLen;
-    const fanY = end.y;
-    const laneDir = deviatedEndDir === 'left' ? -1 : 1;
+    const convX = convergenceX !== undefined ? convergenceX :
+      (boardCenterX !== undefined
+        ? (towardBoard === 'right' ? boardCenterX - 95 : boardCenterX + 95)
+        : (endDir === 'left' ? end.x - stubLen : end.x + stubLen));
+    const convY = convergenceY !== undefined ? convergenceY : end.y;
 
+    const fanOutX = cableExitX !== undefined ? cableExitX :
+      (towardBoard === 'right' ? start.x + 50 : start.x - 50);
+
+    const convergenceKey = `bus_conv_h_${Math.round(convX / 10)}_${Math.round(convY / 10)}`;
+
+    let actualLane = lane;
     let occupied = true;
-    let checkLane = lane;
-    while (occupied && checkLane < lane + 8) {
-      const checkX = fanBaseX + laneDir * checkLane * channelSpacing;
-      const key = `bus_h_${Math.round(checkX / 10)}_${Math.round(fanY / 10)}`;
+    let checkLane = 0;
+    while (occupied && checkLane < 8) {
+      const checkY = convY + checkLane * channelSpacing;
+      const key = `bus_h_${Math.round(convX / 10)}_${Math.round(checkY / 10)}`;
       occupied = channelOccupancyMap?.has(key) ?? false;
       if (!occupied) actualLane = checkLane;
       checkLane++;
     }
 
-    const fanX = fanBaseX + laneDir * actualLane * channelSpacing;
+    const fanY = convY + actualLane * channelSpacing;
     if (channelOccupancyMap) {
-      const key = `bus_h_${Math.round(fanX / 10)}_${Math.round(fanY / 10)}`;
+      const key = `bus_h_${Math.round(convX / 10)}_${Math.round(fanY / 10)}`;
       channelOccupancyMap.set(key, actualLane);
+      channelOccupancyMap.set(convergenceKey, (channelOccupancyMap.get(convergenceKey) || 0) + 1);
     }
 
-    const points: Point[] = [start, { x: fanX, y: start.y }, { x: fanX, y: end.y }, end];
+    let boundaryExitX = start.x;
+    if (componentBounds && towardBoard === 'right') {
+      boundaryExitX = componentBounds.x + componentBounds.width + 2;
+    } else if (componentBounds && towardBoard === 'left') {
+      boundaryExitX = componentBounds.x - 2;
+    }
+
+    const points: Point[] = [
+      start,
+      { x: boundaryExitX, y: start.y },
+      { x: fanOutX, y: start.y },
+      { x: fanOutX, y: fanY },
+      { x: convX, y: fanY },
+      { x: convX, y: end.y },
+      { x: end.x, y: end.y },
+      end
+    ];
+
     const simplified = simplifyPath(points);
     const chamfered = chamferPathCorners(simplified, 6);
     const d = pointsToSvgPath(chamfered);
@@ -952,31 +978,55 @@ export function generateBusStripPath(
 
     return { path: d, width, segments: [{ d, layer: 0 }], vias: [], teardrops };
   } else {
-    const deviatedEndDir = boardCenterY !== undefined
-      ? start.y < boardCenterY ? 'down' : 'up'
-      : endDir;
+    const towardBoard = startDir === 'down' ? 'down' : 'up';
 
-    const fanBaseY = deviatedEndDir === 'up' ? end.y - baseStubLen : end.y + baseStubLen;
-    const fanX = end.x;
-    const laneDir = deviatedEndDir === 'up' ? -1 : 1;
+    const convY = convergenceY !== undefined ? convergenceY :
+      (boardCenterY !== undefined
+        ? (towardBoard === 'down' ? boardCenterY - 105 : boardCenterY + 105)
+        : (endDir === 'up' ? end.y - stubLen : end.y + stubLen));
+    const convX = convergenceX !== undefined ? convergenceX : end.x;
 
+    const fanOutY = cableExitY !== undefined ? cableExitY :
+      (towardBoard === 'down' ? start.y + 50 : start.y - 50);
+
+    const convergenceKey = `bus_conv_v_${Math.round(convX / 10)}_${Math.round(convY / 10)}`;
+
+    let actualLane = lane;
     let occupied = true;
-    let checkLane = lane;
-    while (occupied && checkLane < lane + 8) {
-      const checkY = fanBaseY + laneDir * checkLane * channelSpacing;
-      const key = `bus_v_${Math.round(fanX / 10)}_${Math.round(checkY / 10)}`;
+    let checkLane = 0;
+    while (occupied && checkLane < 8) {
+      const checkX = convX + checkLane * channelSpacing;
+      const key = `bus_v_${Math.round(checkX / 10)}_${Math.round(convY / 10)}`;
       occupied = channelOccupancyMap?.has(key) ?? false;
       if (!occupied) actualLane = checkLane;
       checkLane++;
     }
 
-    const fanY = fanBaseY + laneDir * actualLane * channelSpacing;
+    const fanX = convX + actualLane * channelSpacing;
     if (channelOccupancyMap) {
-      const key = `bus_v_${Math.round(fanX / 10)}_${Math.round(fanY / 10)}`;
+      const key = `bus_v_${Math.round(fanX / 10)}_${Math.round(convY / 10)}`;
       channelOccupancyMap.set(key, actualLane);
+      channelOccupancyMap.set(convergenceKey, (channelOccupancyMap.get(convergenceKey) || 0) + 1);
     }
 
-    const points: Point[] = [start, { x: start.x, y: fanY }, { x: end.x, y: fanY }, end];
+    let boundaryExitY = start.y;
+    if (componentBounds && towardBoard === 'down') {
+      boundaryExitY = componentBounds.y + componentBounds.height + 2;
+    } else if (componentBounds && towardBoard === 'up') {
+      boundaryExitY = componentBounds.y - 2;
+    }
+
+    const points: Point[] = [
+      start,
+      { x: start.x, y: boundaryExitY },
+      { x: start.x, y: fanOutY },
+      { x: fanX, y: fanOutY },
+      { x: fanX, y: convY },
+      { x: end.x, y: convY },
+      { x: end.x, y: end.y },
+      end
+    ];
+
     const simplified = simplifyPath(points);
     const chamfered = chamferPathCorners(simplified, 6);
     const d = pointsToSvgPath(chamfered);

@@ -40,6 +40,7 @@
           <select v-model="wireStyle" class="select font-mono">
             <option value="pcb">45° PCB Trace</option>
             <option value="curved">Fritzing Curved</option>
+            <option value="bus">Bus Strip (Parallel)</option>
           </select>
         </div>
         <div class="control-group">
@@ -304,6 +305,8 @@
                 position: 'absolute',
                 left: `${getCanvasX(comp)}px`,
                 top: `${getCanvasY(comp)}px`,
+                '--rot': `${comp.rotation || 0}deg`,
+                transformOrigin: `${(componentSizes[comp.type]?.width ?? 80) / 2}px ${(componentSizes[comp.type]?.height ?? 60) / 2}px`,
                 zIndex: 10
               }"
               @click="selectComponent(comp)"
@@ -311,6 +314,15 @@
               class="canvas-peripheral-wrapper"
               :class="{ 'selected-peripheral': selectedCompId === comp.id, 'dragging': draggedCompId === comp.id }"
             >
+              <!-- Rotation toolbar (visible when selected) -->
+              <div v-if="selectedCompId === comp.id" class="rotation-toolbar" @mousedown.stop>
+                <button @click.stop="rotateComponent(comp, -90)" class="rot-btn" title="逆时针旋转 90°">
+                  <RotateCcw class="rot-icon" />
+                </button>
+                <button @click.stop="rotateComponent(comp, 90)" class="rot-btn" title="顺时针旋转 90°">
+                  <RotateCw class="rot-icon" />
+                </button>
+              </div>
               <!-- Raw visual components on the Canvas -->
               <wokwi-led 
                 v-if="comp.type === 'led'"
@@ -467,9 +479,25 @@
                   type="range" 
                   min="2" 
                   max="400" 
-                  v-model.number="ultrasonicDistance" 
-                  class="slider" 
+                  v-model.number="ultrasonicDistance"
+                  class="slider"
                 />
+              </div>
+
+              <!-- Rotation Control -->
+              <div class="form-group">
+                <label>Rotation</label>
+                <div class="rotation-btn-group">
+                  <button
+                    v-for="deg in [0, 90, 180, 270]"
+                    :key="deg"
+                    @click="setRotation(selectedComp, deg)"
+                    class="rotation-btn"
+                    :class="{ active: (selectedComp.rotation || 0) === deg }"
+                  >
+                    {{ deg }}°
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -603,7 +631,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { 
-  Play, Pause, RotateCcw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2
+  Play, Pause, RotateCcw, RotateCw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2
 } from 'lucide-vue-next';
 import {
   initSimulation, startSimulation, pauseSimulation, resetSimulation,
@@ -626,6 +654,8 @@ import {
   PinConnectionValue,
   generateSmartOrthogonalPath,
   generateSmartPCBPath,
+  generateBusStripPath,
+  rotatePinOffset,
   Obstacle,
   WirePathResult,
   NetDefinition
@@ -644,6 +674,7 @@ interface ComponentInstance {
   name: string;
   pinConnections: Record<string, PinConnectionValue>;
   props: Record<string, any>;
+  rotation: number;
 }
 
 interface LayoutPosition {
@@ -670,7 +701,7 @@ const catalog = ref<CatalogItem[]>([
   { type: 'ultrasonic', name: 'HC-SR04 Sensor', desc: 'Ultrasonic distance range sensor.' }
 ]);
 
-const wireStyle = ref<'pcb' | 'curved'>('pcb');
+const wireStyle = ref<'pcb' | 'curved' | 'bus'>('bus');
 const routingMode = ref<'auto' | 'manual'>('auto');
 const canvasContainerRef = ref<HTMLElement | null>(null);
 
@@ -727,33 +758,37 @@ function clientToCanvas(clientX: number, clientY: number) {
 }
 
 const activeComponents = ref<ComponentInstance[]>([
-  { 
-    id: 'led1', 
-    type: 'led', 
-    name: 'Virtual LED', 
+  {
+    id: 'led1',
+    type: 'led',
+    name: 'Virtual LED',
     pinConnections: { A: 13, C: 'GND' },
-    props: { color: 'red', brightness: 1.0, label: '', flip: false }
+    props: { color: 'red', brightness: 1.0, label: '', flip: false },
+    rotation: 0
   },
-  { 
-    id: 'btn1', 
-    type: 'button', 
-    name: 'Push Button', 
+  {
+    id: 'btn1',
+    type: 'button',
+    name: 'Push Button',
     pinConnections: { '1.l': 14, '2.l': 'VCC', '1.r': 'GND', '2.r': null },
-    props: { color: 'green', label: '', xray: false, activeLow: true }
+    props: { color: 'green', label: '', xray: false, activeLow: true },
+    rotation: 0
   },
-  { 
-    id: 'oled1', 
-    type: 'oled', 
-    name: 'SSD1306 Display', 
+  {
+    id: 'oled1',
+    type: 'oled',
+    name: 'SSD1306 Display',
     pinConnections: { DATA: 21, CLK: 22, DC: null, RST: null, CS: null, '3V3': '3V3', VIN: null, GND: 'GND' },
-    props: {}
+    props: {},
+    rotation: 0
   },
-  { 
-    id: 'sonar1', 
-    type: 'ultrasonic', 
-    name: 'HC-SR04 Sensor', 
+  {
+    id: 'sonar1',
+    type: 'ultrasonic',
+    name: 'HC-SR04 Sensor',
     pinConnections: { VCC: 'VCC', TRIG: 12, ECHO: 13, GND: 'GND' },
-    props: { distance: 25 }
+    props: { distance: 25 },
+    rotation: 0
   }
 ]);
 
@@ -844,7 +879,8 @@ function addComponent(item: CatalogItem) {
     type: item.type,
     name: item.name,
     pinConnections: getDefaultPinConnections(item.type),
-    props: getDefaultProps(item.type)
+    props: getDefaultProps(item.type),
+    rotation: 0
   };
   
   activeComponents.value.push(newItem);
@@ -869,6 +905,16 @@ function removeComponent(id: string) {
 
 function selectComponent(comp: ComponentInstance) {
   selectedCompId.value = comp.id;
+}
+
+function setRotation(comp: ComponentInstance, deg: number) {
+  comp.rotation = deg;
+  inactiveWireCache.value = {};
+}
+
+function rotateComponent(comp: ComponentInstance, delta: number) {
+  comp.rotation = (((comp.rotation || 0) + delta) % 360 + 360) % 360;
+  inactiveWireCache.value = {};
 }
 
 function handleButtonPress(comp: ComponentInstance) {
@@ -1333,8 +1379,11 @@ function handleComponentMouseMove(event: MouseEvent) {
   let x = Math.round(mouseX - dragOffset.value.x);
   let y = Math.round(mouseY - dragOffset.value.y);
 
-  x = Math.max(10, Math.min(viewWidth.value - 100, x));
-  y = Math.max(10, Math.min(viewHeight.value - 80, y));
+  const draggedComp = activeComponents.value.find(c => c.id === draggedCompId.value);
+  const maxX = viewWidth.value - (draggedComp ? getComponentWidth(draggedComp) : 100) - 10;
+  const maxY = viewHeight.value - (draggedComp ? getComponentHeight(draggedComp) : 80) - 10;
+  x = Math.max(10, Math.min(maxX, x));
+  y = Math.max(10, Math.min(maxY, y));
 
   x = Math.round(x / 10) * 10;
   y = Math.round(y / 10) * 10;
@@ -1366,24 +1415,39 @@ function getCanvasY(comp: ComponentInstance): number {
   return defaultPositions[comp.type]?.y ?? 50;
 }
 
+const componentSizes: Record<string, { width: number; height: number }> = {
+  led: { width: 50, height: 60 },
+  button: { width: 80, height: 60 },
+  oled: { width: 128, height: 64 },
+  ultrasonic: { width: 140, height: 80 },
+};
+
 function getComponentWidth(comp: ComponentInstance): number {
-  const sizes: Record<string, { width: number; height: number }> = {
-    led: { width: 50, height: 60 },
-    button: { width: 80, height: 60 },
-    oled: { width: 128, height: 64 },
-    ultrasonic: { width: 140, height: 80 },
-  };
-  return sizes[comp.type]?.width ?? 80;
+  const s = componentSizes[comp.type] ?? { width: 80, height: 60 };
+  const r = comp.rotation || 0;
+  return (r === 90 || r === 270) ? s.height : s.width;
 }
 
 function getComponentHeight(comp: ComponentInstance): number {
-  const sizes: Record<string, { width: number; height: number }> = {
-    led: { width: 50, height: 60 },
-    button: { width: 80, height: 60 },
-    oled: { width: 128, height: 64 },
-    ultrasonic: { width: 140, height: 80 },
-  };
-  return sizes[comp.type]?.height ?? 60;
+  const s = componentSizes[comp.type] ?? { width: 80, height: 60 };
+  const r = comp.rotation || 0;
+  return (r === 90 || r === 270) ? s.width : s.height;
+}
+
+function getComponentObstacle(comp: ComponentInstance): Obstacle {
+  const s = componentSizes[comp.type] ?? { width: 80, height: 60 };
+  const baseX = getCanvasX(comp);
+  const baseY = getCanvasY(comp);
+  const r = comp.rotation || 0;
+  if (r === 90 || r === 270) {
+    return {
+      x: baseX + (s.width - s.height) / 2,
+      y: baseY + (s.height - s.width) / 2,
+      width: s.height,
+      height: s.width,
+    };
+  }
+  return { x: baseX, y: baseY, width: s.width, height: s.height };
 }
 
 function getWireColor(comp: ComponentInstance): string {
@@ -1410,6 +1474,17 @@ function getPowerPinPosition(powerType: string): { x: number; y: number } {
   return { x: boardPosition.value.x + 7, y: boardPosition.value.y + 122 };
 }
 
+function rotateDir(
+  dir: 'left' | 'right' | 'up' | 'down',
+  rotation: number
+): 'left' | 'right' | 'up' | 'down' {
+  const dirs = ['up', 'right', 'down', 'left'] as const;
+  const idx = dirs.indexOf(dir);
+  if (idx < 0) return dir;
+  const steps = (((Math.round(rotation / 90)) % 4) + 4) % 4;
+  return dirs[(idx + steps) % 4];
+}
+
 function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x: number; y: number } {
   const baseX = getCanvasX(comp);
   const baseY = getCanvasY(comp);
@@ -1417,7 +1492,15 @@ function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x
   const pinDef = config?.pins.find(p => p.name === pinName);
   const offsetX = pinDef ? pinDef.relX : 0;
   const offsetY = pinDef ? pinDef.relY : 0;
-  return { x: baseX + offsetX, y: baseY + offsetY };
+
+  const rotation = comp.rotation || 0;
+  if (rotation === 0) {
+    return { x: baseX + offsetX, y: baseY + offsetY };
+  }
+  const W = componentSizes[comp.type]?.width ?? 80;
+  const H = componentSizes[comp.type]?.height ?? 60;
+  const rotated = rotatePinOffset(offsetX, offsetY, W, H, rotation);
+  return { x: baseX + rotated.x, y: baseY + rotated.y };
 }
 
 function getAllWires(): Array<{ comp: ComponentInstance; mode: 'primary' | 'secondary' | 'vcc' | 'gnd' }> {
@@ -1477,21 +1560,27 @@ function getWirePCBPath(
 
   const lane = getWireLane(comp, mode);
 
-  let startDir: 'left' | 'right' | 'up' | 'down' = 'down';
+  let baseStartDir: 'left' | 'right' | 'up' | 'down' = 'down';
   if (comp.type === 'button') {
-    if (pinName.endsWith('.l')) startDir = 'left';
-    else if (pinName.endsWith('.r')) startDir = 'right';
+    if (pinName.endsWith('.l')) baseStartDir = 'left';
+    else if (pinName.endsWith('.r')) baseStartDir = 'right';
   } else if (comp.type === 'oled') {
-    startDir = 'left';
+    baseStartDir = 'left';
   } else if (comp.type === 'led' || comp.type === 'ultrasonic') {
-    startDir = 'down';
+    baseStartDir = 'down';
   }
+  const startDir = rotateDir(baseStartDir, comp.rotation || 0);
 
-  const endDir = pts.end.x < 400 ? 'left' : 'right';
+  const endDir = pts.end.x < boardPosition.value.x + boardDescriptor.width / 2 ? 'left' : 'right';
 
   const signalType = netDef?.signalType || 'digital';
 
-  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints, wireStyle.value);
+  if (wireStyle.value === 'bus' && routingMode.value === 'auto') {
+    const boardCenterX = boardPosition.value.x + boardDescriptor.width / 2;
+    const boardCenterY = boardPosition.value.y + boardDescriptor.height / 2;
+    return generateBusStripPath(pts.start, pts.end, startDir, endDir, lane, signalType, channelOccupancyMap, boardCenterX, boardCenterY);
+  }
+  return generateSmartPCBPath(pts.start, pts.end, startDir, endDir, lane, obstacles, channelOccupancyMap, signalType, waypoints, wireStyle.value as 'pcb' | 'curved');
 }
 
 const wiresToRender = computed(() => {
@@ -1499,12 +1588,7 @@ const wiresToRender = computed(() => {
     { x: boardPosition.value.x, y: boardPosition.value.y, width: boardDescriptor.width, height: boardDescriptor.height }
   ];
   activeComponents.value.forEach(comp => {
-    obstacles.push({
-      x: getCanvasX(comp),
-      y: getCanvasY(comp),
-      width: getComponentWidth(comp),
-      height: getComponentHeight(comp)
-    });
+    obstacles.push(getComponentObstacle(comp));
   });
 
   interface NetRequest {
@@ -1713,9 +1797,11 @@ function handleWindowResize() {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
   border-radius: 8px;
+  transform: rotate(var(--rot, 0deg));
+  transform-origin: center center;
 }
 .canvas-peripheral-wrapper:hover {
-  transform: scale(1.03) translateY(-2px);
+  transform: rotate(var(--rot, 0deg)) scale(1.03) translateY(-2px);
   box-shadow: 0 8px 16px rgba(56, 189, 248, 0.25);
   filter: brightness(1.1);
 }
@@ -1725,9 +1811,69 @@ function handleWindowResize() {
 }
 .dragging {
   cursor: grabbing;
-  transform: scale(1.05);
+  transform: rotate(var(--rot, 0deg)) scale(1.05);
   box-shadow: 0 12px 24px rgba(56, 189, 248, 0.35);
   z-index: 100 !important;
+}
+.rotation-btn-group {
+  display: flex;
+  gap: 4px;
+}
+.rotation-btn {
+  flex: 1;
+  padding: 6px 0;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+  color: #8fa0a8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: monospace;
+  transition: all 0.15s ease;
+}
+.rotation-btn:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+.rotation-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #38bdf8;
+}
+.rotation-toolbar {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  transform: rotate(calc(-1 * var(--rot, 0deg)));
+  transform-origin: center center;
+  z-index: 20;
+}
+.rot-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: rgba(15, 23, 42, 0.92);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  backdrop-filter: blur(4px);
+}
+.rot-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+.rot-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .waypoint-handle {

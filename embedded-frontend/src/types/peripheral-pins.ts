@@ -144,6 +144,31 @@ export const boardDescriptor: BoardDescriptor = {
   },
 };
 
+export function rotatePinOffset(
+  relX: number,
+  relY: number,
+  W: number,
+  H: number,
+  rotation: number
+): { x: number; y: number } {
+  const cx = W / 2;
+  const cy = H / 2;
+  const dx = relX - cx;
+  const dy = relY - cy;
+  switch (((rotation % 360) + 360) % 360) {
+    case 0:
+      return { x: relX, y: relY };
+    case 90:
+      return { x: cx - dy, y: cy + dx };
+    case 180:
+      return { x: cx - dx, y: cy - dy };
+    case 270:
+      return { x: cx + dy, y: cy - dx };
+    default:
+      return { x: relX, y: relY };
+  }
+}
+
 export function getNetDefinitions(type: string): NetDefinition[] {
   const netMaps: Record<string, NetDefinition[]> = {
     led: [
@@ -843,6 +868,129 @@ export function generateSmartPCBPath(
     vias,
     teardrops
   };
+}
+
+export function generateBusStripPath(
+  start: Point,
+  end: Point,
+  startDir: 'left' | 'right' | 'up' | 'down',
+  endDir: 'left' | 'right' | 'up' | 'down',
+  lane: number,
+  signalType?: 'digital' | 'i2c' | 'power',
+  channelOccupancyMap?: Map<string, number>,
+  boardCenterX?: number,
+  boardCenterY?: number
+): WirePathResult {
+  let width = 2.2;
+  switch (signalType) {
+    case 'power':
+      width = 3.5;
+      break;
+    case 'i2c':
+      width = 1.5;
+      break;
+    case 'digital':
+    default:
+      width = 2.0;
+      break;
+  }
+
+  const horizontalPair =
+    (startDir === 'left' || startDir === 'right') &&
+    (endDir === 'left' || endDir === 'right') &&
+    startDir !== endDir;
+  const verticalPair =
+    (startDir === 'up' || startDir === 'down') &&
+    (endDir === 'up' || endDir === 'down') &&
+    startDir !== endDir;
+
+  if (!horizontalPair && !verticalPair) {
+    return generateSmartPCBPath(start, end, startDir, endDir, lane, undefined, undefined, signalType, undefined, 'pcb');
+  }
+
+  const channelSpacing = 12;
+  const baseStubLen = 18;
+  let actualLane = lane;
+
+  if (horizontalPair) {
+    const deviatedEndDir = boardCenterX !== undefined
+      ? start.x < boardCenterX ? 'right' : 'left'
+      : endDir;
+
+    const fanBaseX = deviatedEndDir === 'left' ? end.x - baseStubLen : end.x + baseStubLen;
+    const fanY = end.y;
+    const laneDir = deviatedEndDir === 'left' ? -1 : 1;
+
+    let occupied = true;
+    let checkLane = lane;
+    while (occupied && checkLane < lane + 8) {
+      const checkX = fanBaseX + laneDir * checkLane * channelSpacing;
+      const key = `bus_h_${Math.round(checkX / 10)}_${Math.round(fanY / 10)}`;
+      occupied = channelOccupancyMap?.has(key) ?? false;
+      if (!occupied) actualLane = checkLane;
+      checkLane++;
+    }
+
+    const fanX = fanBaseX + laneDir * actualLane * channelSpacing;
+    if (channelOccupancyMap) {
+      const key = `bus_h_${Math.round(fanX / 10)}_${Math.round(fanY / 10)}`;
+      channelOccupancyMap.set(key, actualLane);
+    }
+
+    const points: Point[] = [start, { x: fanX, y: start.y }, { x: fanX, y: end.y }, end];
+    const simplified = simplifyPath(points);
+    const chamfered = chamferPathCorners(simplified, 6);
+    const d = pointsToSvgPath(chamfered);
+
+    const teardrops: string[] = [];
+    if (points.length > 2) {
+      const tStart = generateTeardropPath(start, points[1], 5.5, 12);
+      if (tStart) teardrops.push(tStart);
+      const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
+      if (tEnd) teardrops.push(tEnd);
+    }
+
+    return { path: d, width, segments: [{ d, layer: 0 }], vias: [], teardrops };
+  } else {
+    const deviatedEndDir = boardCenterY !== undefined
+      ? start.y < boardCenterY ? 'down' : 'up'
+      : endDir;
+
+    const fanBaseY = deviatedEndDir === 'up' ? end.y - baseStubLen : end.y + baseStubLen;
+    const fanX = end.x;
+    const laneDir = deviatedEndDir === 'up' ? -1 : 1;
+
+    let occupied = true;
+    let checkLane = lane;
+    while (occupied && checkLane < lane + 8) {
+      const checkY = fanBaseY + laneDir * checkLane * channelSpacing;
+      const key = `bus_v_${Math.round(fanX / 10)}_${Math.round(checkY / 10)}`;
+      occupied = channelOccupancyMap?.has(key) ?? false;
+      if (!occupied) actualLane = checkLane;
+      checkLane++;
+    }
+
+    const fanY = fanBaseY + laneDir * actualLane * channelSpacing;
+    if (channelOccupancyMap) {
+      const key = `bus_v_${Math.round(fanX / 10)}_${Math.round(fanY / 10)}`;
+      channelOccupancyMap.set(key, actualLane);
+    }
+
+    const points: Point[] = [start, { x: start.x, y: fanY }, { x: end.x, y: fanY }, end];
+    const simplified = simplifyPath(points);
+    const chamfered = chamferPathCorners(simplified, 6);
+    const d = pointsToSvgPath(chamfered);
+
+    const teardrops: string[] = [];
+    if (points.length > 2) {
+      const tStart = generateTeardropPath(start, points[1], 5.5, 12);
+      if (tStart) teardrops.push(tStart);
+      const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
+      if (tEnd) teardrops.push(tEnd);
+    }
+
+    return { path: d, width, segments: [{ d, layer: 0 }], vias: [], teardrops };
+  }
 }
 
 function chamferPathCorners(pts: Point[], maxOffset = 8): Point[] {

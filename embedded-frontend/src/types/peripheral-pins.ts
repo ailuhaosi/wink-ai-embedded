@@ -951,8 +951,7 @@ export function generateSmartPCBPath(
       vias.push({ x: pt.x, y: pt.y });
 
       const simplified = simplifyPath(currentPts);
-      const chamfered = chamferPathCorners(simplified, 8);
-      const d = pointsToSvgPath(chamfered);
+      const d = pointsToRoundedSvgPath(simplified, 8);
       segments.push({
         d,
         layer: currentLayer
@@ -967,8 +966,7 @@ export function generateSmartPCBPath(
 
   if (currentPts.length > 0) {
     const simplified = simplifyPath(currentPts);
-    const chamfered = chamferPathCorners(simplified, 8);
-    const d = pointsToSvgPath(chamfered);
+    const d = pointsToRoundedSvgPath(simplified, 8);
     segments.push({
       d,
       layer: currentLayer
@@ -995,226 +993,7 @@ export function generateSmartPCBPath(
   };
 }
 
-export function generateBusStripPath(
-  start: Point,
-  end: Point,
-  startDir: 'left' | 'right' | 'up' | 'down',
-  endDir: 'left' | 'right' | 'up' | 'down',
-  lane: number,
-  signalType?: 'digital' | 'i2c' | 'power',
-  channelOccupancyMap?: Map<string, number>,
-  boardCenterX?: number,
-  boardCenterY?: number,
-  cableExitX?: number,
-  cableExitY?: number,
-  convergenceX?: number,
-  convergenceY?: number,
-  componentBounds?: { x: number; y: number; width: number; height: number }
-): WirePathResult {
-  let width = 2.2;
-  switch (signalType) {
-    case 'power':
-      width = 3.5;
-      break;
-    case 'i2c':
-      width = 1.5;
-      break;
-    case 'digital':
-    default:
-      width = 2.0;
-      break;
-  }
 
-  const isHorizontalStart = startDir === 'left' || startDir === 'right';
-  const isHorizontalEnd = endDir === 'left' || endDir === 'right';
-  
-  const horizontalPair = isHorizontalStart || isHorizontalEnd;
-  const verticalPair = !horizontalPair;
-
-  if (!horizontalPair && !verticalPair) {
-    return generateSmartPCBPath(start, end, startDir, endDir, lane, undefined, undefined, signalType, undefined, 'pcb');
-  }
-
-  const channelSpacing = 12;
-  const stubLen = 18;
-
-  if (horizontalPair) {
-    const towardBoard = startDir === 'right' ? 'right' : 'left';
-    const laneDir = towardBoard === 'right' ? 1 : -1;
-
-    const convX = convergenceX !== undefined ? convergenceX :
-      (boardCenterX !== undefined
-        ? (towardBoard === 'right' ? boardCenterX - 95 : boardCenterX + 95)
-        : (endDir === 'left' ? end.x - stubLen : end.x + stubLen));
-    const convY = convergenceY !== undefined ? convergenceY : end.y;
-
-    const fanOutX = cableExitX !== undefined ? cableExitX :
-      (towardBoard === 'right' ? start.x + 50 : start.x - 50);
-
-    const convergenceKey = `bus_conv_h_${Math.round(convX / 10)}_${Math.round(convY / 10)}`;
-
-    let actualLane = lane;
-    let occupied = true;
-    let checkLane = 0;
-    while (occupied && checkLane < 8) {
-      const checkY = convY + checkLane * channelSpacing;
-      const key = `bus_h_${Math.round(convX / 10)}_${Math.round(checkY / 10)}`;
-      occupied = channelOccupancyMap?.has(key) ?? false;
-      if (!occupied) actualLane = checkLane;
-      checkLane++;
-    }
-
-    const fanY = convY + actualLane * channelSpacing;
-    if (channelOccupancyMap) {
-      const key = `bus_h_${Math.round(convX / 10)}_${Math.round(fanY / 10)}`;
-      channelOccupancyMap.set(key, actualLane);
-      channelOccupancyMap.set(convergenceKey, (channelOccupancyMap.get(convergenceKey) || 0) + 1);
-    }
-
-    let boundaryExitX = start.x;
-    if (componentBounds && towardBoard === 'right') {
-      boundaryExitX = componentBounds.x + componentBounds.width + 2;
-    } else if (componentBounds && towardBoard === 'left') {
-      boundaryExitX = componentBounds.x - 2;
-    }
-
-    const points: Point[] = [
-      start,
-      { x: boundaryExitX, y: start.y },
-      { x: fanOutX, y: start.y },
-      { x: fanOutX, y: fanY },
-      { x: convX, y: fanY },
-      { x: convX, y: end.y },
-      { x: end.x, y: end.y },
-      end
-    ];
-
-    const simplified = simplifyPath(points);
-    const chamfered = chamferPathCorners(simplified, 6);
-    const d = pointsToSvgPath(chamfered);
-
-    const teardrops: string[] = [];
-    if (points.length > 2) {
-      const tStart = generateTeardropPath(start, points[1], 5.5, 12);
-      if (tStart) teardrops.push(tStart);
-      const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
-      if (tEnd) teardrops.push(tEnd);
-    }
-
-    return { path: d, width, segments: [{ d, layer: 0 }], vias: [], teardrops };
-  } else {
-    const towardBoard = startDir === 'down' ? 'down' : 'up';
-
-    const convY = convergenceY !== undefined ? convergenceY :
-      (boardCenterY !== undefined
-        ? (towardBoard === 'down' ? boardCenterY - 105 : boardCenterY + 105)
-        : (endDir === 'up' ? end.y - stubLen : end.y + stubLen));
-    const convX = convergenceX !== undefined ? convergenceX : end.x;
-
-    const fanOutY = cableExitY !== undefined ? cableExitY :
-      (towardBoard === 'down' ? start.y + 50 : start.y - 50);
-
-    const convergenceKey = `bus_conv_v_${Math.round(convX / 10)}_${Math.round(convY / 10)}`;
-
-    let actualLane = lane;
-    let occupied = true;
-    let checkLane = 0;
-    while (occupied && checkLane < 8) {
-      const checkX = convX + checkLane * channelSpacing;
-      const key = `bus_v_${Math.round(checkX / 10)}_${Math.round(convY / 10)}`;
-      occupied = channelOccupancyMap?.has(key) ?? false;
-      if (!occupied) actualLane = checkLane;
-      checkLane++;
-    }
-
-    const fanX = convX + actualLane * channelSpacing;
-    if (channelOccupancyMap) {
-      const key = `bus_v_${Math.round(fanX / 10)}_${Math.round(convY / 10)}`;
-      channelOccupancyMap.set(key, actualLane);
-      channelOccupancyMap.set(convergenceKey, (channelOccupancyMap.get(convergenceKey) || 0) + 1);
-    }
-
-    let boundaryExitY = start.y;
-    if (componentBounds && towardBoard === 'down') {
-      boundaryExitY = componentBounds.y + componentBounds.height + 2;
-    } else if (componentBounds && towardBoard === 'up') {
-      boundaryExitY = componentBounds.y - 2;
-    }
-
-    const points: Point[] = [
-      start,
-      { x: start.x, y: boundaryExitY },
-      { x: start.x, y: fanOutY },
-      { x: fanX, y: fanOutY },
-      { x: fanX, y: convY },
-      { x: end.x, y: convY },
-      { x: end.x, y: end.y },
-      end
-    ];
-
-    const simplified = simplifyPath(points);
-    const chamfered = chamferPathCorners(simplified, 6);
-    const d = pointsToSvgPath(chamfered);
-
-    const teardrops: string[] = [];
-    if (points.length > 2) {
-      const tStart = generateTeardropPath(start, points[1], 5.5, 12);
-      if (tStart) teardrops.push(tStart);
-      const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
-      if (tEnd) teardrops.push(tEnd);
-    }
-
-    return { path: d, width, segments: [{ d, layer: 0 }], vias: [], teardrops };
-  }
-}
-
-function chamferPathCorners(pts: Point[], maxOffset = 8): Point[] {
-  if (pts.length <= 2) return pts;
-  
-  const result: Point[] = [pts[0]];
-  
-  for (let i = 1; i < pts.length - 1; i++) {
-    const prev = pts[i - 1];
-    const curr = pts[i];
-    const next = pts[i + 1];
-
-    const dx1 = curr.x - prev.x;
-    const dy1 = curr.y - prev.y;
-    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
-
-    const dx2 = next.x - curr.x;
-    const dy2 = next.y - curr.y;
-    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-
-    if (len1 === 0 || len2 === 0) {
-      result.push(curr);
-      continue;
-    }
-
-    const dot = (dx1 * dx2 + dy1 * dy2) / (len1 * len2);
-    const isOrthogonal = Math.abs(dot) < 0.1;
-
-    if (isOrthogonal) {
-      const offset = Math.min(maxOffset, len1 / 2, len2 / 2);
-      
-      const pa = {
-        x: curr.x - (dx1 / len1) * offset,
-        y: curr.y - (dy1 / len1) * offset
-      };
-      const pb = {
-        x: curr.x + (dx2 / len2) * offset,
-        y: curr.y + (dy2 / len2) * offset
-      };
-      
-      result.push(pa, pb);
-    } else {
-      result.push(curr);
-    }
-  }
-
-  result.push(pts[pts.length - 1]);
-  return result;
-}
 
 export function generateSmartOrthogonalPath(
   start: Point,
@@ -1305,181 +1084,103 @@ export function pointsToSvgPath(pts: Point[]): string {
   return `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
 }
 
-function hybridPathToSvgPath(pts: Point[], cornerRadius: number = 10): string {
+export function roundPathCorners(pts: Point[], radius: number = 8): Point[] {
+  if (pts.length <= 2) return pts;
+  
+  const result: Point[] = [];
+  
+  for (let i = 0; i < pts.length; i++) {
+    const curr = pts[i];
+    const prev = i > 0 ? pts[i - 1] : null;
+    const next = i < pts.length - 1 ? pts[i + 1] : null;
+    
+    if (!prev || !next) {
+      result.push(curr);
+      continue;
+    }
+    
+    const dx1 = curr.x - prev.x;
+    const dy1 = curr.y - prev.y;
+    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+    
+    const dx2 = next.x - curr.x;
+    const dy2 = next.y - curr.y;
+    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    
+    if (len1 === 0 || len2 === 0) {
+      result.push(curr);
+      continue;
+    }
+    
+    const dot = (dx1 * dx2 + dy1 * dy2) / (len1 * len2);
+    const isOrthogonal = Math.abs(dot) < 0.1;
+    
+    if (!isOrthogonal) {
+      result.push(curr);
+      continue;
+    }
+    
+    const r = Math.min(radius, len1 / 2, len2 / 2);
+    
+    const entryX = curr.x - (dx1 / len1) * r;
+    const entryY = curr.y - (dy1 / len1) * r;
+    
+    const exitX = curr.x + (dx2 / len2) * r;
+    const exitY = curr.y + (dy2 / len2) * r;
+    
+    result.push({ x: entryX, y: entryY });
+    result.push(curr);
+    result.push({ x: exitX, y: exitY });
+  }
+  
+  return result;
+}
+
+export function pointsToRoundedSvgPath(pts: Point[], radius: number = 8): string {
   if (pts.length < 2) return '';
   if (pts.length === 2) {
     return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
   }
-
+  
   let d = `M ${pts[0].x} ${pts[0].y}`;
-
+  
   for (let i = 1; i < pts.length - 1; i++) {
     const prev = pts[i - 1];
     const curr = pts[i];
     const next = pts[i + 1];
-
+    
     const dx1 = curr.x - prev.x;
     const dy1 = curr.y - prev.y;
     const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
-
+    
     const dx2 = next.x - curr.x;
     const dy2 = next.y - curr.y;
     const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-
+    
     if (len1 === 0 || len2 === 0) {
       d += ` L ${curr.x} ${curr.y}`;
       continue;
     }
-
+    
     const dot = (dx1 * dx2 + dy1 * dy2) / (len1 * len2);
     const isOrthogonal = Math.abs(dot) < 0.1;
-
+    
     if (isOrthogonal) {
-      const r = Math.min(cornerRadius, len1 / 2, len2 / 2);
-
-      const xStart = curr.x - (dx1 / len1) * r;
-      const yStart = curr.y - (dy1 / len1) * r;
-      const xEnd = curr.x + (dx2 / len2) * r;
-      const yEnd = curr.y + (dy2 / len2) * r;
-
-      d += ` L ${xStart} ${yStart} Q ${curr.x} ${curr.y} ${xEnd} ${yEnd}`;
+      const r = Math.min(radius, len1 / 2, len2 / 2);
+      
+      const entryX = curr.x - (dx1 / len1) * r;
+      const entryY = curr.y - (dy1 / len1) * r;
+      const exitX = curr.x + (dx2 / len2) * r;
+      const exitY = curr.y + (dy2 / len2) * r;
+      
+      d += ` L ${entryX} ${entryY}`;
+      d += ` Q ${curr.x} ${curr.y} ${exitX} ${exitY}`;
     } else {
       d += ` L ${curr.x} ${curr.y}`;
     }
   }
-
+  
   d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
   return d;
 }
 
-export interface HybridPathInfo {
-  path: string;
-  width: number;
-  segments: Array<{ d: string; layer: number }>;
-  vias: Array<{ x: number; y: number }>;
-  teardrops: Array<string>;
-  centerLine: Point[];
-  directionAngle: number;
-}
-
-function calculateDirectionAngle(start: Point, end: Point): number {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  return Math.atan2(dy, dx);
-}
-
-export function areAnglesParallel(angle1: number, angle2: number, tolerance: number = 0.3): boolean {
-  const diff = Math.abs(angle1 - angle2);
-  return diff < tolerance || Math.abs(diff - Math.PI) < tolerance;
-}
-
-export function generateHybridBusPath(
-  start: Point,
-  end: Point,
-  startDir: 'left' | 'right' | 'up' | 'down',
-  endDir: 'left' | 'right' | 'up' | 'down',
-  lane: number,
-  signalType?: 'digital' | 'i2c' | 'power',
-  channelOccupancyMap?: Map<string, number>,
-  boardCenterX?: number,
-  boardCenterY?: number,
-  cableExitX?: number,
-  cableExitY?: number,
-  convergenceX?: number,
-  convergenceY?: number,
-  componentBounds?: { x: number; y: number; width: number; height: number }
-): HybridPathInfo {
-  let width = 2.2;
-  switch (signalType) {
-    case 'power':
-      width = 3.5;
-      break;
-    case 'i2c':
-      width = 1.5;
-      break;
-    case 'digital':
-    default:
-      width = 2.0;
-      break;
-  }
-
-  const extDistStart = 25 + lane * 4;
-  const extDistEnd = 15 + lane * 4;
-
-  const p1 = { x: start.x, y: start.y };
-  if (startDir === 'left') p1.x -= extDistStart;
-  else if (startDir === 'right') p1.x += extDistStart;
-  else if (startDir === 'up') p1.y -= extDistStart;
-  else if (startDir === 'down') p1.y += extDistStart;
-
-  const p2 = { x: end.x, y: end.y };
-  if (endDir === 'left') p2.x -= extDistEnd;
-  else if (endDir === 'right') p2.x += extDistEnd;
-  else if (endDir === 'up') p2.y -= extDistEnd;
-  else if (endDir === 'down') p2.y += extDistEnd;
-
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-
-  const tangent = dist > 0 ? { dx: dx / dist, dy: dy / dist } : { dx: 0, dy: 1 };
-  const normal = { dx: -tangent.dy, dy: tangent.dx };
-
-  const curveStrength = Math.min(dist * 0.25, 60);
-  const fanOffset = lane * 8;
-
-  const midX = (p1.x + p2.x) / 2;
-  const midY = (p1.y + p2.y) / 2;
-
-  const offsetX = normal.dx * curveStrength + tangent.dx * fanOffset * 0.5;
-  const offsetY = normal.dy * curveStrength + tangent.dy * fanOffset * 0.5;
-
-  const controlRatio = 0.45;
-
-  const cp1: Point = {
-    x: p1.x + dx * controlRatio + normal.dx * curveStrength * 0.6,
-    y: p1.y + dy * controlRatio + normal.dy * curveStrength * 0.6
-  };
-
-  const cp2: Point = {
-    x: p2.x - dx * controlRatio + normal.dx * curveStrength * 0.6,
-    y: p2.y - dy * controlRatio + normal.dy * curveStrength * 0.6
-  };
-
-  const points: Point[] = [
-    start,
-    p1,
-    cp1,
-    cp2,
-    p2,
-    end
-  ];
-
-  const centerLine: Point[] = [
-    start,
-    { x: midX + offsetX, y: midY + offsetY },
-    end
-  ];
-
-  const d = pointsToSmoothSvgPath(points, 12);
-
-  const directionAngle = calculateDirectionAngle(p1, p2);
-
-  const teardrops: string[] = [];
-  if (points.length > 2) {
-    const tStart = generateTeardropPath(start, points[1], 5.5, 12);
-    if (tStart) teardrops.push(tStart);
-    const tEnd = generateTeardropPath(end, points[points.length - 2], 5.5, 12);
-    if (tEnd) teardrops.push(tEnd);
-  }
-
-  return { 
-    path: d, 
-    width, 
-    segments: [{ d, layer: 0 }], 
-    vias: [], 
-    teardrops,
-    centerLine,
-    directionAngle
-  };
-}

@@ -455,7 +455,7 @@
                 left: `${getCanvasX(comp)}px`,
                 top: `${getCanvasY(comp)}px`,
                 '--rot': `${comp.rotation || 0}deg`,
-                transformOrigin: `${(componentSizes[comp.type]?.width ?? 80) / 2}px ${(componentSizes[comp.type]?.height ?? 60) / 2}px`,
+                transformOrigin: `${getComponentSize(comp.type).width / 2}px ${getComponentSize(comp.type).height / 2}px`,
                 zIndex: 10
               }"
               @mousedown.capture="onPeripheralMouseDown($event, comp)"
@@ -809,7 +809,8 @@ import {
   WirePathResult,
   NetDefinition
 } from '../types/peripheral-pins';
-import { rotateCardinalDirection, resolveBoardBounds, resolveBoardPinEndDir } from '../routing/geometry';
+import { resolveBoardBounds, resolveBoardPinEndDir, resolvePeripheralPinStartDir } from '../routing/geometry';
+import { resolveNetConnection, resolveNetPin } from '../routing/net-pin-resolver';
 import { SegmentOccupancyRegistry } from '../routing/segment-occupancy';
 import { buildTrackAssignments } from '../routing/track-allocator';
 import { generateWirePath } from '../routing/wire-routing';
@@ -950,7 +951,7 @@ const activeComponents = ref<ComponentInstance[]>([
     id: 'btn1',
     type: 'button',
     name: 'Push Button',
-    pinConnections: { '1.l': 14, '2.l': 'VCC', '1.r': 'GND', '2.r': null },
+    pinConnections: { '1.l': null, '2.l': 'VCC', '1.r': null, '2.r': null },
     props: { color: 'green', label: '', xray: false, activeLow: true },
     rotation: 0
   },
@@ -1589,7 +1590,7 @@ function onPeripheralMouseDown(event: MouseEvent, comp: ComponentInstance) {
   frozenTrackAssignments.value = buildTrackAssignmentMap(
     activeComponents.value.flatMap((c) =>
       getNetDefinitions(c.type)
-        .filter((net) => c.pinConnections[net.pinName] !== null && c.pinConnections[net.pinName] !== undefined)
+        .filter((net) => resolveNetConnection(net, c.pinConnections) !== null)
         .map((net) => ({
           compId: c.id,
           comp: c,
@@ -1662,39 +1663,53 @@ function getCanvasY(comp: ComponentInstance): number {
   return defaultPositions[comp.type]?.y ?? 50;
 }
 
-const componentSizes: Record<string, { width: number; height: number }> = {
-  led: { width: 50, height: 60 },
-  button: { width: 80, height: 60 },
-  oled: { width: 128, height: 64 },
-  ultrasonic: { width: 140, height: 80 },
-};
+function getComponentSize(type: string): { width: number; height: number } {
+  return peripheralConfigs[type]?.size ?? { width: 80, height: 60 };
+}
 
 function getComponentWidth(comp: ComponentInstance): number {
-  const s = componentSizes[comp.type] ?? { width: 80, height: 60 };
+  const s = getComponentSize(comp.type);
   const r = comp.rotation || 0;
   return (r === 90 || r === 270) ? s.height : s.width;
 }
 
 function getComponentHeight(comp: ComponentInstance): number {
-  const s = componentSizes[comp.type] ?? { width: 80, height: 60 };
+  const s = getComponentSize(comp.type);
   const r = comp.rotation || 0;
   return (r === 90 || r === 270) ? s.width : s.height;
 }
 
 function getComponentObstacle(comp: ComponentInstance): Obstacle {
-  const s = componentSizes[comp.type] ?? { width: 80, height: 60 };
+  const s = getComponentSize(comp.type);
+  let minX = 0;
+  let minY = 0;
+  let maxX = s.width;
+  let maxY = s.height;
+  const config = peripheralConfigs[comp.type];
+  if (config) {
+    for (const pin of config.pins) {
+      minX = Math.min(minX, pin.relX - 12);
+      minY = Math.min(minY, pin.relY - 12);
+      maxX = Math.max(maxX, pin.relX + 12);
+      maxY = Math.max(maxY, pin.relY + 12);
+    }
+  }
+  const w = maxX - minX;
+  const h = maxY - minY;
   const baseX = getCanvasX(comp);
   const baseY = getCanvasY(comp);
+  const originX = baseX + minX;
+  const originY = baseY + minY;
   const r = comp.rotation || 0;
   if (r === 90 || r === 270) {
     return {
-      x: baseX + (s.width - s.height) / 2,
-      y: baseY + (s.height - s.width) / 2,
-      width: s.height,
-      height: s.width,
+      x: originX + (w - h) / 2,
+      y: originY + (h - w) / 2,
+      width: h,
+      height: w,
     };
   }
-  return { x: baseX, y: baseY, width: s.width, height: s.height };
+  return { x: originX, y: originY, width: w, height: h };
 }
 
 function getWireColor(comp: ComponentInstance): string {
@@ -1721,20 +1736,17 @@ function getPowerPinPosition(powerType: string): { x: number; y: number } {
   return { x: boardPosition.value.x + 7, y: boardPosition.value.y + 122 };
 }
 
+function getComponentBounds(comp: ComponentInstance) {
+  const obs = getComponentObstacle(comp);
+  return resolveBoardBounds({ x: obs.x, y: obs.y }, obs.width, obs.height);
+}
+
 function resolveWireStartDir(
   comp: ComponentInstance,
   pinName: string,
 ): 'left' | 'right' | 'up' | 'down' {
-  let baseStartDir: 'left' | 'right' | 'up' | 'down' = 'down';
-  if (comp.type === 'button') {
-    if (pinName.endsWith('.l')) baseStartDir = 'left';
-    else if (pinName.endsWith('.r')) baseStartDir = 'right';
-  } else if (comp.type === 'oled') {
-    baseStartDir = 'left';
-  } else if (comp.type === 'led' || comp.type === 'ultrasonic') {
-    baseStartDir = 'down';
-  }
-  return rotateCardinalDirection(baseStartDir, comp.rotation || 0);
+  const pin = getPeripheralPinPosition(comp, pinName);
+  return resolvePeripheralPinStartDir(pin, getComponentBounds(comp));
 }
 
 function resolveWireEndDir(end: { x: number; y: number }): 'left' | 'right' | 'up' | 'down' {
@@ -1781,7 +1793,7 @@ function buildWireRouteRequests(
       wireId,
       start: pts.start,
       end: pts.end,
-      startDir: resolveWireStartDir(req.comp, netDef.pinName),
+      startDir: resolveWireStartDir(req.comp, pts.pinName),
       endDir: resolveWireEndDir(pts.end),
       priority: priorityOrder[req.signalType],
       channel,
@@ -1822,8 +1834,8 @@ function getPeripheralPinPosition(comp: ComponentInstance, pinName: string): { x
   if (rotation === 0) {
     return { x: baseX + offsetX, y: baseY + offsetY };
   }
-  const W = componentSizes[comp.type]?.width ?? 80;
-  const H = componentSizes[comp.type]?.height ?? 60;
+  const W = getComponentSize(comp.type).width;
+  const H = getComponentSize(comp.type).height;
   const rotated = rotatePinOffset(offsetX, offsetY, W, H, rotation);
   return { x: baseX + rotated.x, y: baseY + rotated.y };
 }
@@ -1838,35 +1850,63 @@ function applyGpioFanout(
   return { x: pos.x, y: pos.y + offset };
 }
 
+function resolveWireEndForConnection(
+  connection: PinConnectionValue,
+  fanout?: { index: number; total: number },
+): { x: number; y: number } | null {
+  if (typeof connection === 'number') {
+    return applyGpioFanout(getPinPosition(connection), fanout);
+  }
+  if (connection === 'VCC' || connection === '3V3' || connection === 'GND') {
+    const commonNode = commonPowerNodes.value[connection];
+    if (commonNode) {
+      return { x: commonNode.x, y: commonNode.y };
+    }
+    return getPowerPinPosition(connection);
+  }
+  return null;
+}
+
+function resolveNetPinForComp(
+  comp: ComponentInstance,
+  netDef: NetDefinition,
+  fanout?: { index: number; total: number },
+): { pinName: string; connection: PinConnectionValue } | null {
+  const connection = resolveNetConnection(netDef, comp.pinConnections);
+  if (connection === null || connection === undefined) return null;
+
+  const end = resolveWireEndForConnection(connection, fanout);
+  if (!end) return null;
+
+  const pinName = resolveNetPin(netDef, {
+    pinConnections: comp.pinConnections,
+    getPinPosition: (name) => getPeripheralPinPosition(comp, name),
+    targetPosition: end,
+  });
+  if (!pinName) return null;
+
+  return { pinName, connection };
+}
+
 function getWirePoints(
   comp: ComponentInstance,
   mode: 'primary' | 'secondary' | 'vcc' | 'gnd',
   fanout?: { index: number; total: number }
-): { start: { x: number; y: number }, end: { x: number; y: number } } | null {
+): { start: { x: number; y: number }; end: { x: number; y: number }; pinName: string } | null {
   const netDef = getNetDefinitions(comp.type).find(n => n.mode === mode);
   if (!netDef) return null;
-  
-  const pinName = netDef.pinName;
-  const connection = comp.pinConnections[pinName];
-  if (connection === null || connection === undefined) return null;
 
-  const start = getPeripheralPinPosition(comp, pinName);
-  let end = { x: 307, y: 272 };
-  
-  if (typeof connection === 'number') {
-    end = applyGpioFanout(getPinPosition(connection), fanout);
-  } else if (connection === 'VCC' || connection === '3V3' || connection === 'GND') {
-    const commonNode = commonPowerNodes.value[connection];
-    if (commonNode) {
-      end = { x: commonNode.x, y: commonNode.y };
-    } else {
-      end = getPowerPinPosition(connection);
-    }
-  } else {
-    return null;
-  }
-  
-  return { start, end };
+  const resolved = resolveNetPinForComp(comp, netDef, fanout);
+  if (!resolved) return null;
+
+  const end = resolveWireEndForConnection(resolved.connection, fanout);
+  if (!end) return null;
+
+  return {
+    start: getPeripheralPinPosition(comp, resolved.pinName),
+    end,
+    pinName: resolved.pinName,
+  };
 }
 
 
@@ -1876,7 +1916,7 @@ function buildGpioFanoutMap(requests: Array<{ compId: string; comp: ComponentIns
   for (const req of requests) {
     const netDef = getNetDefinitions(req.comp.type).find(n => n.mode === req.mode);
     if (!netDef) continue;
-    const conn = req.comp.pinConnections[netDef.pinName];
+    const conn = resolveNetConnection(netDef, req.comp.pinConnections);
     if (typeof conn !== 'number') continue;
     const wireId = `${req.compId}-${req.mode}`;
     if (!groups.has(conn)) groups.set(conn, []);
@@ -1926,8 +1966,7 @@ function buildActiveNetRequests(): NetRequest[] {
 
   activeComponents.value.forEach(comp => {
     getNetDefinitions(comp.type).forEach(net => {
-      const pinName = net.pinName;
-      if (!pinName || comp.pinConnections[pinName] === null || comp.pinConnections[pinName] === undefined) {
+      if (resolveNetConnection(net, comp.pinConnections) === null) {
         return;
       }
 
@@ -1990,8 +2029,9 @@ function getWirePCBPath(
   if (!pts) return null;
 
   const netDef = getNetDefinitions(comp.type).find(n => n.mode === mode);
-  const pinName = netDef?.pinName || '';
-  const connection = comp.pinConnections[pinName];
+  const resolved = netDef ? resolveNetPinForComp(comp, netDef, fanout) : null;
+  const pinName = resolved?.pinName || pts.pinName;
+  const connection = resolved?.connection ?? null;
   const signalType = netDef?.signalType || 'digital';
   const wireId = `${comp.id}-${mode}`;
 
@@ -2005,7 +2045,13 @@ function getWirePCBPath(
     !(waypoints && waypoints.length > 0);
 
   if (isPowerToBus) {
-    return generatePowerBusTapPath(pts.start, pts.end, channels.powerRailY, startDir);
+    return generatePowerBusTapPath(
+      pts.start,
+      pts.end,
+      channels.powerRailY,
+      startDir,
+      getComponentObstacle(comp),
+    );
   }
 
   return generateWirePath({

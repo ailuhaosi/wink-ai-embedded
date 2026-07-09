@@ -1,13 +1,15 @@
 import { LOCAL_THRESHOLD } from './constants';
 import {
+  buildBottomPinSideApproachPath,
   classifyTopology,
+  isPinNearBottomEdge,
   manhattanDistance,
   pinCoord,
-  routePathAroundBoard,
+  routePathAroundObstacle,
   segmentIntersectsObstacle,
   snapTrackCoord,
-} from './geometry';
-import type {
+  verticalTrackCrossesObstacle,
+} from './geometry';import type {
   CardinalDirection,
   Obstacle,
   Point,
@@ -99,14 +101,14 @@ function isOrthogonalPath(points: Point[]): boolean {
   return true;
 }
 
-function findBoardObstacle(obstacles: Obstacle[], end: Point): Obstacle | null {
+function findObstacleNear(obstacles: Obstacle[], point: Point): Obstacle | null {
   for (const obs of obstacles) {
     const margin = 24;
     if (
-      end.x >= obs.x - margin &&
-      end.x <= obs.x + obs.width + margin &&
-      end.y >= obs.y - margin &&
-      end.y <= obs.y + obs.height + margin
+      point.x >= obs.x - margin &&
+      point.x <= obs.x + obs.width + margin &&
+      point.y >= obs.y - margin &&
+      point.y <= obs.y + obs.height + margin
     ) {
       return obs;
     }
@@ -114,10 +116,26 @@ function findBoardObstacle(obstacles: Obstacle[], end: Point): Obstacle | null {
   return null;
 }
 
-function finalizeTemplatePath(points: Point[], obstacles: Obstacle[], end: Point): Point[] {
-  const board = findBoardObstacle(obstacles, end);
-  if (!board) return points;
-  return routePathAroundBoard(points, board, end);
+function finalizeTemplatePath(
+  points: Point[],
+  obstacles: Obstacle[],
+  start: Point,
+  end: Point,
+): Point[] {
+  let result = points;
+  const endObstacle = findObstacleNear(obstacles, end);
+  const startObstacle = findObstacleNear(obstacles, start);
+
+  if (endObstacle) {
+    result = routePathAroundObstacle(result, endObstacle, { skipLastSegment: true });
+  }
+  if (startObstacle) {
+    result = routePathAroundObstacle(result, startObstacle, {
+      skipFirstSegment: true,
+      skipLastSegment: false,
+    });
+  }
+  return result;
 }
 
 export function buildStubPoints(
@@ -172,10 +190,35 @@ export function templateLocal(input: TemplateInput): Point[] | null {
   return valid[0];
 }
 
+function needsBottomPinSideApproach(
+  start: Point,
+  p1: Point,
+  trackX: number,
+  p2y: number,
+  obstacle: Obstacle,
+  startDir: CardinalDirection,
+): boolean {
+  if (startDir !== 'down' && !isPinNearBottomEdge(start, obstacle)) {
+    return false;
+  }
+  return verticalTrackCrossesObstacle(trackX, p1.y, p2y, obstacle);
+}
+
 export function templateSameSide(input: TemplateInput): Point[] {
   const { start, end, startDir, endDir, assignment, obstacles } = input;
   const trackX = snapTrackCoord(assignment.verticalTrackX ?? start.x);
   const { p1, p2 } = buildStubPoints(start, end, startDir, endDir, assignment);
+  const p2y = snapTrackCoord(p2.y);
+  const startObstacle = findObstacleNear(obstacles, start);
+
+  if (startObstacle && needsBottomPinSideApproach(start, p1, trackX, p2y, startObstacle, startDir)) {
+    return finalizeTemplatePath(
+      buildBottomPinSideApproachPath(start, p1, trackX, p2y, p2, end, startObstacle),
+      obstacles,
+      start,
+      end,
+    );
+  }
 
   return finalizeTemplatePath(
     [
@@ -187,6 +230,7 @@ export function templateSameSide(input: TemplateInput): Point[] {
       end,
     ],
     obstacles,
+    start,
     end,
   );
 }
@@ -215,6 +259,7 @@ export function templateCrossSide(input: TemplateInput): Point[] {
         end,
       ],
       obstacles,
+      start,
       end,
     );
   }
@@ -231,6 +276,7 @@ export function templateCrossSide(input: TemplateInput): Point[] {
       end,
     ],
     obstacles,
+    start,
     end,
   );
 }

@@ -19,6 +19,8 @@ import { computed } from 'vue';
 import { setPinIdeal } from '../services/simulation-client';
 
 import type { PinConnectionValue } from '../types/peripheral-pins';
+import { getNetDefinitions } from '../types/peripheral-pins';
+import { resolveNetConnection } from '../routing/net-pin-resolver';
 
 const props = defineProps<{
   pinConnections: Record<string, PinConnectionValue>;
@@ -29,8 +31,10 @@ const props = defineProps<{
 }>();
 
 const signalPin = computed(() => {
-  const pin = props.pinConnections['1.l'];
-  return typeof pin === 'number' ? pin : null;
+  const primary = getNetDefinitions('button').find((n) => n.mode === 'primary');
+  if (!primary) return null;
+  const conn = resolveNetConnection(primary, props.pinConnections);
+  return typeof conn === 'number' ? conn : null;
 });
 
 const pinLabel = computed(() => {

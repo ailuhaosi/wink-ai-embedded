@@ -20,12 +20,17 @@ export interface PeripheralProps {
 }
 
 export interface PeripheralConfig {
+  size: {
+    width: number;
+    height: number;
+  };
   pins: PeripheralPinDef[];
   props: PeripheralProps;
 }
 
 export const peripheralConfigs: Record<string, PeripheralConfig> = {
   led: {
+    size: { width: 50, height: 60 },
     pins: [
       { name: 'A', description: 'Anode (+)', required: true, signalType: 'digital', default: 13, relX: 30, relY: 50 },
       { name: 'C', description: 'Cathode (-)', required: true, signalType: 'power', default: 'GND', relX: 10, relY: 50 },
@@ -38,10 +43,11 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
     },
   },
   button: {
+    size: { width: 80, height: 60 },
     pins: [
-      { name: '1.l', description: 'Left pin 1', required: true, signalType: 'digital', default: 14, relX: -5, relY: 20 },
+      { name: '1.l', description: 'Left pin 1', required: true, signalType: 'digital', default: null, relX: -5, relY: 20 },
       { name: '2.l', description: 'Left pin 2', required: false, signalType: 'power', default: 'VCC', relX: -5, relY: 40 },
-      { name: '1.r', description: 'Right pin 1', required: true, signalType: 'power', default: 'GND', relX: 75, relY: 20 },
+      { name: '1.r', description: 'Right pin 1', required: true, signalType: 'digital', default: null, relX: 75, relY: 20 },
       { name: '2.r', description: 'Right pin 2', required: false, signalType: 'digital', default: null, relX: 75, relY: 40 },
     ],
     props: {
@@ -52,6 +58,7 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
     },
   },
   ultrasonic: {
+    size: { width: 180, height: 100 },
     pins: [
       { name: 'VCC', description: 'Power 5V', required: true, signalType: 'power', default: 'VCC', relX: 75, relY: 95 },
       { name: 'TRIG', description: 'Trigger input', required: true, signalType: 'digital', default: 12, relX: 85, relY: 95 },
@@ -63,6 +70,7 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
     },
   },
   oled: {
+    size: { width: 128, height: 64 },
     pins: [
       { name: 'DATA', description: 'I2C SDA', required: true, signalType: 'i2c', default: 21, relX: 40, relY: 75 },
       { name: 'CLK', description: 'I2C SCL', required: true, signalType: 'i2c', default: 22, relX: 50, relY: 75 },
@@ -107,8 +115,11 @@ export function getDefaultProps(type: string): Record<string, any> {
 
 export interface NetDefinition {
   mode: 'primary' | 'secondary' | 'vcc' | 'gnd';
-  pinName: string;
   signalType: 'digital' | 'i2c' | 'power';
+  /** Physical pins that may carry this net; resolved at runtime. */
+  pinCandidates: string[];
+  /** Used when no candidate has an explicit pinConnections entry. */
+  defaultConnection?: PinConnectionValue;
 }
 
 export interface BoardPin {
@@ -235,24 +246,34 @@ export function rotatePinOffset(
 export function getNetDefinitions(type: string): NetDefinition[] {
   const netMaps: Record<string, NetDefinition[]> = {
     led: [
-      { mode: 'primary', pinName: 'A', signalType: 'digital' },
-      { mode: 'gnd', pinName: 'C', signalType: 'power' },
+      { mode: 'primary', signalType: 'digital', pinCandidates: ['A'] },
+      { mode: 'gnd', signalType: 'power', pinCandidates: ['C'] },
     ],
     button: [
-      { mode: 'primary', pinName: '1.l', signalType: 'digital' },
-      { mode: 'gnd', pinName: '1.r', signalType: 'power' },
+      {
+        mode: 'primary',
+        signalType: 'digital',
+        pinCandidates: ['1.l', '1.r'],
+        defaultConnection: 14,
+      },
+      {
+        mode: 'gnd',
+        signalType: 'power',
+        pinCandidates: ['2.l', '2.r'],
+        defaultConnection: 'GND',
+      },
     ],
     oled: [
-      { mode: 'primary', pinName: 'DATA', signalType: 'i2c' },
-      { mode: 'secondary', pinName: 'CLK', signalType: 'i2c' },
-      { mode: 'vcc', pinName: '3V3', signalType: 'power' },
-      { mode: 'gnd', pinName: 'GND', signalType: 'power' },
+      { mode: 'primary', signalType: 'i2c', pinCandidates: ['DATA'] },
+      { mode: 'secondary', signalType: 'i2c', pinCandidates: ['CLK'] },
+      { mode: 'vcc', signalType: 'power', pinCandidates: ['3V3', 'VIN'] },
+      { mode: 'gnd', signalType: 'power', pinCandidates: ['GND'] },
     ],
     ultrasonic: [
-      { mode: 'primary', pinName: 'ECHO', signalType: 'digital' },
-      { mode: 'secondary', pinName: 'TRIG', signalType: 'digital' },
-      { mode: 'vcc', pinName: 'VCC', signalType: 'power' },
-      { mode: 'gnd', pinName: 'GND', signalType: 'power' },
+      { mode: 'primary', signalType: 'digital', pinCandidates: ['ECHO'] },
+      { mode: 'secondary', signalType: 'digital', pinCandidates: ['TRIG'] },
+      { mode: 'vcc', signalType: 'power', pinCandidates: ['VCC'] },
+      { mode: 'gnd', signalType: 'power', pinCandidates: ['GND'] },
     ],
   };
   return netMaps[type] || [];

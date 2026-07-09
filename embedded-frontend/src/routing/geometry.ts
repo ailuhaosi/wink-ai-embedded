@@ -113,16 +113,46 @@ export function resolveBoardBounds(
  * Stub anchor p2 is placed at reverseDir(endDir), i.e. outward from the board edge.
  */
 export function resolveBoardPinEndDir(end: Point, bounds: BoardBounds): CardinalDirection {
-  const distLeft = Math.abs(end.x - bounds.left);
-  const distRight = Math.abs(end.x - bounds.right);
-  const distTop = Math.abs(end.y - bounds.top);
-  const distBottom = Math.abs(end.y - bounds.bottom);
+  return resolveOutwardDirFromNearestEdge(end, bounds, 'inward');
+}
+
+/**
+ * HCTR startDir = direction the stub extends from the peripheral pin (p1).
+ * Stub anchor p1 is placed outward from the nearest component edge.
+ */
+export function resolvePeripheralPinStartDir(pin: Point, bounds: BoardBounds): CardinalDirection {
+  return resolveOutwardDirFromNearestEdge(pin, bounds, 'outward');
+}
+
+function resolveOutwardDirFromNearestEdge(
+  point: Point,
+  bounds: BoardBounds,
+  mode: 'inward' | 'outward',
+): CardinalDirection {
+  const distLeft = Math.abs(point.x - bounds.left);
+  const distRight = Math.abs(point.x - bounds.right);
+  const distTop = Math.abs(point.y - bounds.top);
+  const distBottom = Math.abs(point.y - bounds.bottom);
   const minDist = Math.min(distLeft, distRight, distTop, distBottom);
 
-  if (minDist === distLeft) return 'right';
-  if (minDist === distRight) return 'left';
-  if (minDist === distTop) return 'down';
-  return 'up';
+  let outward: CardinalDirection;
+  if (minDist === distLeft) outward = 'left';
+  else if (minDist === distRight) outward = 'right';
+  else if (minDist === distTop) outward = 'up';
+  else outward = 'down';
+
+  if (mode === 'outward') return outward;
+
+  switch (outward) {
+    case 'left':
+      return 'right';
+    case 'right':
+      return 'left';
+    case 'up':
+      return 'down';
+    case 'down':
+      return 'up';
+  }
 }
 
 function dedupeCollinearPoints(points: Point[]): Point[] {
@@ -141,15 +171,22 @@ function dedupeCollinearPoints(points: Point[]): Point[] {
   return result;
 }
 
-/** Reroute segments that cut through the board body along the nearest outside edge. */
-export function routePathAroundBoard(
+export interface RouteAroundOptions {
+  /** Allow the final segment to enter the pin pad (board/peripheral landing). */
+  skipLastSegment?: boolean;
+  /** Allow the first segment to leave the pin pad. */
+  skipFirstSegment?: boolean;
+}
+
+/** Reroute segments that cut through an obstacle body along the nearest outside edge. */
+export function routePathAroundObstacle(
   points: Point[],
-  board: Obstacle,
-  end: Point,
+  obstacle: Obstacle,
+  options: RouteAroundOptions = { skipLastSegment: true },
 ): Point[] {
   if (points.length < 2) return points;
 
-  const expanded = expandObstacle(board, OBSTACLE_PADDING);
+  const expanded = expandObstacle(obstacle, OBSTACLE_PADDING);
   const edgeLeft = expanded.x;
   const edgeRight = expanded.x + expanded.width;
   const edgeTop = expanded.y;
@@ -160,20 +197,41 @@ export function routePathAroundBoard(
   for (let i = 1; i < points.length; i++) {
     const prev = result[result.length - 1];
     const curr = points[i];
-    const isPinLanding = i === points.length - 1;
+    const isPinLanding = options.skipLastSegment && i === points.length - 1;
+    const isPinExit = options.skipFirstSegment && i === 1;
 
     if (
       !isPinLanding &&
-      segmentIntersectsObstacle(prev, curr, [board], 0)
+      !isPinExit &&
+      segmentIntersectsObstacle(prev, curr, [obstacle], 0)
     ) {
-      const useLeftEdge = prev.x < board.x + board.width / 2;
+      const useLeftEdge = prev.x < obstacle.x + obstacle.width / 2;
       const edgeX = snapTrackCoord(useLeftEdge ? edgeLeft : edgeRight);
 
-      if (prev.x !== edgeX) {
-        result.push({ x: edgeX, y: snapTrackCoord(prev.y) });
-      }
-      if (result[result.length - 1].y !== curr.y) {
-        result.push({ x: edgeX, y: snapTrackCoord(curr.y) });
+      const horizontalCross =
+        prev.y === curr.y &&
+        Math.min(prev.x, curr.x) < obstacle.x + obstacle.width &&
+        Math.max(prev.x, curr.x) > obstacle.x;
+      const verticalCross =
+        prev.x === curr.x &&
+        Math.min(prev.y, curr.y) < obstacle.y + obstacle.height &&
+        Math.max(prev.y, curr.y) > obstacle.y;
+
+      if (horizontalCross) {
+        if (prev.x !== edgeX) {
+          result.push({ x: edgeX, y: snapTrackCoord(prev.y) });
+        }
+        if (result[result.length - 1].y !== curr.y) {
+          result.push({ x: edgeX, y: snapTrackCoord(curr.y) });
+        }
+      } else if (verticalCross) {
+        // Detour via left/right edge (not top/bottom) when a vertical segment cuts through the body.
+        if (prev.x !== edgeX) {
+          result.push({ x: edgeX, y: snapTrackCoord(prev.y) });
+        }
+        if (result[result.length - 1].y !== curr.y) {
+          result.push({ x: edgeX, y: snapTrackCoord(curr.y) });
+        }
       }
     }
 
@@ -184,4 +242,70 @@ export function routePathAroundBoard(
   }
 
   return dedupeCollinearPoints(result);
+}
+
+/** @deprecated Use routePathAroundObstacle — kept for call-site clarity at board end. */
+export function routePathAroundBoard(
+  points: Point[],
+  board: Obstacle,
+  _end: Point,
+): Point[] {
+  return routePathAroundObstacle(points, board, { skipLastSegment: true });
+}
+
+export function isPinNearBottomEdge(pin: Point, obstacle: Obstacle, margin = 24): boolean {
+  const bottom = obstacle.y + obstacle.height;
+  return pin.y >= bottom - margin;
+}
+
+/** True when a vertical track at trackX spans the obstacle body in Y. */
+export function verticalTrackCrossesObstacle(
+  trackX: number,
+  yA: number,
+  yB: number,
+  obstacle: Obstacle,
+): boolean {
+  const xInside = trackX > obstacle.x && trackX < obstacle.x + obstacle.width;
+  if (!xInside) return false;
+  const yLo = Math.min(yA, yB);
+  const yHi = Math.max(yA, yB);
+  return yLo < obstacle.y + obstacle.height && yHi > obstacle.y;
+}
+
+/** Pick left or right bypass edge based on where the wire approaches from (bus / power node). */
+export function resolveBypassEdgeX(obstacle: Obstacle, approachX: number): number {
+  const pad = OBSTACLE_PADDING;
+  const left = obstacle.x - pad;
+  const right = obstacle.x + obstacle.width + pad;
+  const centerX = obstacle.x + obstacle.width / 2;
+  return snapTrackCoord(approachX >= centerX ? right : left);
+}
+
+/**
+ * Bottom-edge pin fed from an upper track: route down the outside left/right edge,
+ * then connect to the vertical bus — avoids dropping through the component body.
+ */
+export function buildBottomPinSideApproachPath(
+  start: Point,
+  p1: Point,
+  trackX: number,
+  p2y: number,
+  p2: Point,
+  end: Point,
+  obstacle: Obstacle,
+): Point[] {
+  const edgeX = resolveBypassEdgeX(obstacle, trackX);
+  const yStub = snapTrackCoord(p1.y);
+  const yTrack = snapTrackCoord(p2y);
+  const busX = snapTrackCoord(trackX);
+
+  return dedupeCollinearPoints([
+    start,
+    p1,
+    { x: edgeX, y: yStub },
+    { x: edgeX, y: yTrack },
+    { x: busX, y: yTrack },
+    p2,
+    end,
+  ]);
 }

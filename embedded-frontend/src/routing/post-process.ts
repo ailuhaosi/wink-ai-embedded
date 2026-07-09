@@ -1,5 +1,6 @@
-import { ROUND_RADIUS } from './constants';
-import type { BoardOrigin, Point, WirePathResult } from './types';
+import { OBSTACLE_PADDING, ROUND_RADIUS } from './constants';
+import { snapTrackCoord, resolveBypassEdgeX, verticalTrackCrossesObstacle } from './geometry';
+import type { BoardOrigin, CardinalDirection, Obstacle, Point, WirePathResult } from './types';
 
 export function simplifyPath(pts: Point[]): Point[] {
   if (pts.length <= 2) return pts.map((p) => ({ ...p }));
@@ -154,12 +155,13 @@ export function buildWirePathResultFrom2D(
 }
 
 /** Star-bus tap: peripheral → horizontal power rail (top) → power node */
-export function generatePowerBusTapPath(
+export function buildPowerBusTapPath2D(
   start: Point,
   nodePos: Point,
   railY: number,
-  startDir: 'left' | 'right' | 'up' | 'down',
-): WirePathResult {
+  startDir: CardinalDirection,
+  sourceObstacle?: Obstacle,
+): Point[] {
   const ext = 14;
   const p1 = { x: start.x, y: start.y };
   if (startDir === 'left') p1.x -= ext;
@@ -167,11 +169,53 @@ export function generatePowerBusTapPath(
   else if (startDir === 'up') p1.y -= ext;
   else if (startDir === 'down') p1.y += ext;
 
+  if (sourceObstacle) {
+    if (startDir === 'left') {
+      p1.x = Math.min(p1.x, sourceObstacle.x - OBSTACLE_PADDING);
+    } else if (startDir === 'right') {
+      p1.x = Math.max(p1.x, sourceObstacle.x + sourceObstacle.width + OBSTACLE_PADDING);
+    } else if (startDir === 'up') {
+      p1.y = Math.min(p1.y, sourceObstacle.y - OBSTACLE_PADDING);
+    } else if (startDir === 'down') {
+      p1.y = Math.max(p1.y, sourceObstacle.y + sourceObstacle.height + OBSTACLE_PADDING);
+    }
+  }
+
+  if (
+    sourceObstacle &&
+    verticalTrackCrossesObstacle(
+      p1.x,
+      Math.min(p1.y, railY),
+      Math.max(p1.y, railY),
+      sourceObstacle,
+    )
+  ) {
+    const edgeX = resolveBypassEdgeX(sourceObstacle, nodePos.x);
+    return [
+      start,
+      p1,
+      { x: edgeX, y: snapTrackCoord(p1.y) },
+      { x: edgeX, y: snapTrackCoord(railY) },
+      { x: snapTrackCoord(nodePos.x), y: snapTrackCoord(railY) },
+      nodePos,
+    ];
+  }
+
   const railTap = { x: p1.x, y: railY };
   const nodeApproach = { x: nodePos.x, y: railY };
-  const p2 = { ...nodeApproach };
+  return [start, p1, railTap, nodeApproach, nodePos];
+}
 
-  const path2D = [start, p1, railTap, nodeApproach, nodePos];
+export function generatePowerBusTapPath(
+  start: Point,
+  nodePos: Point,
+  railY: number,
+  startDir: CardinalDirection,
+  sourceObstacle?: Obstacle,
+): WirePathResult {
+  const path2D = buildPowerBusTapPath2D(start, nodePos, railY, startDir, sourceObstacle);
+  const p1 = path2D[1];
+  const p2 = { x: nodePos.x, y: railY };
   return buildWirePathResultFrom2D(start, nodePos, p1, p2, path2D, 'power');
 }
 

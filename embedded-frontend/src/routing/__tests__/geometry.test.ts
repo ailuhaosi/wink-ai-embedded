@@ -4,6 +4,7 @@ import {
   pinCoord,
   resolveBoardBounds,
   resolveBoardPinEndDir,
+  resolvePeripheralPinStartDir,
   rotateCardinalDirection,
   segmentIntersectsObstacle,
   snapTrackCoord,
@@ -50,5 +51,11 @@ describe('geometry', () => {
     const bounds = resolveBoardBounds({ x: 310, y: 130 }, 180, 200);
     expect(resolveBoardPinEndDir({ x: 317, y: 192 }, bounds)).toBe('right');
     expect(resolveBoardPinEndDir({ x: 487, y: 162 }, bounds)).toBe('left');
+  });
+
+  it('resolvePeripheralPinStartDir picks outward stub for edge pins', () => {
+    const bounds = resolveBoardBounds({ x: 80, y: 240 }, 80, 60);
+    expect(resolvePeripheralPinStartDir({ x: 75, y: 260 }, bounds)).toBe('left');
+    expect(resolvePeripheralPinStartDir({ x: 155, y: 260 }, bounds)).toBe('right');
   });
 });

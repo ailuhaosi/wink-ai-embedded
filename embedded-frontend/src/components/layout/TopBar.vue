@@ -7,6 +7,7 @@ import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
 import { useSimulationStore } from '@/stores/simulation.store';
 import { useCanvasStore } from '@/stores/canvas.store';
 import { useProjectStore } from '@/stores/project.store';
+import { clockUs } from '@/services/simulation-runtime';
 
 const emit = defineEmits<{
   modeChange: [mode: 'design' | 'simulate' | 'diagnose'];
@@ -24,7 +25,7 @@ const simStore = useSimulationStore();
 const canvasStore = useCanvasStore();
 const projectStore = useProjectStore();
 const { current, designSubMode } = storeToRefs(modeStore);
-const { isInitialized, isRunning, isFaulted, clockUs, activeAppId, initError } = storeToRefs(simStore);
+const { isInitialized, isRunning, isFaulted, activeAppId, initError } = storeToRefs(simStore);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 

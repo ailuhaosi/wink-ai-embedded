@@ -106,6 +106,12 @@
       "engineLoading": "引擎加载中",
       "engineFailed": "引擎加载失败"
     },
+    "error": {
+      "engineTitle": "仿真引擎错误",
+      "boundaryTitle": "视图渲染出错",
+      "retry": "重试",
+      "reset": "重置并重试"
+    },
     "project": {
       "save": "保存项目",
       "open": "打开项目",

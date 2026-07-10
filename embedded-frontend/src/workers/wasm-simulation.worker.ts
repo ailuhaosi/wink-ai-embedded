@@ -1,3 +1,4 @@
+import { SIM_UI_TICK_MS } from '../constants/simulation';
 import type { SimWorkerInbound, SimWorkerOutbound } from '../types/sim-worker-protocol';
 import { SimWorkerOutboundType } from '../types/sim-worker-protocol';
 
@@ -287,8 +288,8 @@ function simLoop() {
     return;
   }
 
-  // Schedule next tick (16ms targeting ~60Hz update rate)
-  simTimer = setTimeout(simLoop, 16);
+  // Schedule next tick (~60Hz UI push rate)
+  simTimer = setTimeout(simLoop, SIM_UI_TICK_MS);
 }
 
 // Receive messages from UI thread

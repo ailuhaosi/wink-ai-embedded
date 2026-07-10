@@ -11,11 +11,8 @@ import {
   observePins,
   setFaults,
   setUltrasonicDistance,
-  isInitialized,
-  isRunning,
-  pinStates,
-  oledFb,
 } from '../services/simulation-client';
+import { pinStates, oledFb } from '../services/simulation-runtime';
 
 import TopBar from '@/components/layout/TopBar.vue';
 import SplitPane from '@/components/layout/SplitPane.vue';
@@ -29,6 +26,8 @@ import OnboardingWizard from '@/components/onboarding/OnboardingWizard.vue';
 import WorkbenchPropertyInspector from '@/components/workbench/WorkbenchPropertyInspector.vue';
 import WorkbenchFaultInjector from '@/components/workbench/WorkbenchFaultInjector.vue';
 import OledFrameBufferRenderer from '@/components/workbench/OledFrameBufferRenderer.vue';
+import SimulationErrorBanner from '@/components/workbench/SimulationErrorBanner.vue';
+import ErrorBoundary from '@/components/ErrorBoundary.vue';
 import { resetOnboarding } from '@/composables/useOnboarding';
 import { WorkbenchModeId } from '@/constants/workbench-mode';
 import type { WorkbenchModeValue } from '@/constants/workbench-mode';
@@ -63,6 +62,7 @@ const canvasStore = useCanvasStore();
 const simStore = useSimulationStore();
 const projectStore = useProjectStore();
 const { pendingSwitchTarget } = storeToRefs(modeStore);
+const { isInitialized, isRunning } = storeToRefs(simStore);
 
 const modeAnimating = ref(false);
 const modeSwitchBanner = ref<string | null>(null);
@@ -428,6 +428,8 @@ onUnmounted(() => {
       @open-project="onOpenProject"
     />
 
+    <SimulationErrorBanner />
+
     <div class="main-layout" :class="{ 'left-collapsed': layoutStore.leftPanelCollapsed }">
       <aside v-show="!layoutStore.leftPanelCollapsed" class="panel left-panel">
         <div class="panel-header">
@@ -448,58 +450,62 @@ onUnmounted(() => {
           @ratio-change="onSplitRatioChange"
         >
           <template #primary>
-            <CircuitCanvas
-              ref="circuitCanvasRef"
-              v-model:components="activeComponents"
-              v-model:selected-component-id="selectedCompId"
-              :pin-states="pinStates"
-              :readonly="!modeStore.canEditCircuit"
-              :routing-mode="routingMode"
-              @button-press="handleButtonPress"
-              @button-release="handleButtonRelease"
-              @layout-change="syncCanvasToManifest"
-            />
+            <ErrorBoundary>
+              <CircuitCanvas
+                ref="circuitCanvasRef"
+                v-model:components="activeComponents"
+                v-model:selected-component-id="selectedCompId"
+                :pin-states="pinStates"
+                :readonly="!modeStore.canEditCircuit"
+                :routing-mode="routingMode"
+                @button-press="handleButtonPress"
+                @button-release="handleButtonRelease"
+                @layout-change="syncCanvasToManifest"
+              />
+            </ErrorBoundary>
           </template>
           <template #secondary>
-            <div class="world-pane scrollable">
-              <ProductWorldPlaceholder @load-template="onLoadTemplate" />
-              <div v-if="modeStore.current !== WorkbenchModeId.Design" class="virtual-peripherals-grid">
-                <div v-for="comp in activeComponents" :key="`sim-${comp.id}`" class="grid-card">
-                  <div class="card-header">
-                    <span class="card-title">{{ comp.name }}</span>
-                  </div>
-                  <div class="card-body">
-                    <VirtualLED
-                      v-if="comp.type === 'led'"
-                      :pin-connections="comp.pinConnections"
-                      :color="comp.props.color"
-                      :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
-                      :brightness="comp.props.brightness"
-                      :label="comp.props.label"
-                      :flip="comp.props.flip"
-                    />
-                    <VirtualButton
-                      v-else-if="comp.type === 'button'"
-                      :pin-connections="comp.pinConnections"
-                      :color="comp.props.color"
-                      :label="comp.props.label"
-                      :xray="comp.props.xray"
-                      :active-low="comp.props.activeLow"
-                    />
-                    <VirtualOLED
-                      v-else-if="comp.type === 'oled'"
-                      :pin-connections="comp.pinConnections"
-                      :framebuffer="oledFb"
-                    />
-                    <VirtualUltrasonic
-                      v-else-if="comp.type === 'ultrasonic'"
-                      :pin-connections="comp.pinConnections"
-                      :distance="comp.props.distance"
-                    />
+            <ErrorBoundary>
+              <div class="world-pane scrollable">
+                <ProductWorldPlaceholder @load-template="onLoadTemplate" />
+                <div v-if="modeStore.current !== WorkbenchModeId.Design" class="virtual-peripherals-grid">
+                  <div v-for="comp in activeComponents" :key="`sim-${comp.id}`" class="grid-card">
+                    <div class="card-header">
+                      <span class="card-title">{{ comp.name }}</span>
+                    </div>
+                    <div class="card-body">
+                      <VirtualLED
+                        v-if="comp.type === 'led'"
+                        :pin-connections="comp.pinConnections"
+                        :color="comp.props.color"
+                        :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
+                        :brightness="comp.props.brightness"
+                        :label="comp.props.label"
+                        :flip="comp.props.flip"
+                      />
+                      <VirtualButton
+                        v-else-if="comp.type === 'button'"
+                        :pin-connections="comp.pinConnections"
+                        :color="comp.props.color"
+                        :label="comp.props.label"
+                        :xray="comp.props.xray"
+                        :active-low="comp.props.activeLow"
+                      />
+                      <VirtualOLED
+                        v-else-if="comp.type === 'oled'"
+                        :pin-connections="comp.pinConnections"
+                        :framebuffer="oledFb"
+                      />
+                      <VirtualUltrasonic
+                        v-else-if="comp.type === 'ultrasonic'"
+                        :pin-connections="comp.pinConnections"
+                        :distance="comp.props.distance"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </ErrorBoundary>
           </template>
         </SplitPane>
       </main>

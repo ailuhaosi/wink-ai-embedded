@@ -1,4 +1,3 @@
-import { ref } from 'vue';
 import WasmWorker from '../workers/wasm-simulation.worker?worker';
 import type { PinConnectionValue } from '../types/peripheral-pins';
 import type {
@@ -7,32 +6,46 @@ import type {
   SimWorkerOutbound,
 } from '../types/sim-worker-protocol';
 import { SimWorkerInboundType } from '../types/sim-worker-protocol';
+import {
+  applyStateUpdate,
+  appendLog,
+  clearLogs as clearRuntimeLogs,
+  resetDataPlane,
+} from './simulation-runtime';
 
 export type { SimFaultsConfig } from '../types/sim-worker-protocol';
+export type { SimTrace } from './simulation-runtime';
 
 export interface PeripheralConfig {
   type: string;
   pinConnections: Record<string, PinConnectionValue>;
 }
 
-export interface SimTrace {
-  timestamp: number;
-  type: number;
-  pinOrBus: number;
-  sequence?: number;
+/** Control-plane sink bound by simulation.store (avoids circular imports). */
+export interface SimulationControlApi {
+  resetForInit: () => void;
+  onInitDone: () => void;
+  onError: (message: string) => void;
+  onResetDone: () => void;
+  setFaulted: (faulted: boolean) => void;
+  setRunning: (running: boolean) => void;
+  isInitialized: () => boolean;
+  isRunning: () => boolean;
 }
 
-export const isInitialized = ref(false);
-export const isRunning = ref(false);
-export const isFaulted = ref(false);
-export const initError = ref<string | null>(null);
-export const clockUs = ref('0');
-export const pinStates = ref<Record<number, boolean>>({});
-export const oledFb = ref<Uint8Array | null>(null);
-export const logs = ref<Array<{ level: string; message: string; timestamp: number }>>([]);
-export const traces = ref<SimTrace[]>([]);
-
+let control: SimulationControlApi | null = null;
 let worker: Worker | null = null;
+
+export function bindSimulationControl(api: SimulationControlApi) {
+  control = api;
+}
+
+function requireControl(): SimulationControlApi {
+  if (!control) {
+    throw new Error('[SimulationClient] control plane not bound — call store.init() first');
+  }
+  return control;
+}
 
 /** Worker postMessage requires plain data — Vue reactive proxies cannot be cloned. */
 export function cloneFaultsConfig(faults: SimFaultsConfig): SimFaultsConfig {
@@ -48,18 +61,14 @@ export function cloneFaultsConfig(faults: SimFaultsConfig): SimFaultsConfig {
 }
 
 export function initSimulation() {
+  const ctrl = requireControl();
+
   if (worker) {
     worker.terminate();
   }
 
-  isInitialized.value = false;
-  isRunning.value = false;
-  isFaulted.value = false;
-  initError.value = null;
-  clockUs.value = '0';
-  pinStates.value = {};
-  oledFb.value = null;
-  traces.value = [];
+  ctrl.resetForInit();
+  resetDataPlane();
 
   console.log('[SimulationClient] Spawning simulation worker...');
   worker = new WasmWorker();
@@ -69,48 +78,36 @@ export function initSimulation() {
       payload?: unknown;
       message?: string;
     };
+    const c = requireControl();
 
     switch (type) {
       case 'INIT_DONE':
-        isInitialized.value = true;
-        initError.value = null;
+        c.onInitDone();
         console.log('[SimulationClient] Simulator initialized successfully!');
         break;
 
       case 'STATE_UPDATE':
         if (payload) {
           const state = payload as Extract<SimWorkerOutbound, { type: 'STATE_UPDATE' }>['payload'];
-          clockUs.value = state.us;
-          pinStates.value = state.pinStates || {};
-          oledFb.value = state.oledFb || null;
-          traces.value = (state.traces || []) as SimTrace[];
-          isFaulted.value = state.isFaulted || false;
+          applyStateUpdate(state);
+          c.setFaulted(state.isFaulted || false);
         }
         break;
 
       case 'LOG':
         if (payload) {
-          logs.value.push(payload as Extract<SimWorkerOutbound, { type: 'LOG' }>['payload']);
-          // Keep only last 1000 logs to prevent memory bloat
-          if (logs.value.length > 1000) {
-            logs.value.shift();
-          }
+          appendLog(payload as Extract<SimWorkerOutbound, { type: 'LOG' }>['payload']);
         }
         break;
 
       case 'ERROR':
         console.error(`[SimulationClient Worker Error] ${message}`);
-        isInitialized.value = false;
-        initError.value = message ?? 'Unknown worker error';
+        c.onError(message ?? 'Unknown worker error');
         break;
 
       case 'RESET_DONE':
-        isRunning.value = false;
-        clockUs.value = '0';
-        pinStates.value = {};
-        oledFb.value = null;
-        traces.value = [];
-        isFaulted.value = false;
+        c.onResetDone();
+        resetDataPlane();
         break;
     }
   };
@@ -120,18 +117,20 @@ export function initSimulation() {
 }
 
 export function startSimulation() {
-  if (worker && isInitialized.value) {
+  const ctrl = requireControl();
+  if (worker && ctrl.isInitialized()) {
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.START };
     worker.postMessage(msg);
-    isRunning.value = true;
+    ctrl.setRunning(true);
   }
 }
 
 export function pauseSimulation() {
-  if (worker && isRunning.value) {
+  const ctrl = requireControl();
+  if (worker && ctrl.isRunning()) {
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.PAUSE };
     worker.postMessage(msg);
-    isRunning.value = false;
+    ctrl.setRunning(false);
   }
 }
 
@@ -139,7 +138,7 @@ export function resetSimulation() {
   if (worker) {
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.RESET };
     worker.postMessage(msg);
-    isRunning.value = false;
+    requireControl().setRunning(false);
   }
 }
 
@@ -216,5 +215,5 @@ export function setSpeed(speed: number) {
 }
 
 export function clearLogs() {
-  logs.value = [];
+  clearRuntimeLogs();
 }

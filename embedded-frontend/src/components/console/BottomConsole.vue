@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia';
 import { useLayoutStore } from '@/stores/layout.store';
 import { useSimulationStore } from '@/stores/simulation.store';
 import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
+import { traces, logs } from '@/services/simulation-runtime';
 import { Activity, Terminal, GitBranch, Hammer, ShieldCheck, Stethoscope } from 'lucide-vue-next';
 
 const { t } = useI18n();
@@ -12,7 +13,6 @@ const layoutStore = useLayoutStore();
 const simStore = useSimulationStore();
 const modeStore = useWorkbenchModeStore();
 const { bottomPanelActiveTab, bottomPanelHeight, bottomPanelExpanded } = storeToRefs(layoutStore);
-const { traces, logs } = storeToRefs(simStore);
 const { lastStaticCheckIssues, lastBindingValidationIssues } = storeToRefs(modeStore);
 
 const tabs = computed(() => [

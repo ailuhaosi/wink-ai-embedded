@@ -7,4 +7,7 @@ import { i18n } from './i18n';
 const app = createApp(App);
 app.use(pinia);
 app.use(i18n);
+app.config.errorHandler = (err, _instance, info) => {
+  console.error('[Vue errorHandler]', info, err);
+};
 app.mount('#app');

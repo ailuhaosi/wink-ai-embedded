@@ -7,11 +7,11 @@ import { paintOledFramebuffer, type OledElementLike } from './paintFramebuffer';
 const oledEl = ref<OledElementLike | null>(null);
 
 watch(
-  oledFb,
-  (newFb) => {
-    if (!oledEl.value)
+  [oledFb, oledEl],
+  ([newFb, el]) => {
+    if (!el)
       return;
-    paintOledFramebuffer(oledEl.value, newFb);
+    paintOledFramebuffer(el, newFb ?? null);
   },
   { immediate: true },
 );

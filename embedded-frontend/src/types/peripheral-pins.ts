@@ -45,10 +45,11 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
   button: {
     size: { width: 80, height: 60 },
     pins: [
-      { name: '1.l', description: 'Left pin 1', required: true, signalType: 'digital', default: null, relX: -5, relY: 20 },
+      // Signal pins are optional until the user wires a GPIO; demo starts with them open.
+      { name: '1.l', description: 'Left pin 1', required: false, signalType: 'digital', default: null, relX: -5, relY: 20 },
       { name: '2.l', description: 'Left pin 2', required: false, signalType: 'power', default: 'VCC', relX: -5, relY: 40 },
-      { name: '1.r', description: 'Right pin 1', required: true, signalType: 'digital', default: null, relX: 75, relY: 20 },
-      { name: '2.r', description: 'Right pin 2', required: false, signalType: 'digital', default: null, relX: 75, relY: 40 },
+      { name: '1.r', description: 'Right pin 1', required: false, signalType: 'digital', default: null, relX: 75, relY: 13 },
+      { name: '2.r', description: 'Right pin 2', required: false, signalType: 'digital', default: null, relX: 75, relY: 33 },
     ],
     props: {
       color: { type: 'string', default: 'red', description: 'Button color', options: ['red', 'green', 'blue', 'yellow', 'white', 'black'] },
@@ -60,10 +61,10 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
   ultrasonic: {
     size: { width: 180, height: 100 },
     pins: [
-      { name: 'VCC', description: 'Power 5V', required: true, signalType: 'power', default: 'VCC', relX: 75, relY: 95 },
-      { name: 'TRIG', description: 'Trigger input', required: true, signalType: 'digital', default: 12, relX: 85, relY: 95 },
-      { name: 'ECHO', description: 'Echo output', required: true, signalType: 'digital', default: 13, relX: 95, relY: 95 },
-      { name: 'GND', description: 'Ground', required: true, signalType: 'power', default: 'GND', relX: 105, relY: 95 },
+      { name: 'VCC', description: 'Power 5V', required: true, signalType: 'power', default: 'VCC', relX: 72, relY: 95 },
+      { name: 'TRIG', description: 'Trigger input', required: true, signalType: 'digital', default: 12, relX: 82, relY: 95 },
+      { name: 'ECHO', description: 'Echo output', required: true, signalType: 'digital', default: 13, relX: 92, relY: 95 },
+      { name: 'GND', description: 'Ground', required: true, signalType: 'power', default: 'GND', relX: 102, relY: 95 },
     ],
     props: {
       distance: { type: 'number', default: 25, description: 'Distance in cm' },

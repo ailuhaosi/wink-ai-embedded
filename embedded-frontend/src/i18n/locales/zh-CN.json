@@ -1,0 +1,85 @@
+{
+  "workbench": {
+    "brand": "Wink-AI",
+    "mode": {
+      "design": "设计",
+      "simulate": "仿真",
+      "diagnose": "诊断",
+      "designDesc": "编辑",
+      "simulateDesc": "仿真",
+      "diagnoseDesc": "诊断"
+    },
+    "designSubMode": {
+      "circuitFirst": "接线优先",
+      "structureFirst": "结构优先"
+    },
+    "controls": {
+      "play": "运行",
+      "pause": "暂停",
+      "stop": "停止",
+      "reset": "重置",
+      "step": "单步",
+      "speed": "速度",
+      "time": "时间",
+      "wireAuto": "自动",
+      "wireManual": "手动",
+      "tidy": "整理走线",
+      "grid": "网格"
+    },
+    "confirm": {
+      "stopSimulationTitle": "停止仿真？",
+      "stopSimulationBody": "返回设计模式将停止当前仿真，运行时状态将被清除。",
+      "cancel": "取消",
+      "stopAndReturn": "停止并返回"
+    },
+    "inspector": {
+      "circuit": "电路",
+      "mechanical": "机械",
+      "bindings": "绑定",
+      "environment": "环境",
+      "faults": "故障",
+      "diagnostics": "诊断"
+    },
+    "console": {
+      "trace": "Trace",
+      "causal": "因果链",
+      "logs": "日志",
+      "build": "构建",
+      "staticCheck": "静态检查"
+    },
+    "world": {
+      "title": "3D 产品世界",
+      "subtitle": "拖入底盘零件，开始搭建你的产品",
+      "templateAvoidance": "避障小车模板",
+      "templateTempAlarm": "温感报警模板",
+      "hint": "或使用上方模板快速开始（W2 起可从左侧 Mechanical 库拖入零件）",
+      "placeholderW3a": "W3a 阶段实现",
+      "placeholderW2": "W2 阶段实现",
+      "placeholderW4": "W4 阶段实现",
+      "placeholderW5": "W5 阶段实现"
+    },
+    "onboarding": {
+      "step1Title": "双视窗工作台",
+      "step1Body": "左侧编辑电路，右侧预览产品世界。拖拽分割条可调整比例。",
+      "step2Title": "快速开始",
+      "step2Body": "从左栏选择模板或添加外设，快速搭建你的项目。",
+      "step3Title": "运行仿真",
+      "step3Body": "切换到仿真模式并点击运行，观察电路与产品的联动。",
+      "next": "下一步",
+      "skip": "跳过",
+      "done": "完成"
+    },
+    "staticCheck": {
+      "passed": "静态检查通过",
+      "failed": "静态检查未通过",
+      "noComponents": "请至少添加一个外设",
+      "notInitialized": "仿真引擎尚未就绪，请稍候",
+      "unconnectedPins": "存在未连接的必要引脚"
+    },
+    "status": {
+      "simulating": "仿真中",
+      "standby": "待机",
+      "faulted": "故障"
+    }
+  }
+}

@@ -42,6 +42,34 @@ describe('static-check.service', () => {
     });
     expect(result.ok).toBe(true);
   });
+
+  it('passes with default workbench demo peripherals', () => {
+    const result = runStaticCheck({
+      isSimulationReady: true,
+      components: [
+        { id: 'led1', type: 'led', name: 'Virtual LED', pinConnections: { A: 13, C: 'GND' } },
+        {
+          id: 'btn1',
+          type: 'button',
+          name: 'Push Button',
+          pinConnections: { '1.l': null, '2.l': 'VCC', '1.r': null, '2.r': null },
+        },
+        {
+          id: 'oled1',
+          type: 'oled',
+          name: 'SSD1306 Display',
+          pinConnections: { DATA: 21, CLK: 22, DC: null, RST: null, CS: null, '3V3': '3V3', VIN: null, GND: 'GND' },
+        },
+        {
+          id: 'sonar1',
+          type: 'ultrasonic',
+          name: 'HC-SR04 Sensor',
+          pinConnections: { VCC: 'VCC', TRIG: 12, ECHO: 13, GND: 'GND' },
+        },
+      ],
+    });
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('workbench-mode store guards', () => {

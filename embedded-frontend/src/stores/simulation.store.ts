@@ -1,3 +1,4 @@
+import { watch } from 'vue';
 import { defineStore } from 'pinia';
 import {
   initSimulation,
@@ -10,6 +11,7 @@ import {
   setSpeed,
   clearLogs,
   setUltrasonicDistance,
+  initError,
   isInitialized,
   isRunning,
   isFaulted,
@@ -20,33 +22,89 @@ import {
   traces,
   type SimFaultsConfig,
   type PeripheralConfig,
+  type SimTrace,
 } from '../services/simulation-client';
 
 interface SimulationState {
   simSpeed: number;
   lastError: string | null;
+  /** Mirrored from simulation-client refs for Pinia reactivity */
+  initError: string | null;
+  isInitialized: boolean;
+  isRunning: boolean;
+  isFaulted: boolean;
+  clockUs: string;
+  pinStates: Record<number, boolean>;
+  oledFb: Uint8Array | null;
+  logs: Array<{ level: string; message: string; timestamp: number }>;
+  traces: SimTrace[];
 }
+
+let runtimeSyncStarted = false;
 
 export const useSimulationStore = defineStore('simulation', {
   state: (): SimulationState => ({
     simSpeed: 1,
     lastError: null,
+    initError: null,
+    isInitialized: false,
+    isRunning: false,
+    isFaulted: false,
+    clockUs: '0',
+    pinStates: {},
+    oledFb: null,
+    logs: [],
+    traces: [],
   }),
 
   getters: {
-    isInitialized: () => isInitialized.value,
-    isRunning: () => isRunning.value,
-    isFaulted: () => isFaulted.value,
-    clockUs: () => clockUs.value,
-    pinStates: () => pinStates.value,
-    oledFb: () => oledFb.value,
-    logs: () => logs.value,
-    traces: () => traces.value,
-    simTimeUs: () => clockUs.value,
+    simTimeUs: (state) => state.clockUs,
   },
 
   actions: {
+    ensureRuntimeSync() {
+      if (runtimeSyncStarted) return;
+      runtimeSyncStarted = true;
+
+      watch(isInitialized, (value) => {
+        this.isInitialized = value;
+      }, { immediate: true });
+
+      watch(initError, (value) => {
+        this.initError = value;
+      }, { immediate: true });
+
+      watch(isRunning, (value) => {
+        this.isRunning = value;
+      }, { immediate: true });
+
+      watch(isFaulted, (value) => {
+        this.isFaulted = value;
+      }, { immediate: true });
+
+      watch(clockUs, (value) => {
+        this.clockUs = value;
+      }, { immediate: true });
+
+      watch(pinStates, (value) => {
+        this.pinStates = value;
+      }, { immediate: true, deep: true });
+
+      watch(oledFb, (value) => {
+        this.oledFb = value;
+      }, { immediate: true });
+
+      watch(logs, (value) => {
+        this.logs = value;
+      }, { immediate: true, deep: true });
+
+      watch(traces, (value) => {
+        this.traces = value;
+      }, { immediate: true, deep: true });
+    },
+
     init() {
+      this.ensureRuntimeSync();
       initSimulation();
     },
 

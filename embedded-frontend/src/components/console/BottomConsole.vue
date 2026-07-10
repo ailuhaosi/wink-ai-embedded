@@ -107,7 +107,7 @@ function formatTime(val: number): string {
         <div v-if="lastStaticCheckIssues.length === 0" class="empty-console">{{ t('workbench.staticCheck.passed') }}</div>
         <ul v-else class="issue-list">
           <li v-for="issue in lastStaticCheckIssues" :key="issue.id" class="issue-item">
-            {{ t(issue.message) }}
+            {{ issue.id === 'sim-init-failed' ? issue.message : t(issue.message) }}
           </li>
         </ul>
       </div>
@@ -130,6 +130,7 @@ function formatTime(val: number): string {
   border-top: 1px solid var(--border-color);
   background: var(--bg-primary);
   min-height: 36px;
+  flex-shrink: 0;
   position: relative;
 }
 

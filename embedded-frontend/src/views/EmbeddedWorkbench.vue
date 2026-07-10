@@ -575,6 +575,14 @@
       </aside>
     </div>
 
+    <div
+      v-if="!legacyMode && modeSwitchBanner"
+      class="mode-switch-banner"
+      role="alert"
+    >
+      {{ modeSwitchBanner }}
+    </div>
+
     <BottomConsole v-if="!legacyMode" />
 
     <!-- Legacy Bottom Panel -->
@@ -650,6 +658,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useI18n } from 'vue-i18n';
 import { 
   Play, Pause, RotateCcw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2, LayoutGrid
 } from 'lucide-vue-next';
@@ -686,6 +695,7 @@ import {
   powerOptions,
 } from '../types/peripheral-pins';
 
+const { t } = useI18n();
 const legacyMode = import.meta.env.VITE_LEGACY_SIM_TAB === 'true';
 const modeStore = useWorkbenchModeStore();
 const layoutStore = useLayoutStore();
@@ -695,6 +705,9 @@ const inspectorStore = useInspectorStore();
 const { pendingSwitchTarget } = storeToRefs(modeStore);
 
 const modeAnimating = ref(false);
+const modeSwitchBanner = ref<string | null>(null);
+const pendingSimulateAfterInit = ref(false);
+let modeSwitchBannerTimer: ReturnType<typeof setTimeout> | null = null;
 const showStopConfirm = computed(() => pendingSwitchTarget.value === 'design');
 
 const routingMode = computed({
@@ -963,8 +976,8 @@ function toggleWireBreak() {
 }
 
 // Helpers
-function formatTime(val: string | bigint): string {
-  const us = BigInt(val.toString());
+function formatTime(val: string | number | bigint): string {
+  const us = typeof val === 'number' ? BigInt(val) : BigInt(val.toString());
   return (Number(us) / 1000).toFixed(2);
 }
 
@@ -991,6 +1004,7 @@ function getTraceClass(type: number): string {
 function buildStaticCheckContext() {
   return {
     isSimulationReady: isInitialized.value,
+    initError: simStore.initError,
     components: activeComponents.value.map((c) => ({
       id: c.id,
       type: c.type,
@@ -1000,9 +1014,32 @@ function buildStaticCheckContext() {
   };
 }
 
+function showModeSwitchBanner(message: string) {
+  modeSwitchBanner.value = message;
+  if (modeSwitchBannerTimer) clearTimeout(modeSwitchBannerTimer);
+  modeSwitchBannerTimer = setTimeout(() => {
+    modeSwitchBanner.value = null;
+  }, 6000);
+}
+
 async function handleModeChange(mode: 'design' | 'simulate' | 'diagnose'): Promise<boolean> {
   modeAnimating.value = true;
   const ok = await modeStore.switchTo(mode, buildStaticCheckContext());
+  if (ok) {
+    pendingSimulateAfterInit.value = false;
+    modeSwitchBanner.value = null;
+  } else if (mode === 'simulate') {
+    const issues = modeStore.lastStaticCheckIssues;
+    const waitingForSim = issues.some((issue) => issue.id === 'sim-not-ready');
+    if (waitingForSim) {
+      pendingSimulateAfterInit.value = true;
+      showModeSwitchBanner(t('workbench.staticCheck.waitingForEngine'));
+    } else if (issues.length > 0) {
+      showModeSwitchBanner(t(issues[0].message));
+    } else {
+      showModeSwitchBanner(t('workbench.staticCheck.failed'));
+    }
+  }
   setTimeout(() => {
     modeAnimating.value = false;
     // Mode change animates split/bottom heights — rescale after layout settles.
@@ -1053,6 +1090,11 @@ function handleWindowResize() {
   }, 100);
 }
 
+watch(isInitialized, (ready) => {
+  if (!ready || !pendingSimulateAfterInit.value) return;
+  void handleModeChange('simulate');
+});
+
 onMounted(() => {
   simStore.init();
   layoutStore.applyModeDefaults(modeStore.current);
@@ -1066,6 +1108,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (modeSwitchBannerTimer) clearTimeout(modeSwitchBannerTimer);
   window.removeEventListener('resize', handleWindowResize);
   window.removeEventListener('keydown', onGlobalKeydown);
 });
@@ -1101,9 +1144,21 @@ onUnmounted(() => {
 .workbench {
   width: 100%;
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background-color: #080c14;
+  overflow: hidden;
+}
+
+.mode-switch-banner {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: rgba(255, 74, 90, 0.12);
+  border-bottom: 1px solid rgba(255, 74, 90, 0.35);
+  color: #fecaca;
+  font-size: 13px;
+  text-align: center;
 }
 
 /* Top Bar */
@@ -1222,9 +1277,9 @@ onUnmounted(() => {
 /* Common Layout Components */
 .main-layout {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: hidden;
-  height: calc(100vh - 120px);
 }
 .panel {
   display: flex;

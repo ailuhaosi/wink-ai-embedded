@@ -71,7 +71,8 @@
     },
     "staticCheck": {
       "passed": "静态检查通过",
-      "failed": "静态检查未通过",
+      "failed": "静态检查未通过，请查看底栏「静态检查」",
+      "waitingForEngine": "仿真引擎加载中，就绪后将自动进入仿真模式",
       "noComponents": "请至少添加一个外设",
       "notInitialized": "仿真引擎尚未就绪，请稍候",
       "unconnectedPins": "存在未连接的必要引脚"

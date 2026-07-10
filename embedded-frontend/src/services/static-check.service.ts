@@ -8,6 +8,7 @@ export interface StaticCheckIssue {
 
 export interface StaticCheckContext {
   isSimulationReady: boolean;
+  initError?: string | null;
   components: Array<{
     id: string;
     type: string;
@@ -30,9 +31,9 @@ export function runStaticCheck(context: StaticCheckContext): StaticCheckResult {
 
   if (!context.isSimulationReady) {
     issues.push({
-      id: 'sim-not-ready',
+      id: context.initError ? 'sim-init-failed' : 'sim-not-ready',
       severity: 'error',
-      message: 'workbench.staticCheck.notInitialized',
+      message: context.initError ?? 'workbench.staticCheck.notInitialized',
     });
   }
 

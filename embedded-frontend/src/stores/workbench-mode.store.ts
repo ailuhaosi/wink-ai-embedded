@@ -58,6 +58,7 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
         const simStore = useSimulationStore();
         const checkContext: StaticCheckContext = context ?? {
           isSimulationReady: simStore.isInitialized,
+          initError: simStore.initError,
           components: [],
         };
         const result = staticCheckService.runDetailed(checkContext);

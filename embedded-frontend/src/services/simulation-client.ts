@@ -17,14 +17,22 @@ export interface PeripheralConfig {
   pinConnections: Record<string, PinConnectionValue>;
 }
 
+export interface SimTrace {
+  timestamp: number;
+  type: number;
+  pinOrBus: number;
+  sequence?: number;
+}
+
 export const isInitialized = ref(false);
 export const isRunning = ref(false);
 export const isFaulted = ref(false);
+export const initError = ref<string | null>(null);
 export const clockUs = ref('0');
 export const pinStates = ref<Record<number, boolean>>({});
 export const oledFb = ref<Uint8Array | null>(null);
 export const logs = ref<Array<{ level: string; message: string; timestamp: number }>>([]);
-export const traces = ref<any[]>([]);
+export const traces = ref<SimTrace[]>([]);
 
 let worker: Worker | null = null;
 
@@ -36,6 +44,7 @@ export function initSimulation() {
   isInitialized.value = false;
   isRunning.value = false;
   isFaulted.value = false;
+  initError.value = null;
   clockUs.value = '0';
   pinStates.value = {};
   oledFb.value = null;
@@ -50,6 +59,7 @@ export function initSimulation() {
     switch (type) {
       case 'INIT_DONE':
         isInitialized.value = true;
+        initError.value = null;
         console.log('[SimulationClient] Simulator initialized successfully!');
         break;
         
@@ -75,6 +85,8 @@ export function initSimulation() {
         
       case 'ERROR':
         console.error(`[SimulationClient Worker Error] ${message}`);
+        isInitialized.value = false;
+        initError.value = message ?? 'Unknown worker error';
         break;
         
       case 'RESET_DONE':

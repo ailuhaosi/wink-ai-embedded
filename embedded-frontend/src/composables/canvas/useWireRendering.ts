@@ -8,8 +8,8 @@ import type {
   NetDefinition,
   PinConnectionValue,
 } from '@/types/peripheral-pins';
+import { peripheralConfigsAdapter } from '@/peripherals';
 import {
-  peripheralConfigs,
   getNetDefinitions,
   boardDescriptor,
   generatePowerBusTapPath,
@@ -60,7 +60,7 @@ export function useWireRendering(
   function getPeripheralPinPosition(comp: CircuitComponentInstance, pinName: string): { x: number; y: number } {
     const baseX = layout.getCanvasX(comp);
     const baseY = layout.getCanvasY(comp);
-    const config = peripheralConfigs[comp.type];
+    const config = peripheralConfigsAdapter[comp.type];
     const pinDef = config?.pins.find(p => p.name === pinName);
     const offsetX = pinDef ? pinDef.relX : 0;
     const offsetY = pinDef ? pinDef.relY : 0;

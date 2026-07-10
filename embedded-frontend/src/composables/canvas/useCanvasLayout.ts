@@ -1,6 +1,6 @@
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { Obstacle } from '@/types/peripheral-pins';
-import { peripheralConfigs } from '@/types/peripheral-pins';
+import { peripheralConfigsAdapter } from '@/peripherals';
 import { defaultPositions } from './constants';
 import type { CanvasContext, LayoutPosition } from './types';
 
@@ -59,7 +59,7 @@ export function useCanvasLayout(ctx: CanvasContext) {
   }
 
   function getComponentSize(type: string): { width: number; height: number } {
-    return peripheralConfigs[type]?.size ?? { width: 80, height: 60 };
+    return peripheralConfigsAdapter[type]?.size ?? { width: 80, height: 60 };
   }
 
   function getComponentWidth(comp: CircuitComponentInstance): number {
@@ -80,7 +80,7 @@ export function useCanvasLayout(ctx: CanvasContext) {
     let minY = 0;
     let maxX = s.width;
     let maxY = s.height;
-    const config = peripheralConfigs[comp.type];
+    const config = peripheralConfigsAdapter[comp.type];
     if (config) {
       for (const pin of config.pins) {
         minX = Math.min(minX, pin.relX - 12);

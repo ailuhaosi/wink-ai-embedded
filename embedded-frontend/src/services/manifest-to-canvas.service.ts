@@ -11,8 +11,7 @@ import type {
 import {
   getDefaultPinConnections,
   getDefaultProps,
-
-} from '@/types/peripheral-pins';
+} from '@/peripherals';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 import { parsePinRef } from '@/services/connection-normalize';
 import { isPowerConnection } from '@/constants/power-rail';

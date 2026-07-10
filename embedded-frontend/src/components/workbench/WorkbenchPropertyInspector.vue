@@ -2,8 +2,8 @@
 /* Shared object from parent canvas list — intentional in-place edits. */
 /* eslint-disable vue/no-mutating-props */
 import type { CircuitComponentInstance } from '@/types/circuit-component';
+import { peripheralConfigsAdapter } from '@/peripherals';
 import {
-  peripheralConfigs,
   availableGPIOs,
   powerOptions,
 } from '@/types/peripheral-pins';
@@ -47,7 +47,7 @@ const rotationDegrees = [0, 90, 180, 270] as const;
         Pin Connections
       </div>
       <div
-        v-for="pinDef in peripheralConfigs[selectedComp.type]?.pins"
+        v-for="pinDef in peripheralConfigsAdapter[selectedComp.type]?.pins"
         :key="pinDef.name"
         class="form-group"
       >
@@ -77,7 +77,7 @@ const rotationDegrees = [0, 90, 180, 270] as const;
         Properties
       </div>
       <div
-        v-for="(propDef, propKey) in peripheralConfigs[selectedComp.type]?.props"
+        v-for="(propDef, propKey) in peripheralConfigsAdapter[selectedComp.type]?.props"
         :key="propKey"
         class="form-group"
       >

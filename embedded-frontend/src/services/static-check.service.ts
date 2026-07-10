@@ -1,4 +1,4 @@
-import { peripheralConfigs } from '../types/peripheral-pins';
+import { peripheralConfigsAdapter } from '@/peripherals';
 
 export interface StaticCheckIssue {
   id: string;
@@ -46,7 +46,7 @@ export function runStaticCheck(context: StaticCheckContext): StaticCheckResult {
   }
 
   for (const comp of context.components) {
-    const pinDefs = peripheralConfigs[comp.type]?.pins ?? [];
+    const pinDefs = peripheralConfigsAdapter[comp.type]?.pins ?? [];
     for (const pinDef of pinDefs) {
       // Only enforce required pins that ship with a default connection.
       // Pins with default:null are user-wired later and must not block simulate.

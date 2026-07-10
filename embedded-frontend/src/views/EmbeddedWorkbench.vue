@@ -49,7 +49,7 @@ import type { CircuitComponentInstance } from '@/types/circuit-component';
 import {
   getDefaultPinConnections,
   getDefaultProps,
-} from '../types/peripheral-pins';
+} from '@/peripherals';
 
 const { t } = useI18n();
 const modeStore = useWorkbenchModeStore();

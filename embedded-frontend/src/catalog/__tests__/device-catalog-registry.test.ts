@@ -32,6 +32,21 @@ describe('device-catalog from registry', () => {
     }
   });
 
+  it('every catalog peripheral (category=peripheral) has registry.get(canvasType)', () => {
+    const peripherals = deviceCatalog
+      .listDevices()
+      .filter((d) => d.category === 'peripheral');
+    expect(peripherals.length).toBeGreaterThan(0);
+
+    for (const entry of peripherals) {
+      expect(entry.canvasType, `${entry.id} missing canvasType`).toBeDefined();
+      expect(
+        registry.get(entry.canvasType!),
+        `catalog peripheral ${entry.id} canvasType=${entry.canvasType} not in registry`,
+      ).toBeDefined();
+    }
+  });
+
   it('modelIdForCanvasType ↔ canvasTypeForModelId round-trips for registry peripherals', () => {
     const withCatalog = registry.list().filter((d) => d.catalog);
     for (const def of withCatalog) {

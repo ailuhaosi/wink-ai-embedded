@@ -26,7 +26,7 @@ function coerceProps(schema: PeripheralPropsSchema): PeripheralProps {
 
 /**
  * Transition adapter: read registry → legacy PeripheralConfig shape.
- * Call sites migrate in P2.3; do not delete peripheralConfigs yet (P2.4).
+ * Prefer registry APIs for new code; adapter remains for legacy call sites.
  */
 export const peripheralConfigsAdapter: Record<string, PeripheralConfig> = new Proxy(
   {} as Record<string, PeripheralConfig>,

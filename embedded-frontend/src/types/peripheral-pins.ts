@@ -1,6 +1,5 @@
 import { POWER_RAIL_VALUES } from '@/constants/power-rail';
 import type { PowerRailValue } from '@/constants/power-rail';
-import { OLED_WIDTH, OLED_HEIGHT } from '@/constants/oled';
 
 export type PinConnectionValue = number | PowerRailValue | null;
 
@@ -32,91 +31,9 @@ export interface PeripheralConfig {
   props: PeripheralProps;
 }
 
-export const peripheralConfigs: Record<string, PeripheralConfig> = {
-  led: {
-    size: { width: 50, height: 60 },
-    pins: [
-      { name: 'A', description: 'Anode (+)', required: true, signalType: 'digital', default: 13, relX: 30, relY: 50 },
-      { name: 'C', description: 'Cathode (-)', required: true, signalType: 'power', default: 'GND', relX: 10, relY: 50 },
-    ],
-    props: {
-      color: { type: 'string', default: 'red', description: 'LED color', options: ['red', 'green', 'blue', 'yellow', 'white', 'orange', 'purple'] },
-      brightness: { type: 'number', default: 1.0, description: 'Brightness (0-1)' },
-      label: { type: 'string', default: '', description: 'Label text' },
-      flip: { type: 'boolean', default: false, description: 'Flip orientation' },
-    },
-  },
-  button: {
-    size: { width: 80, height: 60 },
-    pins: [
-      // Signal pins are optional until the user wires a GPIO; demo starts with them open.
-      { name: '1.l', description: 'Left pin 1', required: false, signalType: 'digital', default: null, relX: -5, relY: 20 },
-      { name: '2.l', description: 'Left pin 2', required: false, signalType: 'power', default: 'VCC', relX: -5, relY: 40 },
-      { name: '1.r', description: 'Right pin 1', required: false, signalType: 'digital', default: null, relX: 75, relY: 13 },
-      { name: '2.r', description: 'Right pin 2', required: false, signalType: 'digital', default: null, relX: 75, relY: 33 },
-    ],
-    props: {
-      color: { type: 'string', default: 'red', description: 'Button color', options: ['red', 'green', 'blue', 'yellow', 'white', 'black'] },
-      label: { type: 'string', default: '', description: 'Label text' },
-      xray: { type: 'boolean', default: false, description: 'Show internal structure' },
-      activeLow: { type: 'boolean', default: true, description: 'Active low mode (pull-up)' },
-    },
-  },
-  ultrasonic: {
-    size: { width: 180, height: 100 },
-    pins: [
-      { name: 'VCC', description: 'Power 5V', required: true, signalType: 'power', default: 'VCC', relX: 72, relY: 95 },
-      { name: 'TRIG', description: 'Trigger input', required: true, signalType: 'digital', default: 12, relX: 82, relY: 95 },
-      { name: 'ECHO', description: 'Echo output', required: true, signalType: 'digital', default: 13, relX: 92, relY: 95 },
-      { name: 'GND', description: 'Ground', required: true, signalType: 'power', default: 'GND', relX: 102, relY: 95 },
-    ],
-    props: {
-      distance: { type: 'number', default: 25, description: 'Distance in cm' },
-    },
-  },
-  oled: {
-    size: { width: OLED_WIDTH, height: OLED_HEIGHT },
-    pins: [
-      { name: 'DATA', description: 'I2C SDA', required: true, signalType: 'i2c', default: 21, relX: 40, relY: 75 },
-      { name: 'CLK', description: 'I2C SCL', required: true, signalType: 'i2c', default: 22, relX: 50, relY: 75 },
-      { name: 'DC', description: 'Data/Command', required: false, signalType: 'digital', default: null, relX: 60, relY: 75 },
-      { name: 'RST', description: 'Reset', required: false, signalType: 'digital', default: null, relX: 70, relY: 75 },
-      { name: 'CS', description: 'Chip Select', required: false, signalType: 'digital', default: null, relX: 80, relY: 75 },
-      { name: '3V3', description: 'Power 3.3V', required: true, signalType: 'power', default: '3V3', relX: 90, relY: 75 },
-      { name: 'VIN', description: 'Power Input', required: false, signalType: 'power', default: null, relX: 100, relY: 75 },
-      { name: 'GND', description: 'Ground', required: true, signalType: 'power', default: 'GND', relX: 110, relY: 75 },
-    ],
-    props: {},
-  },
-};
-
 export const availableGPIOs = [12, 13, 14, 21, 22];
 
 export const powerOptions: PowerRailValue[] = [...POWER_RAIL_VALUES];
-
-export function getDefaultPinConnections(type: string): Record<string, PinConnectionValue> {
-  const config = peripheralConfigs[type];
-  if (!config) return {};
-
-  const connections: Record<string, PinConnectionValue> = {};
-  config.pins.forEach((pin) => {
-    if (pin.default !== null && pin.default !== undefined) {
-      connections[pin.name] = pin.default;
-    }
-  });
-  return connections;
-}
-
-export function getDefaultProps(type: string): Record<string, any> {
-  const config = peripheralConfigs[type];
-  if (!config) return {};
-
-  const props: Record<string, any> = {};
-  Object.keys(config.props).forEach((key) => {
-    props[key] = config.props[key].default;
-  });
-  return props;
-}
 
 export interface NetDefinition {
   mode: 'primary' | 'secondary' | 'vcc' | 'gnd';

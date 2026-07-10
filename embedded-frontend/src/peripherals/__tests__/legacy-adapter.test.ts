@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { peripheralConfigs } from '@/types/peripheral-pins';
+import { OLED_WIDTH, OLED_HEIGHT } from '@/constants/oled';
 import {
   peripheralConfigsAdapter,
   getDefaultProps,
@@ -9,29 +9,28 @@ import {
 import { registry } from '../registry';
 
 describe('peripheralConfigsAdapter', () => {
-  it.each(['led', 'button', 'oled', 'ultrasonic'] as const)(
-    '%s size matches legacy peripheralConfigs',
-    (type) => {
-      expect(peripheralConfigsAdapter[type]?.size).toEqual(peripheralConfigs[type].size);
-    },
-  );
-
-  it('led pin relX/relY match legacy (A, C)', () => {
-    const adapted = peripheralConfigsAdapter.led!;
-    const legacy = peripheralConfigs.led;
-    const pinA = adapted.pins.find((p) => p.name === 'A');
-    const pinC = adapted.pins.find((p) => p.name === 'C');
-    const legacyA = legacy.pins.find((p) => p.name === 'A')!;
-    const legacyC = legacy.pins.find((p) => p.name === 'C')!;
-    expect(pinA).toMatchObject({ relX: legacyA.relX, relY: legacyA.relY });
-    expect(pinC).toMatchObject({ relX: legacyC.relX, relY: legacyC.relY });
+  it.each([
+    ['led', { width: 50, height: 60 }],
+    ['button', { width: 80, height: 60 }],
+    ['oled', { width: OLED_WIDTH, height: OLED_HEIGHT }],
+    ['ultrasonic', { width: 180, height: 100 }],
+  ] as const)('%s size matches definition', (type, size) => {
+    expect(peripheralConfigsAdapter[type]?.size).toEqual(size);
+    expect(registry.get(type)?.size).toEqual(size);
   });
 
-  it('ultrasonic TRIG relX/relY match legacy', () => {
+  it('led pin relX/relY match definition (A, C)', () => {
+    const adapted = peripheralConfigsAdapter.led!;
+    const pinA = adapted.pins.find((p) => p.name === 'A');
+    const pinC = adapted.pins.find((p) => p.name === 'C');
+    expect(pinA).toMatchObject({ relX: 30, relY: 50 });
+    expect(pinC).toMatchObject({ relX: 10, relY: 50 });
+  });
+
+  it('ultrasonic TRIG relX/relY match definition', () => {
     const adapted = peripheralConfigsAdapter.ultrasonic!;
-    const legacyTrig = peripheralConfigs.ultrasonic.pins.find((p) => p.name === 'TRIG')!;
     const trig = adapted.pins.find((p) => p.name === 'TRIG');
-    expect(trig).toMatchObject({ relX: legacyTrig.relX, relY: legacyTrig.relY });
+    expect(trig).toMatchObject({ relX: 82, relY: 95 });
   });
 
   it('maps props schema enum/color to string and preserves options', () => {

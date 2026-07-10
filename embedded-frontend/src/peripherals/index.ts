@@ -3,6 +3,12 @@
  * Import this module (or individual packages) to ensure builtins are registered.
  */
 export { registry } from './registry';
+export { ObserveBuilderImpl } from './observe-builder';
+export type {
+  ObserveBuilder,
+  ObserveFn,
+  ObserveResult,
+} from './observe-builder';
 export type {
   PeripheralDefinition,
   PeripheralPinDef,

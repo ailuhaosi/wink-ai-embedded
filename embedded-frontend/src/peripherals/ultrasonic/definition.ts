@@ -38,4 +38,15 @@ export const ultrasonicDefinition: PeripheralDefinition = {
   props: ultrasonicProps,
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  simulation: {
+    worldCoupling: 'required',
+    observe(comp, builder) {
+      const trig = comp.pinConnections.TRIG;
+      const echo = comp.pinConnections.ECHO;
+      builder.watchUltrasonic(
+        typeof trig === 'number' ? trig : null,
+        typeof echo === 'number' ? echo : null,
+      );
+    },
+  },
 };

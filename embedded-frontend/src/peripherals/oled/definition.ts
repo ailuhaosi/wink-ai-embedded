@@ -31,4 +31,15 @@ export const oledDefinition: PeripheralDefinition = {
   props: {},
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  simulation: {
+    worldCoupling: 'optional',
+    observe(comp, builder) {
+      const sda = comp.pinConnections.DATA;
+      const scl = comp.pinConnections.CLK;
+      builder.watchI2C(
+        typeof sda === 'number' ? sda : null,
+        typeof scl === 'number' ? scl : null,
+      );
+    },
+  },
 };

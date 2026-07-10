@@ -1,5 +1,6 @@
 import type { Component } from 'vue';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
+import type { ObserveFn } from './observe-builder';
 
 /** 单个属性的定义 schema */
 export interface PeripheralPropDef {
@@ -78,10 +79,10 @@ export interface PeripheralDefinition {
     component: Component;
   };
 
-  /** P3：仿真观察插件接口（类型占位，P0 可暂空） */
+  /** P3：仿真观察插件接口 */
   simulation?: {
     worldCoupling?: 'none' | 'optional' | 'required';
-    observe?: (comp: unknown, ctx: unknown) => void;
+    observe?: ObserveFn;
   };
 
   /** 可选：属性面板额外插槽（用于非常规控件，如距离滑块） */

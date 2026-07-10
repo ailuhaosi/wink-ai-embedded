@@ -1,4 +1,6 @@
 import { computed } from 'vue';
+import '@/peripherals';
+import { registry } from '@/peripherals';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type {
   Obstacle,
@@ -31,11 +33,7 @@ export function useWireRendering(
   layout: Pick<CanvasLayout, 'getCanvasX' | 'getCanvasY' | 'getComponentSize' | 'getComponentObstacle'>,
 ) {
   function getWireColor(comp: CircuitComponentInstance): string {
-    if (comp.type === 'led') return '#00ff88';
-    if (comp.type === 'button') return '#38bdf8';
-    if (comp.type === 'oled') return '#a855f7';
-    if (comp.type === 'ultrasonic') return '#eab308';
-    return '#ffffff';
+    return registry.getWireColor(comp.type);
   }
 
   function getPinPosition(pin: number): { x: number; y: number } {

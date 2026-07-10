@@ -1,6 +1,7 @@
 import type { PeripheralDefinition, PeripheralPropsSchema } from '../types';
 import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
+import InspectorExtra from './InspectorExtra.vue';
 
 const ultrasonicProps: PeripheralPropsSchema = {
   distance: {
@@ -38,6 +39,7 @@ export const ultrasonicDefinition: PeripheralDefinition = {
   props: ultrasonicProps,
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  inspectorExtra: InspectorExtra,
   simulation: {
     worldCoupling: 'required',
     observe(comp, builder) {

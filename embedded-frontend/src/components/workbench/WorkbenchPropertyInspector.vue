@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /* Shared object from parent canvas list — intentional in-place edits. */
 /* eslint-disable vue/no-mutating-props */
+import { computed } from 'vue';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
-import { peripheralConfigsAdapter } from '@/peripherals';
+import { peripheralConfigsAdapter, registry } from '@/peripherals';
 import {
   availableGPIOs,
   powerOptions,
 } from '@/types/peripheral-pins';
 
-defineProps<{
+const props = defineProps<{
   selectedComp: CircuitComponentInstance | undefined;
   canEdit: boolean;
   ultrasonicDistance: number;
@@ -20,6 +21,10 @@ const emit = defineEmits<{
 }>();
 
 const rotationDegrees = [0, 90, 180, 270] as const;
+
+const inspectorExtra = computed(
+  () => registry.get(props.selectedComp?.type)?.inspectorExtra,
+);
 </script>
 
 <template>
@@ -114,20 +119,13 @@ const rotationDegrees = [0, 90, 180, 270] as const;
         >
       </div>
 
-      <div v-if="selectedComp.type === 'ultrasonic'" class="form-group">
-        <div class="slider-label">
-          <span>Distance (cm):</span>
-          <span class="val">{{ ultrasonicDistance }} cm</span>
-        </div>
-        <input
-          type="range"
-          min="2"
-          max="400"
-          class="slider"
-          :value="ultrasonicDistance"
-          @input="emit('update:ultrasonicDistance', Number(($event.target as HTMLInputElement).value))"
-        >
-      </div>
+      <component
+        :is="inspectorExtra"
+        v-if="inspectorExtra"
+        :model-value="ultrasonicDistance"
+        :disabled="!canEdit"
+        @update:model-value="emit('update:ultrasonicDistance', $event)"
+      />
 
       <div class="form-group">
         <label>Rotation</label>

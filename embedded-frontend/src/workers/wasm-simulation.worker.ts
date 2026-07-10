@@ -1,3 +1,6 @@
+import type { SimWorkerInbound, SimWorkerOutbound } from '../types/sim-worker-protocol';
+import { SimWorkerOutboundType } from '../types/sim-worker-protocol';
+
 // @ts-ignore — loaded at runtime via importScripts to avoid Vite bundling Node fs paths
 import { SimWorker } from '@unisim/worker/SimWorker';
 import {
@@ -47,7 +50,7 @@ function loadWasmSandboxFactory(): Promise<WasmSandboxFactory> {
       ) => WasmSandboxFactory;
       const factory = loader(shimModule, shimModule.exports);
       if (typeof factory !== 'function') {
-        throw new Error('WasmSandbox factory not found in /wasm/wink_simulator.js');
+        throw new TypeError('WasmSandbox factory not found in /wasm/wink_simulator.js');
       }
       return factory;
     })();
@@ -64,9 +67,9 @@ const originalDebug = console.debug;
 
 function sendLogToUI(level: 'log' | 'warn' | 'error' | 'info' | 'debug', msg: string) {
   self.postMessage({
-    type: 'LOG',
-    payload: { level, message: msg, timestamp: Date.now() }
-  });
+    type: SimWorkerOutboundType.LOG,
+    payload: { level, message: msg, timestamp: Date.now() },
+  } satisfies SimWorkerOutbound);
 }
 
 console.log = (...args) => {
@@ -131,7 +134,7 @@ async function initSimulator() {
   try {
     console.log('[SimWorker] Loading Emscripten glue...');
     const WasmSandbox = await loadWasmSandboxFactory();
-    
+
     console.log('[SimWorker] Instantiating SimWorker...');
     simWorker = new SimWorker({
       exports: exportsProxy,
@@ -144,12 +147,12 @@ async function initSimulator() {
       ultrasonicEchoUs: (pin) => {
         const dist = ultrasonicDistances.get(pin) ?? 10.0;
         return dist * 58; // 58us per cm
-      }
+      },
     });
-    
+
     // Get the imports configuration from the worker
     const imports = simWorker.buildWasmImports();
-    
+
     const moduleConfig = {
       ...imports,
       // Defer main() until SimWorker INIT resets clocks — auto callMain before
@@ -165,12 +168,13 @@ async function initSimulator() {
         realModule = mod;
         try {
           rawModuleAdapter = adaptEmscriptenRawModule(realModule);
-        } catch {
+        }
+        catch {
           rawModuleAdapter = null;
         }
       }],
     };
-    
+
     console.log('[SimWorker] Instantiating WASM sandbox...');
     const Module = await WasmSandbox(moduleConfig);
 
@@ -178,20 +182,22 @@ async function initSimulator() {
     if (!rawModuleAdapter) {
       try {
         rawModuleAdapter = adaptEmscriptenRawModule(realModule);
-      } catch {
+      }
+      catch {
         rawModuleAdapter = null;
       }
     }
-    
+
     // Reset worker clocks/physical state (wasm app starts on first START).
     simWorker.handleMessage({ type: 'INIT', id: 0 });
 
     console.log('[SimWorker] WASM simulation sandbox initialized successfully!');
-    
-    self.postMessage({ type: 'INIT_DONE' });
-  } catch (err: any) {
+
+    self.postMessage({ type: SimWorkerOutboundType.INIT_DONE } satisfies SimWorkerOutbound);
+  }
+  catch (err: any) {
     console.error(`[SimWorker] Initialization failed: ${err.message}`);
-    self.postMessage({ type: 'ERROR', message: err.message });
+    self.postMessage({ type: SimWorkerOutboundType.ERROR, message: err.message } satisfies SimWorkerOutbound);
   }
 }
 
@@ -207,13 +213,13 @@ function ensureWasmMainStarted(): void {
 // Drive the simulation loop
 function simLoop() {
   if (!running || !simWorker) return;
-  
+
   try {
     // Step the clock based on the speed multiplier
     for (let i = 0; i < speedMultiplier; i++) {
       simWorker.handleMessage({ type: 'STEP_CLOCK', id: 0, us: STEP_US });
     }
-    
+
     // Read the states of all registered pins
     const pinStates: Record<number, boolean> = {};
     for (const pin of observedPins) {
@@ -222,7 +228,7 @@ function simLoop() {
         pinStates[pin] = (res.payload as any).level;
       }
     }
-    
+
     // Read OLED Framebuffer if enabled
     let oledFb: Uint8Array | null = null;
     if (hasOled && realModule && rawModuleAdapter && hasEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb')) {
@@ -237,7 +243,8 @@ function simLoop() {
           const fbSize = (width * height) / 8;
           oledFb = new Uint8Array(heap.buffer, fbPtr, fbSize).slice();
         }
-      } finally {
+      }
+      finally {
         rawModuleAdapter!._free(wPtr);
         rawModuleAdapter!._free(hPtr);
       }
@@ -261,41 +268,42 @@ function simLoop() {
       : false;
 
     const currentUs = simWorker.getBridge().getClockUs().toString();
-    
+
     self.postMessage({
-      type: 'STATE_UPDATE',
+      type: SimWorkerOutboundType.STATE_UPDATE,
       payload: {
         us: currentUs,
         pinStates,
         oledFb,
         traces,
-        isFaulted
-      }
-    });
-  } catch (err: any) {
+        isFaulted,
+      },
+    } satisfies SimWorkerOutbound);
+  }
+  catch (err: any) {
     console.error(`[SimLoop Error] ${err.message}`);
     running = false;
-    self.postMessage({ type: 'ERROR', message: err.message });
+    self.postMessage({ type: SimWorkerOutboundType.ERROR, message: err.message } satisfies SimWorkerOutbound);
     return;
   }
-  
+
   // Schedule next tick (16ms targeting ~60Hz update rate)
   simTimer = setTimeout(simLoop, 16);
 }
 
 // Receive messages from UI thread
-self.onmessage = async (e: MessageEvent<any>) => {
-  const { type, payload } = e.data;
-  
+self.onmessage = async (e: MessageEvent<SimWorkerInbound>) => {
+  const { type, payload } = e.data as SimWorkerInbound & { payload?: unknown };
+
   if (!simWorker && type !== 'INIT') {
     return;
   }
-  
+
   switch (type) {
     case 'INIT':
       await initSimulator();
       break;
-      
+
     case 'START':
       if (!running) {
         ensureWasmMainStarted();
@@ -304,27 +312,27 @@ self.onmessage = async (e: MessageEvent<any>) => {
         console.log('[SimWorker] Simulation started');
       }
       break;
-      
+
     case 'PAUSE':
       running = false;
       if (simTimer) clearTimeout(simTimer);
       console.log('[SimWorker] Simulation paused');
       break;
-      
+
     case 'RESET':
       running = false;
       if (simTimer) clearTimeout(simTimer);
       simWorker!.handleMessage({ type: 'INIT', id: 0 });
       console.log('[SimWorker] Simulation reset');
-      self.postMessage({ type: 'RESET_DONE' });
+      self.postMessage({ type: SimWorkerOutboundType.RESET_DONE } satisfies SimWorkerOutbound);
       break;
-      
+
     case 'SET_PIN_IDEAL': {
       const { pin, level } = payload;
       simWorker!.handleMessage({ type: 'SET_GPIO_IDEAL', id: 0, pin, level });
       break;
     }
-      
+
     case 'SET_ULTRASONIC_DISTANCE': {
       const { trigPin, echoPin, distanceCm } = payload as {
         trigPin: number;
@@ -340,7 +348,7 @@ self.onmessage = async (e: MessageEvent<any>) => {
       }
       break;
     }
-      
+
     case 'OBSERVE_PINS': {
       const { pins, oled } = payload;
       observedPins.clear();
@@ -348,12 +356,12 @@ self.onmessage = async (e: MessageEvent<any>) => {
       hasOled = oled;
       break;
     }
-      
+
     case 'SET_FAULTS': {
       simWorker!.handleMessage({ type: 'SET_FAULTS', id: 0, faults: payload });
       break;
     }
-      
+
     case 'SET_SPEED': {
       speedMultiplier = payload;
       break;

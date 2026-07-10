@@ -31,12 +31,12 @@ export interface BoardCatalogEntry {
 }
 
 export interface DeviceCatalog {
-  getDevice(modelId: string): DeviceCatalogEntry | undefined;
-  getBoard(boardId: string): BoardCatalogEntry | undefined;
-  listDevices(): DeviceCatalogEntry[];
-  listBoards(): BoardCatalogEntry[];
-  listMechanicalModels(): Array<{ id: string; displayName: string }>;
-  listEnvironmentModels(): Array<{ id: string; displayName: string }>;
+  getDevice: (modelId: string) => DeviceCatalogEntry | undefined;
+  getBoard: (boardId: string) => BoardCatalogEntry | undefined;
+  listDevices: () => DeviceCatalogEntry[];
+  listBoards: () => BoardCatalogEntry[];
+  listMechanicalModels: () => Array<{ id: string; displayName: string }>;
+  listEnvironmentModels: () => Array<{ id: string; displayName: string }>;
 }
 
 const BOARDS: BoardCatalogEntry[] = [
@@ -165,10 +165,10 @@ for (const d of DEVICES) {
 
 export const deviceCatalog: DeviceCatalog = {
   getDevice(modelId: string) {
-    return DEVICES.find((d) => d.id === modelId);
+    return DEVICES.find(d => d.id === modelId);
   },
   getBoard(boardId: string) {
-    return BOARDS.find((b) => b.id === boardId);
+    return BOARDS.find(b => b.id === boardId);
   },
   listDevices() {
     return [...DEVICES];

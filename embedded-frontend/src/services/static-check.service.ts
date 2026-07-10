@@ -63,7 +63,7 @@ export function runStaticCheck(context: StaticCheckContext): StaticCheckResult {
     }
   }
 
-  const blocking = issues.filter((i) => i.severity === 'error');
+  const blocking = issues.filter(i => i.severity === 'error');
   return { ok: blocking.length === 0, issues };
 }
 

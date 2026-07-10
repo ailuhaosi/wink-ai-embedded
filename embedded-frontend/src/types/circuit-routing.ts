@@ -1,1 +1,1 @@
-export type { ConnectionRouting, WireRouteMode, CircuitPoint, OrthogonalCommand } from './circuit';
+export type { CircuitPoint, ConnectionRouting, OrthogonalCommand, WireRouteMode } from './circuit';

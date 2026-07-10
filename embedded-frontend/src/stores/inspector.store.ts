@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia';
 
-export type InspectorTabId =
-  | 'circuit'
-  | 'mechanical'
-  | 'bindings'
-  | 'environment'
-  | 'faults'
-  | 'diagnostics';
+export type InspectorTabId
+  = | 'circuit'
+    | 'mechanical'
+    | 'bindings'
+    | 'environment'
+    | 'faults'
+    | 'diagnostics';
 
 interface InspectorState {
   activeTab: InspectorTabId;

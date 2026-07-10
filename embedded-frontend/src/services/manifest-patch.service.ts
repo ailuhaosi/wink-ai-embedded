@@ -10,8 +10,8 @@ export const WORKBENCH_TEMPLATE_IDS = {
   OLED_DASHBOARD: OLED_DASHBOARD_TEMPLATE_ID,
 } as const;
 
-export type WorkbenchTemplateId =
-  (typeof WORKBENCH_TEMPLATE_IDS)[keyof typeof WORKBENCH_TEMPLATE_IDS];
+export type WorkbenchTemplateId
+  = (typeof WORKBENCH_TEMPLATE_IDS)[keyof typeof WORKBENCH_TEMPLATE_IDS];
 
 const TEMPLATE_ALIASES: Record<string, WorkbenchTemplateId> = {
   tpl_avoidance_car: WORKBENCH_TEMPLATE_IDS.AVOIDANCE_CAR,
@@ -21,8 +21,8 @@ const TEMPLATE_ALIASES: Record<string, WorkbenchTemplateId> = {
 export function normalizeTemplateId(templateId: string): WorkbenchTemplateId | null {
   const normalized = TEMPLATE_ALIASES[templateId] ?? templateId;
   if (
-    normalized === WORKBENCH_TEMPLATE_IDS.AVOIDANCE_CAR ||
-    normalized === WORKBENCH_TEMPLATE_IDS.OLED_DASHBOARD
+    normalized === WORKBENCH_TEMPLATE_IDS.AVOIDANCE_CAR
+    || normalized === WORKBENCH_TEMPLATE_IDS.OLED_DASHBOARD
   ) {
     return normalized;
   }

@@ -20,7 +20,7 @@ describe('manifest-patch.service', () => {
     expect(manifest).not.toBeNull();
     const { components, layoutPositions } = manifestToCanvas(manifest!);
     expect(components).toHaveLength(3);
-    expect(components.find((c) => c.id === 'btn1')?.pinConnections['1.l']).toBe(10);
+    expect(components.find(c => c.id === 'btn1')?.pinConnections['1.l']).toBe(10);
     expect(layoutPositions.btn1).toEqual({ x: 80, y: 240 });
     expect(isOledDashboardTemplate('tpl_oled_dashboard')).toBe(true);
   });

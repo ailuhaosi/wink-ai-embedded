@@ -132,17 +132,17 @@ export interface EnvironmentField {
   falloffRadiusM?: number;
 }
 
-export type FieldType =
-  | 'uniform_temperature'
-  | 'point_temperature'
-  | 'uniform_light'
-  | 'directional_light'
-  | 'gravity';
+export type FieldType
+  = | 'uniform_temperature'
+    | 'point_temperature'
+    | 'uniform_light'
+    | 'directional_light'
+    | 'gravity';
 
-export type FieldRegion =
-  | { type: 'global' }
-  | { type: 'sphere'; center: Vector3; radius: number }
-  | {
+export type FieldRegion
+  = | { type: 'global' }
+    | { type: 'sphere'; center: Vector3; radius: number }
+    | {
       type: 'cone';
       apex: Vector3;
       direction: Vector3;

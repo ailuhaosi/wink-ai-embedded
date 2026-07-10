@@ -1,697 +1,41 @@
-<template>
-  <div class="workbench">
-    <TopBar
-      v-if="!legacyMode"
-      @mode-change="handleModeChange"
-      @toggle-simulation="toggleSimulation"
-      @reset="handleReset"
-      @tidy="tidyRouting"
-      @replay-onboarding="replayOnboarding"
-      @save-project="onSaveProject"
-      @open-project="onOpenProject"
-    />
-
-    <!-- Legacy Top Control Bar -->
-    <header v-else class="top-bar">
-      <div class="brand">
-        <Cpu class="brand-icon" />
-        <span>Wink-AI Simulation Workbench</span>
-        <span class="badge font-mono">Phase C</span>
-      </div>
-
-      <div class="sim-controls">
-        <button 
-          @click="toggleSimulation" 
-          :disabled="!isInitialized" 
-          class="btn" 
-          :class="{ 'btn-running': isRunning, 'btn-paused': !isRunning }"
-        >
-          <Play v-if="!isRunning" class="icon" />
-          <Pause v-else class="icon" />
-          <span>{{ isRunning ? 'Running' : 'Paused' }}</span>
-        </button>
-
-        <button @click="handleReset" :disabled="!isInitialized" class="btn btn-secondary">
-          <RotateCcw class="icon" />
-          <span>Reset</span>
-        </button>
-
-        <div class="control-group">
-          <label>Speed:</label>
-          <select v-model="simSpeed" @change="updateSpeed" class="select font-mono">
-            <option :value="1">1x (1ms/tick)</option>
-            <option :value="2">2x</option>
-            <option :value="5">5x</option>
-            <option :value="10">10x</option>
-          </select>
-        </div>
-
-        <div class="control-group">
-          <label>Wire Style:</label>
-          <span class="text-sm font-mono text-gray-400">45° PCB Trace</span>
-        </div>
-        <div class="control-group">
-          <label>Routing Mode:</label>
-          <div class="mode-switch">
-            <button 
-              @click="setRoutingMode('auto')" 
-              class="mode-btn" 
-              :class="{ active: routingMode === 'auto' }"
-            >
-              <Zap class="mode-icon" />
-              <span>Auto</span>
-            </button>
-            <button 
-              @click="setRoutingMode('manual')" 
-              class="mode-btn" 
-              :class="{ active: routingMode === 'manual' }"
-            >
-              <MousePointer2 class="mode-icon" />
-              <span>Manual</span>
-            </button>
-          </div>
-        </div>
-
-        <button @click="tidyRouting" class="btn btn-secondary btn-small" title="重置走线并整理布局">
-          <LayoutGrid class="icon" />
-          <span>Tidy Wires</span>
-        </button>
-
-        <div class="control-group">
-          <label>Time:</label>
-          <span class="time-display font-mono">{{ formatTime(clockUs) }} ms</span>
-        </div>
-      </div>
-
-      <div class="status-indicators">
-        <span v-if="isFaulted" class="status-tag status-danger anim-glow-danger">
-          <Zap class="icon" /> FAULTED
-        </span>
-        <span v-else-if="isRunning" class="status-tag status-success anim-glow-success">
-          <Activity class="icon" /> SIMULATING
-        </span>
-        <span v-else class="status-tag status-idle">
-          STANDBY
-        </span>
-      </div>
-    </header>
-
-    <div class="main-layout" :class="{ 'left-collapsed': !legacyMode && layoutStore.leftPanelCollapsed }">
-      <!-- Left Panel: Layered Asset Library (W2) or legacy catalog -->
-      <aside v-show="legacyMode || !layoutStore.leftPanelCollapsed" class="panel left-panel">
-        <template v-if="legacyMode">
-        <div class="panel-header">
-          <Layers class="panel-header-icon" />
-          <span>Device Library</span>
-        </div>
-        <div class="panel-content scrollable">
-          <p class="section-desc">Click to add peripherals to the workbench workspace:</p>
-          <div class="catalog-list">
-            <div 
-              v-for="item in catalog" 
-              :key="item.type" 
-              @click="addComponent(item)"
-              class="catalog-item"
-            >
-              <div class="catalog-item-info">
-                <span class="catalog-item-name">{{ item.name }}</span>
-                <span class="catalog-item-desc">{{ item.desc }}</span>
-              </div>
-              <Plus class="catalog-item-add" />
-            </div>
-          </div>
-
-          <div class="active-components-section">
-            <div class="section-title">Active Peripherals</div>
-            <div v-if="activeComponents.length === 0" class="empty-state">No peripherals active</div>
-            <div v-else class="active-list">
-              <div 
-                v-for="comp in activeComponents" 
-                :key="comp.id" 
-                @click="selectComponent(comp)"
-                class="active-item"
-                :class="{ 'active-item-selected': selectedCompId === comp.id }"
-              >
-                <span>{{ comp.name }} (Pin {{ getPinLabel(comp) }})</span>
-                <button @click.stop="removeComponent(comp.id)" class="btn-icon">
-                  <Trash class="icon icon-danger" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        </template>
-        <template v-else>
-          <div class="panel-header">
-            <Layers class="panel-header-icon" />
-            <span>{{ t('workbench.assets.peripherals') }}</span>
-          </div>
-          <div class="panel-content scrollable">
-            <LayeredAssetLibrary @add-peripheral="addFromLibrary" />
-          </div>
-        </template>
-      </aside>
-
-      <!-- Center Workspace (Canvas and Visuals) -->
-      <main class="center-workspace">
-        <div v-if="legacyMode" class="workspace-tabs">
-          <button 
-            @click="activeTab = 'canvas'" 
-            class="tab-btn" 
-            :class="{ active: activeTab === 'canvas' }"
-          >
-            <Activity class="tab-icon" />
-            <span>Circuit Canvas</span>
-          </button>
-          <button 
-            @click="activeTab = 'sim'" 
-            class="tab-btn" 
-            :class="{ active: activeTab === 'sim' }"
-          >
-            <Layers class="tab-icon" />
-            <span>Simulation View</span>
-          </button>
-        </div>
-
-        <SplitPane
-          v-if="!legacyMode"
-          class="workspace-split"
-          :direction="layoutStore.splitDirection"
-          :ratio="layoutStore.splitRatio"
-          :animate="modeAnimating"
-          @ratio-change="onSplitRatioChange"
-        >
-          <template #primary>
-            <CircuitCanvas
-              ref="circuitCanvasRef"
-              v-model:components="activeComponents"
-              v-model:selected-component-id="selectedCompId"
-              :pin-states="pinStates"
-              :readonly="!modeStore.canEditCircuit"
-              :routing-mode="routingMode"
-              @button-press="handleButtonPress"
-              @button-release="handleButtonRelease"
-              @layout-change="syncCanvasToManifest"
-            />
-          </template>
-          <template #secondary>
-            <div class="world-pane scrollable">
-              <ProductWorldPlaceholder @load-template="onLoadTemplate" />
-              <div v-if="modeStore.current !== 'design'" class="virtual-peripherals-grid">
-                <div v-for="comp in activeComponents" :key="'sim-' + comp.id" class="grid-card">
-                  <div class="card-header"><span class="card-title">{{ comp.name }}</span></div>
-                  <div class="card-body">
-                    <VirtualLED v-if="comp.type === 'led'" :pin-connections="comp.pinConnections" :color="comp.props.color" :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false" :brightness="comp.props.brightness" :label="comp.props.label" :flip="comp.props.flip" />
-                    <VirtualButton v-else-if="comp.type === 'button'" :pin-connections="comp.pinConnections" :color="comp.props.color" :label="comp.props.label" :xray="comp.props.xray" :active-low="comp.props.activeLow" />
-                    <VirtualOLED v-else-if="comp.type === 'oled'" :pin-connections="comp.pinConnections" :framebuffer="oledFb" />
-                    <VirtualUltrasonic v-else-if="comp.type === 'ultrasonic'" :pin-connections="comp.pinConnections" :distance="comp.props.distance" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </SplitPane>
-
-        <div v-else class="workspace-content">
-          <!-- Canvas Tab -->
-          <div v-show="activeTab === 'canvas'">
-            <CircuitCanvas
-              ref="circuitCanvasRef"
-              v-model:components="activeComponents"
-              v-model:selected-component-id="selectedCompId"
-              :pin-states="pinStates"
-              :readonly="!modeStore.canEditCircuit"
-              :routing-mode="routingMode"
-              @button-press="handleButtonPress"
-              @button-release="handleButtonRelease"
-              @layout-change="syncCanvasToManifest"
-            />
-          </div>
-
-          <!-- Simulation Grid Tab -->
-          <div v-show="activeTab === 'sim'" class="sim-grid-container scrollable">
-            <div class="virtual-peripherals-grid">
-              <div v-for="comp in activeComponents" :key="comp.id" class="grid-card">
-                <div class="card-header">
-                  <span class="card-title">{{ comp.name }}</span>
-                </div>
-                
-                <div class="card-body">
-                  <VirtualLED 
-                    v-if="comp.type === 'led'"
-                    :pin-connections="comp.pinConnections"
-                    :color="comp.props.color"
-                    :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
-                    :brightness="comp.props.brightness"
-                    :label="comp.props.label"
-                    :flip="comp.props.flip"
-                  />
-                  <VirtualButton
-                    v-else-if="comp.type === 'button'"
-                    :pin-connections="comp.pinConnections"
-                    :color="comp.props.color"
-                    :label="comp.props.label"
-                    :xray="comp.props.xray"
-                    :active-low="comp.props.activeLow"
-                  />
-                  <VirtualOLED
-                    v-else-if="comp.type === 'oled'"
-                    :pin-connections="comp.pinConnections"
-                    :framebuffer="oledFb"
-                  />
-                  <VirtualUltrasonic
-                    v-else-if="comp.type === 'ultrasonic'"
-                    :pin-connections="comp.pinConnections"
-                    :distance="comp.props.distance"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <ContextInspector v-if="!legacyMode" class="panel right-panel">
-        <template #circuit>
-          <div class="inspector-section">
-            <div class="section-title">Property Inspector</div>
-            
-            <div v-if="!selectedComp" class="empty-state">
-              Select a peripheral on the left or click canvas node to edit properties.
-            </div>
-            
-            <div v-else class="property-form">
-              <div class="form-group">
-                <label>Component Name</label>
-                <input type="text" v-model="selectedComp.name" class="input" :disabled="!modeStore.canEditCircuit" />
-              </div>
-
-              <div class="section-title">Pin Connections</div>
-              <div 
-                v-for="pinDef in peripheralConfigs[selectedComp.type]?.pins" 
-                :key="pinDef.name"
-                class="form-group"
-              >
-                <label>{{ pinDef.name }} - {{ pinDef.description }}</label>
-                <select 
-                  v-model="selectedComp.pinConnections[pinDef.name]" 
-                  class="select font-mono"
-                  :disabled="!modeStore.canEditCircuit"
-                >
-                  <option v-if="!pinDef.required" :value="null">Not Connected</option>
-                  <template v-if="pinDef.signalType === 'power' || pinDef.signalType === 'i2c'">
-                    <option v-for="opt in powerOptions" :key="opt" :value="opt">{{ opt }}</option>
-                  </template>
-                  <template v-if="pinDef.signalType === 'digital' || pinDef.signalType === 'i2c'">
-                    <option v-for="gpio in availableGPIOs" :key="gpio" :value="gpio">IO{{ gpio }}</option>
-                  </template>
-                </select>
-              </div>
-
-              <div class="section-title">Properties</div>
-              <div 
-                v-for="(propDef, propKey) in peripheralConfigs[selectedComp.type]?.props" 
-                :key="propKey"
-                class="form-group"
-              >
-                <label>{{ propDef.description }}</label>
-                <select v-if="propDef.options" v-model="selectedComp.props[propKey]" class="select" :disabled="!modeStore.canEditCircuit">
-                  <option v-for="opt in propDef.options" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-                <input 
-                  v-else-if="propDef.type === 'number'" 
-                  type="number" 
-                  v-model.number="selectedComp.props[propKey]" 
-                  class="input font-mono"
-                  :disabled="!modeStore.canEditCircuit"
-                />
-                <input 
-                  v-else-if="propDef.type === 'boolean'" 
-                  type="checkbox" 
-                  v-model="selectedComp.props[propKey]"
-                  :disabled="!modeStore.canEditCircuit"
-                />
-                <input 
-                  v-else 
-                  type="text" 
-                  v-model="selectedComp.props[propKey]" 
-                  class="input"
-                  :disabled="!modeStore.canEditCircuit"
-                />
-              </div>
-
-              <div v-if="selectedComp.type === 'ultrasonic'" class="form-group">
-                <div class="slider-label">
-                  <span>Distance (cm):</span>
-                  <span class="val">{{ ultrasonicDistance }} cm</span>
-                </div>
-                <input type="range" min="2" max="400" v-model.number="ultrasonicDistance" class="slider" />
-              </div>
-
-              <div class="form-group">
-                <label>Rotation</label>
-                <div class="rotation-btn-group">
-                  <button
-                    v-for="deg in [0, 90, 180, 270]"
-                    :key="deg"
-                    @click="setRotation(selectedComp, deg)"
-                    class="rotation-btn"
-                    :class="{ active: (selectedComp.rotation || 0) === deg }"
-                    :disabled="!modeStore.canEditCircuit"
-                  >
-                    {{ deg }}°
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-        <template #bindings>
-          <BindingsInspector />
-        </template>
-        <template #diagnostics>
-          <BindingsInspector />
-        </template>
-        <template #faults>
-          <div class="inspector-section fault-section">
-            <div class="section-title text-danger">Fault Injector</div>
-            <div class="property-form">
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>Debounce Window (bounce_us):</span>
-                  <span class="val">{{ faults.bounce_us }} us</span>
-                </div>
-                <input type="range" min="0" max="5000" step="50" v-model.number="faults.bounce_us" @input="injectFaults" class="slider" />
-              </div>
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>Warm-up Period (warmup_us):</span>
-                  <span class="val">{{ faults.warmup_us }} us</span>
-                </div>
-                <input type="range" min="0" max="10000" step="100" v-model.number="faults.warmup_us" @input="injectFaults" class="slider" />
-              </div>
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>ADC Sample Interval (us):</span>
-                  <span class="val">{{ faults.sample_interval_us }} us</span>
-                </div>
-                <input type="range" min="0" max="5000" step="50" v-model.number="faults.sample_interval_us" @input="injectFaults" class="slider" />
-              </div>
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>ADC Noise (adc_noise_v):</span>
-                  <span class="val">{{ faults.adc_noise_v.toFixed(3) }} V</span>
-                </div>
-                <input type="range" min="0" max="1.0" step="0.05" v-model.number="faults.adc_noise_v" @input="injectFaults" class="slider" />
-              </div>
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>RC Time Constant (rc_tau_s):</span>
-                  <span class="val">{{ faults.rc_tau_s.toFixed(3) }} s</span>
-                </div>
-                <input type="range" min="0" max="0.5" step="0.01" v-model.number="faults.rc_tau_s" @input="injectFaults" class="slider" />
-              </div>
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>I2C Drop Rate:</span>
-                  <span class="val">{{ (faults.i2c_drop_permil / 10).toFixed(1) }} %</span>
-                </div>
-                <input type="range" min="0" max="1000" step="10" v-model.number="faults.i2c_drop_permil" @input="injectFaults" class="slider" />
-              </div>
-              <div class="form-group checkbox-group danger-checkbox">
-                <input type="checkbox" id="breakWire" v-model="wireBroken" @change="toggleWireBreak" />
-                <label for="breakWire">Cut Output Signal Wire (Hi-Z)</label>
-              </div>
-            </div>
-          </div>
-        </template>
-      </ContextInspector>
-
-      <!-- Legacy Right Panel -->
-      <aside v-else class="panel right-panel">
-        <div class="panel-header">
-          <Settings class="panel-header-icon" />
-          <span>Properties & Faults</span>
-        </div>
-
-        <div class="panel-content scrollable">
-          <!-- Property Inspector Section -->
-          <div class="inspector-section">
-            <div class="section-title">Property Inspector</div>
-            
-            <div v-if="!selectedComp" class="empty-state">
-              Select a peripheral on the left or click canvas node to edit properties.
-            </div>
-            
-            <div v-else class="property-form">
-              <div class="form-group">
-                <label>Component Name</label>
-                <input type="text" v-model="selectedComp.name" class="input" />
-              </div>
-
-              <!-- Dynamic Pin Configuration -->
-              <div class="section-title">Pin Connections</div>
-              <div 
-                v-for="pinDef in peripheralConfigs[selectedComp.type]?.pins" 
-                :key="pinDef.name"
-                class="form-group"
-              >
-                <label>{{ pinDef.name }} - {{ pinDef.description }}</label>
-                <select 
-                  v-model="selectedComp.pinConnections[pinDef.name]" 
-                  class="select font-mono"
-                >
-                  <option v-if="!pinDef.required" :value="null">Not Connected</option>
-                  <template v-if="pinDef.signalType === 'power' || pinDef.signalType === 'i2c'">
-                    <option v-for="opt in powerOptions" :key="opt" :value="opt">{{ opt }}</option>
-                  </template>
-                  <template v-if="pinDef.signalType === 'digital' || pinDef.signalType === 'i2c'">
-                    <option v-for="gpio in availableGPIOs" :key="gpio" :value="gpio">IO{{ gpio }}</option>
-                  </template>
-                </select>
-              </div>
-
-              <!-- Dynamic Properties -->
-              <div class="section-title">Properties</div>
-              <div 
-                v-for="(propDef, propKey) in peripheralConfigs[selectedComp.type]?.props" 
-                :key="propKey"
-                class="form-group"
-              >
-                <label>{{ propDef.description }}</label>
-                <select v-if="propDef.options" v-model="selectedComp.props[propKey]" class="select">
-                  <option v-for="opt in propDef.options" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-                <input 
-                  v-else-if="propDef.type === 'number'" 
-                  type="number" 
-                  v-model.number="selectedComp.props[propKey]" 
-                  class="input font-mono"
-                />
-                <input 
-                  v-else-if="propDef.type === 'boolean'" 
-                  type="checkbox" 
-                  v-model="selectedComp.props[propKey]" 
-                />
-                <input 
-                  v-else 
-                  type="text" 
-                  v-model="selectedComp.props[propKey]" 
-                  class="input"
-                />
-              </div>
-
-              <!-- Ultrasonic distance slider (special handling) -->
-              <div v-if="selectedComp.type === 'ultrasonic'" class="form-group">
-                <div class="slider-label">
-                  <span>Distance (cm):</span>
-                  <span class="val">{{ ultrasonicDistance }} cm</span>
-                </div>
-                <input 
-                  type="range" 
-                  min="2" 
-                  max="400" 
-                  v-model.number="ultrasonicDistance"
-                  class="slider"
-                />
-              </div>
-
-              <!-- Rotation Control -->
-              <div class="form-group">
-                <label>Rotation</label>
-                <div class="rotation-btn-group">
-                  <button
-                    v-for="deg in [0, 90, 180, 270]"
-                    :key="deg"
-                    @click="setRotation(selectedComp, deg)"
-                    class="rotation-btn"
-                    :class="{ active: (selectedComp.rotation || 0) === deg }"
-                  >
-                    {{ deg }}°
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Fault Injector Section -->
-          <div class="inspector-section fault-section">
-            <div class="section-title text-danger">Fault Injector</div>
-            
-            <div class="property-form">
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>Debounce Window (bounce_us):</span>
-                  <span class="val">{{ faults.bounce_us }} us</span>
-                </div>
-                <input type="range" min="0" max="5000" step="50" v-model.number="faults.bounce_us" @input="injectFaults" class="slider" />
-              </div>
-
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>Warm-up Period (warmup_us):</span>
-                  <span class="val">{{ faults.warmup_us }} us</span>
-                </div>
-                <input type="range" min="0" max="10000" step="100" v-model.number="faults.warmup_us" @input="injectFaults" class="slider" />
-              </div>
-
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>ADC Sample Interval (us):</span>
-                  <span class="val">{{ faults.sample_interval_us }} us</span>
-                </div>
-                <input type="range" min="100" max="5000" step="50" v-model.number="faults.sample_interval_us" @input="injectFaults" class="slider" />
-              </div>
-
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>ADC Noise (adc_noise_v):</span>
-                  <span class="val">{{ faults.adc_noise_v.toFixed(3) }} V</span>
-                </div>
-                <input type="range" min="0" max="1.0" step="0.05" v-model.number="faults.adc_noise_v" @input="injectFaults" class="slider" />
-              </div>
-
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>RC Time Constant (rc_tau_s):</span>
-                  <span class="val">{{ faults.rc_tau_s.toFixed(3) }} s</span>
-                </div>
-                <input type="range" min="0" max="0.5" step="0.01" v-model.number="faults.rc_tau_s" @input="injectFaults" class="slider" />
-              </div>
-
-              <div class="form-group">
-                <div class="slider-label">
-                  <span>I2C Drop Rate:</span>
-                  <span class="val">{{ (faults.i2c_drop_permil / 10).toFixed(1) }} %</span>
-                </div>
-                <input type="range" min="0" max="1000" step="10" v-model.number="faults.i2c_drop_permil" @input="injectFaults" class="slider" />
-              </div>
-
-              <div class="form-group checkbox-group danger-checkbox">
-                <input type="checkbox" id="breakWire" v-model="wireBroken" @change="toggleWireBreak" />
-                <label for="breakWire">Cut Output Signal Wire (Hi-Z)</label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </div>
-
-    <div
-      v-if="!legacyMode && modeSwitchBanner"
-      class="mode-switch-banner"
-      role="alert"
-    >
-      {{ modeSwitchBanner }}
-    </div>
-
-    <BottomConsole v-if="!legacyMode" />
-
-    <!-- Legacy Bottom Panel -->
-    <footer v-else class="bottom-panel">
-      <div class="panel-header tabs-header">
-        <button 
-          @click="bottomTab = 'traces'" 
-          class="tab-btn" 
-          :class="{ active: bottomTab === 'traces' }"
-        >
-          <Activity class="tab-icon" />
-          <span>Trace Logs</span>
-        </button>
-        <button 
-          @click="bottomTab = 'logs'" 
-          class="tab-btn" 
-          :class="{ active: bottomTab === 'logs' }"
-        >
-          <Terminal class="tab-icon" />
-          <span>Diagnostics / Logs</span>
-        </button>
-      </div>
-
-      <div class="panel-content tab-content scrollable font-mono">
-        <!-- Trace Console -->
-        <div v-show="bottomTab === 'traces'" class="console traces-console">
-          <div v-if="traces.length === 0" class="empty-console">No simulation traces captured yet. Start simulation.</div>
-          <div v-else class="trace-list">
-            <div 
-              v-for="(t, index) in traces.slice().reverse()" 
-              :key="'trace-' + index" 
-              class="trace-line"
-              :class="getTraceClass(t.type)"
-            >
-              <span class="trace-time">[{{ formatTime(t.timestamp) }} ms]</span>
-              <span class="trace-seq">#{{ t.sequence }}</span>
-              <span class="trace-type">{{ getTraceLabel(t.type) }}</span>
-              <span class="trace-details">Pin/Bus ID: {{ t.pinOrBus }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Raw Logs -->
-        <div v-show="bottomTab === 'logs'" class="console logs-console">
-          <div class="console-actions">
-            <button @click="clearLogs" class="btn btn-secondary btn-small">Clear Logs</button>
-          </div>
-          <div v-if="logs.length === 0" class="empty-console">Console is clear.</div>
-          <div v-else class="log-list">
-            <div 
-              v-for="(log, idx) in logs" 
-              :key="'log-' + idx" 
-              class="log-line"
-              :class="'log-' + log.level"
-            >
-              <span class="log-time">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
-              <span class="log-msg">{{ log.message }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </footer>
-
-    <ConfirmDialog
-      :visible="showStopConfirm"
-      @confirm="confirmStopSimulation"
-      @cancel="cancelStopSimulation"
-    />
-    <OnboardingWizard
-      v-if="!legacyMode"
-      ref="onboardingRef"
-      @complete="onOnboardingComplete"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { 
-  Play, Pause, RotateCcw, Cpu, Layers, Settings, Zap, Terminal, Activity, Plus, Trash, MousePointer2, LayoutGrid
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Cpu,
+  Layers,
+  Settings,
+  Zap,
+  Terminal,
+  Activity,
+  Plus,
+  Trash,
+  MousePointer2,
+  LayoutGrid,
 } from 'lucide-vue-next';
 import {
-  initSimulation, startSimulation, pauseSimulation, resetSimulation,
-  setPinIdeal, observePins, setFaults, setSpeed, clearLogs, setUltrasonicDistance,
-  isInitialized, isRunning, isFaulted, clockUs, pinStates, oledFb, logs, traces
+  initSimulation,
+  startSimulation,
+  pauseSimulation,
+  resetSimulation,
+  setPinIdeal,
+  observePins,
+  setFaults,
+  setSpeed,
+  clearLogs,
+  setUltrasonicDistance,
+  isInitialized,
+  isRunning,
+  isFaulted,
+  clockUs,
+  pinStates,
+  oledFb,
+  logs,
+  traces,
 } from '../services/simulation-client';
 
 import TopBar from '@/components/layout/TopBar.vue';
@@ -708,7 +52,6 @@ import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
 import { useLayoutStore } from '@/stores/layout.store';
 import { useCanvasStore } from '@/stores/canvas.store';
 import { useSimulationStore } from '@/stores/simulation.store';
-import { useInspectorStore } from '@/stores/inspector.store';
 import { useProjectStore } from '@/stores/project.store';
 import {
   createWorkbenchTemplateManifest,
@@ -738,7 +81,6 @@ const modeStore = useWorkbenchModeStore();
 const layoutStore = useLayoutStore();
 const canvasStore = useCanvasStore();
 const simStore = useSimulationStore();
-const inspectorStore = useInspectorStore();
 const projectStore = useProjectStore();
 const { pendingSwitchTarget } = storeToRefs(modeStore);
 
@@ -776,9 +118,8 @@ const catalog = ref<CatalogItem[]>([
   { type: 'led', name: 'Virtual LED', desc: 'Outputs HIGH/LOW voltage state.' },
   { type: 'button', name: 'Push Button', desc: 'Injects HIGH/LOW ideal digital inputs.' },
   { type: 'oled', name: 'SSD1306 Display', desc: '128x64 pixels screen using I2C lines.' },
-  { type: 'ultrasonic', name: 'HC-SR04 Sensor', desc: 'Ultrasonic distance range sensor.' }
+  { type: 'ultrasonic', name: 'HC-SR04 Sensor', desc: 'Ultrasonic distance range sensor.' },
 ]);
-
 
 const activeComponents = ref<CircuitComponentInstance[]>([]);
 
@@ -799,7 +140,7 @@ const faults = ref({
   adc_noise_v: 0.0,
   rc_tau_s: 0.0,
   i2c_drop_permil: 0,
-  prng_seed: 1
+  prng_seed: 1,
 });
 
 // Watch framebuffer and copy to the canvas OLED element dynamically
@@ -809,16 +150,17 @@ watch(oledFb, (newFb) => {
     ? canvasOled.find(el => el && el.tagName === 'WOKWI-SSD1306')
     : canvasOled;
   if (!oledEl) return;
-  
+
   let imgData = oledEl.imageData;
   if (!imgData || imgData.width !== 128 || imgData.height !== 64) {
     try {
       imgData = new ImageData(128, 64);
-    } catch {
+    }
+    catch {
       return;
     }
   }
-  
+
   const px = imgData.data;
   if (newFb && newFb.length === 1024) {
     for (let page = 0; page < 8; page++) {
@@ -828,21 +170,22 @@ watch(oledFb, (newFb) => {
           const row = page * 8 + bit;
           const lit = (byte >> bit) & 1;
           const idx = (row * 128 + col) * 4;
-          
-          px[idx]     = lit ? 0   : 8;
+
+          px[idx] = lit ? 0 : 8;
           px[idx + 1] = lit ? 210 : 12;
           px[idx + 2] = lit ? 255 : 24;
           px[idx + 3] = 255;
         }
       }
     }
-  } else {
+  }
+  else {
     px.fill(0);
     for (let i = 3; i < px.length; i += 4) {
       px[i] = 255;
     }
   }
-  
+
   oledEl.imageData = imgData;
   if (typeof oledEl.redraw === 'function') {
     oledEl.redraw();
@@ -869,16 +212,16 @@ function addFromLibrary(payload: { type: string; name: string }) {
 function addComponent(item: CatalogItem) {
   if (!modeStore.canEditCircuit) return;
   const newId = `${item.type}_${Date.now()}`;
-  
+
   const newItem: CircuitComponentInstance = {
     id: newId,
     type: item.type,
     name: item.name,
     pinConnections: getDefaultPinConnections(item.type),
     props: getDefaultProps(item.type),
-    rotation: 0
+    rotation: 0,
   };
-  
+
   activeComponents.value.push(newItem);
   selectedCompId.value = newId;
   circuitCanvasRef.value?.assignLayoutForNewComponent(newId, item.type);
@@ -900,21 +243,17 @@ function setRotation(comp: CircuitComponentInstance, deg: number) {
   circuitCanvasRef.value?.setRotation(comp, deg);
 }
 
-function rotateComponent(comp: CircuitComponentInstance, delta: number) {
-  circuitCanvasRef.value?.rotateComponent(comp, delta);
-}
-
 function handleButtonPress(comp: CircuitComponentInstance) {
   const signalPin = comp.pinConnections['1.l'];
   if (typeof signalPin === 'number') {
-    setPinIdeal(signalPin, comp.props.activeLow ? false : true);
+    setPinIdeal(signalPin, !comp.props.activeLow);
   }
 }
 
 function handleButtonRelease(comp: CircuitComponentInstance) {
   const signalPin = comp.pinConnections['1.l'];
   if (typeof signalPin === 'number') {
-    setPinIdeal(signalPin, comp.props.activeLow ? true : false);
+    setPinIdeal(signalPin, !!comp.props.activeLow);
   }
 }
 
@@ -937,15 +276,15 @@ watch(activeComponents, (comps) => {
   const positions = circuitCanvasRef.value?.getLayoutPositions() ?? {};
   projectStore.syncFromCanvas(comps, positions);
   const pins: number[] = [];
-  
-  comps.forEach(c => {
-    Object.values(c.pinConnections).forEach(val => {
+
+  comps.forEach((c) => {
+    Object.values(c.pinConnections).forEach((val) => {
       if (typeof val === 'number') {
         pins.push(val);
       }
     });
   });
-  
+
   observePins(pins, comps);
 }, { deep: true, immediate: true });
 
@@ -981,8 +320,8 @@ function handleReset() {
   resetSimulation();
   setTimeout(() => {
     const pins: number[] = [];
-    activeComponents.value.forEach(c => {
-      Object.values(c.pinConnections).forEach(val => {
+    activeComponents.value.forEach((c) => {
+      Object.values(c.pinConnections).forEach((val) => {
         if (typeof val === 'number') {
           pins.push(val);
         }
@@ -1041,7 +380,7 @@ function buildStaticCheckContext() {
   return {
     isSimulationReady: isInitialized.value,
     initError: simStore.initError,
-    components: activeComponents.value.map((c) => ({
+    components: activeComponents.value.map(c => ({
       id: c.id,
       type: c.type,
       name: c.name,
@@ -1064,19 +403,23 @@ async function handleModeChange(mode: 'design' | 'simulate' | 'diagnose'): Promi
   if (ok) {
     pendingSimulateAfterInit.value = false;
     modeSwitchBanner.value = null;
-  } else if (mode === 'simulate') {
+  }
+  else if (mode === 'simulate') {
     const bindingIssues = modeStore.lastBindingValidationIssues;
     if (bindingIssues.length > 0) {
       showModeSwitchBanner(`[${bindingIssues[0].ruleId}] ${bindingIssues[0].message}`);
-    } else {
+    }
+    else {
       const issues = modeStore.lastStaticCheckIssues;
-      const waitingForSim = issues.some((issue) => issue.id === 'sim-not-ready');
+      const waitingForSim = issues.some(issue => issue.id === 'sim-not-ready');
       if (waitingForSim) {
         pendingSimulateAfterInit.value = true;
         showModeSwitchBanner(t('workbench.staticCheck.waitingForEngine'));
-      } else if (issues.length > 0) {
+      }
+      else if (issues.length > 0) {
         showModeSwitchBanner(t(issues[0].message));
-      } else {
+      }
+      else {
         showModeSwitchBanner(t('workbench.staticCheck.failed'));
       }
     }
@@ -1101,7 +444,7 @@ function applyManifestToWorkbench(manifest: EmbeddedProjectManifest) {
   activeComponents.value = components;
   selectedCompId.value = components[0]?.id ?? '';
 
-  const sonar = components.find((c) => c.type === 'ultrasonic');
+  const sonar = components.find(c => c.type === 'ultrasonic');
   if (sonar && typeof sonar.props.distance === 'number') {
     ultrasonicDistance.value = sonar.props.distance;
   }
@@ -1109,7 +452,8 @@ function applyManifestToWorkbench(manifest: EmbeddedProjectManifest) {
   void nextTick(() => {
     if (Object.keys(layoutPositions).length > 0) {
       circuitCanvasRef.value?.setLayoutPositions(layoutPositions);
-    } else {
+    }
+    else {
       for (const comp of components) {
         circuitCanvasRef.value?.assignLayoutForNewComponent(comp.id, comp.type);
       }
@@ -1129,7 +473,8 @@ async function onOpenProject(file: File) {
     const manifest = await readManifestFromFile(file);
     applyManifestToWorkbench(manifest);
     showModeSwitchBanner(t('workbench.project.loaded'));
-  } catch (err) {
+  }
+  catch (err) {
     const message = err instanceof Error ? err.message : t('workbench.project.loadError');
     showModeSwitchBanner(`${t('workbench.project.loadError')}: ${message}`);
   }
@@ -1144,7 +489,8 @@ function onLoadTemplate(templateId: string) {
   if (isOledDashboardTemplate(templateId)) {
     selectedCompId.value = 'btn1';
     faults.value = { ...faults.value, bounce_us: 0, i2c_drop_permil: 0 };
-  } else {
+  }
+  else {
     ultrasonicDistance.value = 25;
   }
 
@@ -1216,6 +562,689 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onGlobalKeydown);
 });
 </script>
+
+<template>
+  <div class="workbench">
+    <TopBar
+      v-if="!legacyMode"
+      @mode-change="handleModeChange"
+      @toggle-simulation="toggleSimulation"
+      @reset="handleReset"
+      @tidy="tidyRouting"
+      @replay-onboarding="replayOnboarding"
+      @save-project="onSaveProject"
+      @open-project="onOpenProject"
+    />
+
+    <!-- Legacy Top Control Bar -->
+    <header v-else class="top-bar">
+      <div class="brand">
+        <Cpu class="brand-icon" />
+        <span>Wink-AI Simulation Workbench</span>
+        <span class="badge font-mono">Phase C</span>
+      </div>
+
+      <div class="sim-controls">
+        <button
+          :disabled="!isInitialized"
+          class="btn"
+          :class="{ 'btn-running': isRunning, 'btn-paused': !isRunning }"
+          @click="toggleSimulation"
+        >
+          <Play v-if="!isRunning" class="icon" />
+          <Pause v-else class="icon" />
+          <span>{{ isRunning ? 'Running' : 'Paused' }}</span>
+        </button>
+
+        <button :disabled="!isInitialized" class="btn btn-secondary" @click="handleReset">
+          <RotateCcw class="icon" />
+          <span>Reset</span>
+        </button>
+
+        <div class="control-group">
+          <label>Speed:</label>
+          <select v-model="simSpeed" class="select font-mono" @change="updateSpeed">
+            <option :value="1">1x (1ms/tick)</option>
+            <option :value="2">2x</option>
+            <option :value="5">5x</option>
+            <option :value="10">10x</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Wire Style:</label>
+          <span class="text-sm font-mono text-gray-400">45° PCB Trace</span>
+        </div>
+        <div class="control-group">
+          <label>Routing Mode:</label>
+          <div class="mode-switch">
+            <button
+              class="mode-btn"
+              :class="{ active: routingMode === 'auto' }"
+              @click="setRoutingMode('auto')"
+            >
+              <Zap class="mode-icon" />
+              <span>Auto</span>
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: routingMode === 'manual' }"
+              @click="setRoutingMode('manual')"
+            >
+              <MousePointer2 class="mode-icon" />
+              <span>Manual</span>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary btn-small" title="重置走线并整理布局" @click="tidyRouting">
+          <LayoutGrid class="icon" />
+          <span>Tidy Wires</span>
+        </button>
+
+        <div class="control-group">
+          <label>Time:</label>
+          <span class="time-display font-mono">{{ formatTime(clockUs) }} ms</span>
+        </div>
+      </div>
+
+      <div class="status-indicators">
+        <span v-if="isFaulted" class="status-tag status-danger anim-glow-danger">
+          <Zap class="icon" /> FAULTED
+        </span>
+        <span v-else-if="isRunning" class="status-tag status-success anim-glow-success">
+          <Activity class="icon" /> SIMULATING
+        </span>
+        <span v-else class="status-tag status-idle">
+          STANDBY
+        </span>
+      </div>
+    </header>
+
+    <div class="main-layout" :class="{ 'left-collapsed': !legacyMode && layoutStore.leftPanelCollapsed }">
+      <!-- Left Panel: Layered Asset Library (W2) or legacy catalog -->
+      <aside v-show="legacyMode || !layoutStore.leftPanelCollapsed" class="panel left-panel">
+        <template v-if="legacyMode">
+          <div class="panel-header">
+            <Layers class="panel-header-icon" />
+            <span>Device Library</span>
+          </div>
+          <div class="panel-content scrollable">
+            <p class="section-desc">Click to add peripherals to the workbench workspace:</p>
+            <div class="catalog-list">
+              <div
+                v-for="item in catalog"
+                :key="item.type"
+                class="catalog-item"
+                @click="addComponent(item)"
+              >
+                <div class="catalog-item-info">
+                  <span class="catalog-item-name">{{ item.name }}</span>
+                  <span class="catalog-item-desc">{{ item.desc }}</span>
+                </div>
+                <Plus class="catalog-item-add" />
+              </div>
+            </div>
+
+            <div class="active-components-section">
+              <div class="section-title">Active Peripherals</div>
+              <div v-if="activeComponents.length === 0" class="empty-state">No peripherals active</div>
+              <div v-else class="active-list">
+                <div
+                  v-for="comp in activeComponents"
+                  :key="comp.id"
+                  class="active-item"
+                  :class="{ 'active-item-selected': selectedCompId === comp.id }"
+                  @click="selectComponent(comp)"
+                >
+                  <span>{{ comp.name }} (Pin {{ getPinLabel(comp) }})</span>
+                  <button class="btn-icon" @click.stop="removeComponent(comp.id)">
+                    <Trash class="icon icon-danger" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="panel-header">
+            <Layers class="panel-header-icon" />
+            <span>{{ t('workbench.assets.peripherals') }}</span>
+          </div>
+          <div class="panel-content scrollable">
+            <LayeredAssetLibrary @add-peripheral="addFromLibrary" />
+          </div>
+        </template>
+      </aside>
+
+      <!-- Center Workspace (Canvas and Visuals) -->
+      <main class="center-workspace">
+        <div v-if="legacyMode" class="workspace-tabs">
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'canvas' }"
+            @click="activeTab = 'canvas'"
+          >
+            <Activity class="tab-icon" />
+            <span>Circuit Canvas</span>
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'sim' }"
+            @click="activeTab = 'sim'"
+          >
+            <Layers class="tab-icon" />
+            <span>Simulation View</span>
+          </button>
+        </div>
+
+        <SplitPane
+          v-if="!legacyMode"
+          class="workspace-split"
+          :direction="layoutStore.splitDirection"
+          :ratio="layoutStore.splitRatio"
+          :animate="modeAnimating"
+          @ratio-change="onSplitRatioChange"
+        >
+          <template #primary>
+            <CircuitCanvas
+              ref="circuitCanvasRef"
+              v-model:components="activeComponents"
+              v-model:selected-component-id="selectedCompId"
+              :pin-states="pinStates"
+              :readonly="!modeStore.canEditCircuit"
+              :routing-mode="routingMode"
+              @button-press="handleButtonPress"
+              @button-release="handleButtonRelease"
+              @layout-change="syncCanvasToManifest"
+            />
+          </template>
+          <template #secondary>
+            <div class="world-pane scrollable">
+              <ProductWorldPlaceholder @load-template="onLoadTemplate" />
+              <div v-if="modeStore.current !== 'design'" class="virtual-peripherals-grid">
+                <div v-for="comp in activeComponents" :key="`sim-${comp.id}`" class="grid-card">
+                  <div class="card-header"><span class="card-title">{{ comp.name }}</span></div>
+                  <div class="card-body">
+                    <VirtualLED v-if="comp.type === 'led'" :pin-connections="comp.pinConnections" :color="comp.props.color" :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false" :brightness="comp.props.brightness" :label="comp.props.label" :flip="comp.props.flip" />
+                    <VirtualButton v-else-if="comp.type === 'button'" :pin-connections="comp.pinConnections" :color="comp.props.color" :label="comp.props.label" :xray="comp.props.xray" :active-low="comp.props.activeLow" />
+                    <VirtualOLED v-else-if="comp.type === 'oled'" :pin-connections="comp.pinConnections" :framebuffer="oledFb" />
+                    <VirtualUltrasonic v-else-if="comp.type === 'ultrasonic'" :pin-connections="comp.pinConnections" :distance="comp.props.distance" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </SplitPane>
+
+        <div v-else class="workspace-content">
+          <!-- Canvas Tab -->
+          <div v-show="activeTab === 'canvas'">
+            <CircuitCanvas
+              ref="circuitCanvasRef"
+              v-model:components="activeComponents"
+              v-model:selected-component-id="selectedCompId"
+              :pin-states="pinStates"
+              :readonly="!modeStore.canEditCircuit"
+              :routing-mode="routingMode"
+              @button-press="handleButtonPress"
+              @button-release="handleButtonRelease"
+              @layout-change="syncCanvasToManifest"
+            />
+          </div>
+
+          <!-- Simulation Grid Tab -->
+          <div v-show="activeTab === 'sim'" class="sim-grid-container scrollable">
+            <div class="virtual-peripherals-grid">
+              <div v-for="comp in activeComponents" :key="comp.id" class="grid-card">
+                <div class="card-header">
+                  <span class="card-title">{{ comp.name }}</span>
+                </div>
+
+                <div class="card-body">
+                  <VirtualLED
+                    v-if="comp.type === 'led'"
+                    :pin-connections="comp.pinConnections"
+                    :color="comp.props.color"
+                    :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
+                    :brightness="comp.props.brightness"
+                    :label="comp.props.label"
+                    :flip="comp.props.flip"
+                  />
+                  <VirtualButton
+                    v-else-if="comp.type === 'button'"
+                    :pin-connections="comp.pinConnections"
+                    :color="comp.props.color"
+                    :label="comp.props.label"
+                    :xray="comp.props.xray"
+                    :active-low="comp.props.activeLow"
+                  />
+                  <VirtualOLED
+                    v-else-if="comp.type === 'oled'"
+                    :pin-connections="comp.pinConnections"
+                    :framebuffer="oledFb"
+                  />
+                  <VirtualUltrasonic
+                    v-else-if="comp.type === 'ultrasonic'"
+                    :pin-connections="comp.pinConnections"
+                    :distance="comp.props.distance"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <ContextInspector v-if="!legacyMode" class="panel right-panel">
+        <template #circuit>
+          <div class="inspector-section">
+            <div class="section-title">Property Inspector</div>
+
+            <div v-if="!selectedComp" class="empty-state">
+              Select a peripheral on the left or click canvas node to edit properties.
+            </div>
+
+            <div v-else class="property-form">
+              <div class="form-group">
+                <label>Component Name</label>
+                <input v-model="selectedComp.name" type="text" class="input" :disabled="!modeStore.canEditCircuit" />
+              </div>
+
+              <div class="section-title">Pin Connections</div>
+              <div
+                v-for="pinDef in peripheralConfigs[selectedComp.type]?.pins"
+                :key="pinDef.name"
+                class="form-group"
+              >
+                <label>{{ pinDef.name }} - {{ pinDef.description }}</label>
+                <select
+                  v-model="selectedComp.pinConnections[pinDef.name]"
+                  class="select font-mono"
+                  :disabled="!modeStore.canEditCircuit"
+                >
+                  <option v-if="!pinDef.required" :value="null">Not Connected</option>
+                  <template v-if="pinDef.signalType === 'power' || pinDef.signalType === 'i2c'">
+                    <option v-for="opt in powerOptions" :key="opt" :value="opt">{{ opt }}</option>
+                  </template>
+                  <template v-if="pinDef.signalType === 'digital' || pinDef.signalType === 'i2c'">
+                    <option v-for="gpio in availableGPIOs" :key="gpio" :value="gpio">IO{{ gpio }}</option>
+                  </template>
+                </select>
+              </div>
+
+              <div class="section-title">Properties</div>
+              <div
+                v-for="(propDef, propKey) in peripheralConfigs[selectedComp.type]?.props"
+                :key="propKey"
+                class="form-group"
+              >
+                <label>{{ propDef.description }}</label>
+                <select v-if="propDef.options" v-model="selectedComp.props[propKey]" class="select" :disabled="!modeStore.canEditCircuit">
+                  <option v-for="opt in propDef.options" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+                <input
+                  v-else-if="propDef.type === 'number'"
+                  v-model.number="selectedComp.props[propKey]"
+                  type="number"
+                  class="input font-mono"
+                  :disabled="!modeStore.canEditCircuit"
+                />
+                <input
+                  v-else-if="propDef.type === 'boolean'"
+                  v-model="selectedComp.props[propKey]"
+                  type="checkbox"
+                  :disabled="!modeStore.canEditCircuit"
+                />
+                <input
+                  v-else
+                  v-model="selectedComp.props[propKey]"
+                  type="text"
+                  class="input"
+                  :disabled="!modeStore.canEditCircuit"
+                />
+              </div>
+
+              <div v-if="selectedComp.type === 'ultrasonic'" class="form-group">
+                <div class="slider-label">
+                  <span>Distance (cm):</span>
+                  <span class="val">{{ ultrasonicDistance }} cm</span>
+                </div>
+                <input v-model.number="ultrasonicDistance" type="range" min="2" max="400" class="slider" />
+              </div>
+
+              <div class="form-group">
+                <label>Rotation</label>
+                <div class="rotation-btn-group">
+                  <button
+                    v-for="deg in [0, 90, 180, 270]"
+                    :key="deg"
+                    class="rotation-btn"
+                    :class="{ active: (selectedComp.rotation || 0) === deg }"
+                    :disabled="!modeStore.canEditCircuit"
+                    @click="setRotation(selectedComp, deg)"
+                  >
+                    {{ deg }}°
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template #bindings>
+          <BindingsInspector />
+        </template>
+        <template #diagnostics>
+          <BindingsInspector />
+        </template>
+        <template #faults>
+          <div class="inspector-section fault-section">
+            <div class="section-title text-danger">Fault Injector</div>
+            <div class="property-form">
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>Debounce Window (bounce_us):</span>
+                  <span class="val">{{ faults.bounce_us }} us</span>
+                </div>
+                <input v-model.number="faults.bounce_us" type="range" min="0" max="5000" step="50" class="slider" @input="injectFaults" />
+              </div>
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>Warm-up Period (warmup_us):</span>
+                  <span class="val">{{ faults.warmup_us }} us</span>
+                </div>
+                <input v-model.number="faults.warmup_us" type="range" min="0" max="10000" step="100" class="slider" @input="injectFaults" />
+              </div>
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>ADC Sample Interval (us):</span>
+                  <span class="val">{{ faults.sample_interval_us }} us</span>
+                </div>
+                <input v-model.number="faults.sample_interval_us" type="range" min="0" max="5000" step="50" class="slider" @input="injectFaults" />
+              </div>
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>ADC Noise (adc_noise_v):</span>
+                  <span class="val">{{ faults.adc_noise_v.toFixed(3) }} V</span>
+                </div>
+                <input v-model.number="faults.adc_noise_v" type="range" min="0" max="1.0" step="0.05" class="slider" @input="injectFaults" />
+              </div>
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>RC Time Constant (rc_tau_s):</span>
+                  <span class="val">{{ faults.rc_tau_s.toFixed(3) }} s</span>
+                </div>
+                <input v-model.number="faults.rc_tau_s" type="range" min="0" max="0.5" step="0.01" class="slider" @input="injectFaults" />
+              </div>
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>I2C Drop Rate:</span>
+                  <span class="val">{{ (faults.i2c_drop_permil / 10).toFixed(1) }} %</span>
+                </div>
+                <input v-model.number="faults.i2c_drop_permil" type="range" min="0" max="1000" step="10" class="slider" @input="injectFaults" />
+              </div>
+              <div class="form-group checkbox-group danger-checkbox">
+                <input id="breakWire" v-model="wireBroken" type="checkbox" @change="toggleWireBreak" />
+                <label for="breakWire">Cut Output Signal Wire (Hi-Z)</label>
+              </div>
+            </div>
+          </div>
+        </template>
+      </ContextInspector>
+
+      <!-- Legacy Right Panel -->
+      <aside v-else class="panel right-panel">
+        <div class="panel-header">
+          <Settings class="panel-header-icon" />
+          <span>Properties & Faults</span>
+        </div>
+
+        <div class="panel-content scrollable">
+          <!-- Property Inspector Section -->
+          <div class="inspector-section">
+            <div class="section-title">Property Inspector</div>
+
+            <div v-if="!selectedComp" class="empty-state">
+              Select a peripheral on the left or click canvas node to edit properties.
+            </div>
+
+            <div v-else class="property-form">
+              <div class="form-group">
+                <label>Component Name</label>
+                <input v-model="selectedComp.name" type="text" class="input" />
+              </div>
+
+              <!-- Dynamic Pin Configuration -->
+              <div class="section-title">Pin Connections</div>
+              <div
+                v-for="pinDef in peripheralConfigs[selectedComp.type]?.pins"
+                :key="pinDef.name"
+                class="form-group"
+              >
+                <label>{{ pinDef.name }} - {{ pinDef.description }}</label>
+                <select
+                  v-model="selectedComp.pinConnections[pinDef.name]"
+                  class="select font-mono"
+                >
+                  <option v-if="!pinDef.required" :value="null">Not Connected</option>
+                  <template v-if="pinDef.signalType === 'power' || pinDef.signalType === 'i2c'">
+                    <option v-for="opt in powerOptions" :key="opt" :value="opt">{{ opt }}</option>
+                  </template>
+                  <template v-if="pinDef.signalType === 'digital' || pinDef.signalType === 'i2c'">
+                    <option v-for="gpio in availableGPIOs" :key="gpio" :value="gpio">IO{{ gpio }}</option>
+                  </template>
+                </select>
+              </div>
+
+              <!-- Dynamic Properties -->
+              <div class="section-title">Properties</div>
+              <div
+                v-for="(propDef, propKey) in peripheralConfigs[selectedComp.type]?.props"
+                :key="propKey"
+                class="form-group"
+              >
+                <label>{{ propDef.description }}</label>
+                <select v-if="propDef.options" v-model="selectedComp.props[propKey]" class="select">
+                  <option v-for="opt in propDef.options" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+                <input
+                  v-else-if="propDef.type === 'number'"
+                  v-model.number="selectedComp.props[propKey]"
+                  type="number"
+                  class="input font-mono"
+                />
+                <input
+                  v-else-if="propDef.type === 'boolean'"
+                  v-model="selectedComp.props[propKey]"
+                  type="checkbox"
+                />
+                <input
+                  v-else
+                  v-model="selectedComp.props[propKey]"
+                  type="text"
+                  class="input"
+                />
+              </div>
+
+              <!-- Ultrasonic distance slider (special handling) -->
+              <div v-if="selectedComp.type === 'ultrasonic'" class="form-group">
+                <div class="slider-label">
+                  <span>Distance (cm):</span>
+                  <span class="val">{{ ultrasonicDistance }} cm</span>
+                </div>
+                <input
+                  v-model.number="ultrasonicDistance"
+                  type="range"
+                  min="2"
+                  max="400"
+                  class="slider"
+                />
+              </div>
+
+              <!-- Rotation Control -->
+              <div class="form-group">
+                <label>Rotation</label>
+                <div class="rotation-btn-group">
+                  <button
+                    v-for="deg in [0, 90, 180, 270]"
+                    :key="deg"
+                    class="rotation-btn"
+                    :class="{ active: (selectedComp.rotation || 0) === deg }"
+                    @click="setRotation(selectedComp, deg)"
+                  >
+                    {{ deg }}°
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fault Injector Section -->
+          <div class="inspector-section fault-section">
+            <div class="section-title text-danger">Fault Injector</div>
+
+            <div class="property-form">
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>Debounce Window (bounce_us):</span>
+                  <span class="val">{{ faults.bounce_us }} us</span>
+                </div>
+                <input v-model.number="faults.bounce_us" type="range" min="0" max="5000" step="50" class="slider" @input="injectFaults" />
+              </div>
+
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>Warm-up Period (warmup_us):</span>
+                  <span class="val">{{ faults.warmup_us }} us</span>
+                </div>
+                <input v-model.number="faults.warmup_us" type="range" min="0" max="10000" step="100" class="slider" @input="injectFaults" />
+              </div>
+
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>ADC Sample Interval (us):</span>
+                  <span class="val">{{ faults.sample_interval_us }} us</span>
+                </div>
+                <input v-model.number="faults.sample_interval_us" type="range" min="100" max="5000" step="50" class="slider" @input="injectFaults" />
+              </div>
+
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>ADC Noise (adc_noise_v):</span>
+                  <span class="val">{{ faults.adc_noise_v.toFixed(3) }} V</span>
+                </div>
+                <input v-model.number="faults.adc_noise_v" type="range" min="0" max="1.0" step="0.05" class="slider" @input="injectFaults" />
+              </div>
+
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>RC Time Constant (rc_tau_s):</span>
+                  <span class="val">{{ faults.rc_tau_s.toFixed(3) }} s</span>
+                </div>
+                <input v-model.number="faults.rc_tau_s" type="range" min="0" max="0.5" step="0.01" class="slider" @input="injectFaults" />
+              </div>
+
+              <div class="form-group">
+                <div class="slider-label">
+                  <span>I2C Drop Rate:</span>
+                  <span class="val">{{ (faults.i2c_drop_permil / 10).toFixed(1) }} %</span>
+                </div>
+                <input v-model.number="faults.i2c_drop_permil" type="range" min="0" max="1000" step="10" class="slider" @input="injectFaults" />
+              </div>
+
+              <div class="form-group checkbox-group danger-checkbox">
+                <input id="breakWire" v-model="wireBroken" type="checkbox" @change="toggleWireBreak" />
+                <label for="breakWire">Cut Output Signal Wire (Hi-Z)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div
+      v-if="!legacyMode && modeSwitchBanner"
+      class="mode-switch-banner"
+      role="alert"
+    >
+      {{ modeSwitchBanner }}
+    </div>
+
+    <BottomConsole v-if="!legacyMode" />
+
+    <!-- Legacy Bottom Panel -->
+    <footer v-else class="bottom-panel">
+      <div class="panel-header tabs-header">
+        <button
+          class="tab-btn"
+          :class="{ active: bottomTab === 'traces' }"
+          @click="bottomTab = 'traces'"
+        >
+          <Activity class="tab-icon" />
+          <span>Trace Logs</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ active: bottomTab === 'logs' }"
+          @click="bottomTab = 'logs'"
+        >
+          <Terminal class="tab-icon" />
+          <span>Diagnostics / Logs</span>
+        </button>
+      </div>
+
+      <div class="panel-content tab-content scrollable font-mono">
+        <!-- Trace Console -->
+        <div v-show="bottomTab === 'traces'" class="console traces-console">
+          <div v-if="traces.length === 0" class="empty-console">No simulation traces captured yet. Start simulation.</div>
+          <div v-else class="trace-list">
+            <div
+              v-for="(t, index) in traces.slice().reverse()"
+              :key="`trace-${index}`"
+              class="trace-line"
+              :class="getTraceClass(t.type)"
+            >
+              <span class="trace-time">[{{ formatTime(t.timestamp) }} ms]</span>
+              <span class="trace-seq">#{{ t.sequence }}</span>
+              <span class="trace-type">{{ getTraceLabel(t.type) }}</span>
+              <span class="trace-details">Pin/Bus ID: {{ t.pinOrBus }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Raw Logs -->
+        <div v-show="bottomTab === 'logs'" class="console logs-console">
+          <div class="console-actions">
+            <button class="btn btn-secondary btn-small" @click="clearLogs">Clear Logs</button>
+          </div>
+          <div v-if="logs.length === 0" class="empty-console">Console is clear.</div>
+          <div v-else class="log-list">
+            <div
+              v-for="(log, idx) in logs"
+              :key="`log-${idx}`"
+              class="log-line"
+              :class="`log-${log.level}`"
+            >
+              <span class="log-time">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
+              <span class="log-msg">{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <ConfirmDialog
+      :visible="showStopConfirm"
+      @confirm="confirmStopSimulation"
+      @cancel="cancelStopSimulation"
+    />
+    <OnboardingWizard
+      v-if="!legacyMode"
+      ref="onboardingRef"
+      @complete="onOnboardingComplete"
+    />
+  </div>
+</template>
 
 <style scoped>
 .rotation-btn-group {

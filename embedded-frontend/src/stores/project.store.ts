@@ -12,6 +12,7 @@ import { migrateManifest } from '@/services/manifest-migration';
 import {
   buildConnectionFromPin,
   buildConnectionFromPowerPin,
+  bindingPinResolver,
 } from '@/services/binding-pin-resolver';
 import {
   modelIdForCanvasType,
@@ -19,10 +20,12 @@ import {
 } from '@/catalog/device-catalog';
 import {
   validateBindings,
-  type ValidationResult,
+
 } from '@/services/binding-validation.service';
-import { bindingPinResolver } from '@/services/binding-pin-resolver';
-import { suggestBindings, type SuggestedBinding } from '@/services/binding-suggest.service';
+import type { ValidationResult } from '@/services/binding-validation.service';
+
+import { suggestBindings } from '@/services/binding-suggest.service';
+import type { SuggestedBinding } from '@/services/binding-suggest.service';
 import { provisionImplicitCanvasBindings } from '@/services/canvas-binding-provision';
 
 function resolveBoardDeviceEntry(
@@ -30,7 +33,7 @@ function resolveBoardDeviceEntry(
 ): DeviceEntry {
   const boardId = manifest.target.boardId;
   const existing = manifest.devices.find(
-    (d) => deviceCatalog.getDevice(d.modelId)?.category === 'board',
+    d => deviceCatalog.getDevice(d.modelId)?.category === 'board',
   );
   return (
     existing ?? {
@@ -81,15 +84,15 @@ export const useProjectStore = defineStore('project', {
   }),
 
   getters: {
-    projectName: (state) => state.manifest.name,
-    targetBoard: (state) => state.manifest.target.boardId,
+    projectName: state => state.manifest.name,
+    targetBoard: state => state.manifest.target.boardId,
     manifestSchemaV2Enabled: () => isManifestSchemaV2Enabled(),
     bindingValidationSummary(state): { errors: number; warnings: number; infos: number } {
       const r = state.lastValidationResults;
       return {
-        errors: r.filter((x) => x.severity === 'error').length,
-        warnings: r.filter((x) => x.severity === 'warning').length,
-        infos: r.filter((x) => x.severity === 'info').length,
+        errors: r.filter(x => x.severity === 'error').length,
+        warnings: r.filter(x => x.severity === 'warning').length,
+        infos: r.filter(x => x.severity === 'info').length,
       };
     },
   },
@@ -118,7 +121,7 @@ export const useProjectStore = defineStore('project', {
       const canvasDevices = buildCanvasDeviceEntries(components, layoutPositions);
       const devices = [
         boardEntry,
-        ...canvasDevices.filter((d) => d.componentId !== boardEntry.componentId),
+        ...canvasDevices.filter(d => d.componentId !== boardEntry.componentId),
       ];
 
       const connections: ConnectionEntry[] = [];
@@ -128,7 +131,8 @@ export const useProjectStore = defineStore('project', {
             connections.push(
               buildConnectionFromPin(comp.id, pinName, value, this.manifest),
             );
-          } else if (value === 'VCC' || value === '3V3' || value === 'GND') {
+          }
+          else if (value === 'VCC' || value === '3V3' || value === 'GND') {
             connections.push(
               buildConnectionFromPowerPin(comp.id, pinName, value, this.manifest),
             );
@@ -145,6 +149,14 @@ export const useProjectStore = defineStore('project', {
         components,
       );
       this.refreshValidation('design');
+    },
+
+    /** SSOT write path: canvas snapshot → Manifest (alias of syncFromCanvas). */
+    commitCanvasSnapshot(
+      components: CircuitComponentInstance[],
+      layoutPositions?: Record<string, { x: number; y: number }>,
+    ) {
+      this.syncFromCanvas(components, layoutPositions);
     },
 
     addSensorBinding(binding: SensorBinding) {
@@ -166,13 +178,13 @@ export const useProjectStore = defineStore('project', {
     removeBinding(bindingId: string) {
       if (!this.manifest.bindings) return;
       this.manifest.bindings.actuators = this.manifest.bindings.actuators.filter(
-        (b) => b.bindingId !== bindingId,
+        b => b.bindingId !== bindingId,
       );
       this.manifest.bindings.sensors = this.manifest.bindings.sensors.filter(
-        (b) => b.bindingId !== bindingId,
+        b => b.bindingId !== bindingId,
       );
       this.manifest.bindings.displays = this.manifest.bindings.displays.filter(
-        (b) => b.bindingId !== bindingId,
+        b => b.bindingId !== bindingId,
       );
       this.refreshValidation('design');
     },
@@ -186,12 +198,13 @@ export const useProjectStore = defineStore('project', {
           mechanicalPartId: suggestion.mechanicalPartId,
           mapping: suggestion.suggestedMapping,
         });
-      } else if (
-        suggestion.suggestedMapping.type === 'pwm_to_angular_velocity' ||
-        suggestion.suggestedMapping.type === 'pwm_to_linear_position' ||
-        suggestion.suggestedMapping.type === 'gpio_to_binary_state' ||
-        suggestion.suggestedMapping.type === 'pwm_to_brightness' ||
-        suggestion.suggestedMapping.type === 'gpio_to_emissive'
+      }
+      else if (
+        suggestion.suggestedMapping.type === 'pwm_to_angular_velocity'
+        || suggestion.suggestedMapping.type === 'pwm_to_linear_position'
+        || suggestion.suggestedMapping.type === 'gpio_to_binary_state'
+        || suggestion.suggestedMapping.type === 'pwm_to_brightness'
+        || suggestion.suggestedMapping.type === 'gpio_to_emissive'
       ) {
         this.addActuatorBinding({
           bindingId,

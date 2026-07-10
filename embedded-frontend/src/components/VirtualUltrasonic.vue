@@ -1,26 +1,3 @@
-<template>
-  <div class="virtual-ultrasonic">
-    <div class="component-label">HC-SR04 (TRIG:{{ trigPin }}, ECHO:{{ echoPin }})</div>
-    <div class="sensor-wrapper">
-      <wokwi-hc-sr04 />
-    </div>
-    <div class="slider-container">
-      <div class="slider-header">
-        <span>Distance:</span>
-        <span class="value-display">{{ localDistance }} cm</span>
-      </div>
-      <input
-        type="range"
-        min="2"
-        max="400"
-        v-model.number="localDistance"
-        @input="updateDistance"
-        class="distance-slider"
-      />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import '@wokwi/elements';
 import { ref, computed, onMounted, watch } from 'vue';
@@ -61,6 +38,29 @@ onMounted(() => {
   updateDistance();
 });
 </script>
+
+<template>
+  <div class="virtual-ultrasonic">
+    <div class="component-label">HC-SR04 (TRIG:{{ trigPin }}, ECHO:{{ echoPin }})</div>
+    <div class="sensor-wrapper">
+      <wokwi-hc-sr04 />
+    </div>
+    <div class="slider-container">
+      <div class="slider-header">
+        <span>Distance:</span>
+        <span class="value-display">{{ localDistance }} cm</span>
+      </div>
+      <input
+        v-model.number="localDistance"
+        type="range"
+        min="2"
+        max="400"
+        class="distance-slider"
+        @input="updateDistance"
+      />
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .virtual-ultrasonic {

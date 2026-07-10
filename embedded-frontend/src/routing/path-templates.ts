@@ -9,7 +9,7 @@ import {
   segmentIntersectsObstacle,
   snapTrackCoord,
   verticalTrackCrossesObstacle,
-} from './geometry';import type {
+} from './geometry'; import type {
   CardinalDirection,
   Obstacle,
   Point,
@@ -105,10 +105,10 @@ function findObstacleNear(obstacles: Obstacle[], point: Point): Obstacle | null 
   for (const obs of obstacles) {
     const margin = 24;
     if (
-      point.x >= obs.x - margin &&
-      point.x <= obs.x + obs.width + margin &&
-      point.y >= obs.y - margin &&
-      point.y <= obs.y + obs.height + margin
+      point.x >= obs.x - margin
+      && point.x <= obs.x + obs.width + margin
+      && point.y >= obs.y - margin
+      && point.y <= obs.y + obs.height + margin
     ) {
       return obs;
     }

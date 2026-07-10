@@ -159,7 +159,7 @@ describe('peripheral edge routing', () => {
     const points = buildPowerBusTapPath2D(start, node, railY, 'down', ULTRASONIC_OBSTACLE);
 
     expect(interiorCrossesObstacle(points, ULTRASONIC_OBSTACLE)).toBe(false);
-    expect(points.some((p) => p.x >= ULTRASONIC_BOUNDS.right)).toBe(true);
+    expect(points.some(p => p.x >= ULTRASONIC_BOUNDS.right)).toBe(true);
   });
 
   it('power taps from same module use the same bypass side (by node position)', () => {
@@ -167,8 +167,8 @@ describe('peripheral edge routing', () => {
     const railY = 80;
     const vcc = buildPowerBusTapPath2D({ x: 165, y: 455 }, { x: 328, y: 80 }, railY, 'down', obstacle);
     const gnd = buildPowerBusTapPath2D({ x: 195, y: 455 }, { x: 472, y: 80 }, railY, 'down', obstacle);
-    const vccEdge = vcc.find((p) => p.y === railY && p.x !== 328)?.x;
-    const gndEdge = gnd.find((p) => p.y === railY && p.x !== 472)?.x;
+    const vccEdge = vcc.find(p => p.y === railY && p.x !== 328)?.x;
+    const gndEdge = gnd.find(p => p.y === railY && p.x !== 472)?.x;
     expect(vccEdge).toBeDefined();
     expect(gndEdge).toBe(vccEdge);
     expect(vccEdge!).toBeGreaterThanOrEqual(ULTRASONIC_BOUNDS.right);
@@ -289,7 +289,7 @@ describe('peripheral edge routing', () => {
     });
 
     expect(interiorCrossesObstacle(points, ULTRASONIC_OBSTACLE)).toBe(false);
-    const edgePoint = points.find((p) => p.x > ULTRASONIC_BOUNDS.right && p.y > 440);
+    const edgePoint = points.find(p => p.x > ULTRASONIC_BOUNDS.right && p.y > 440);
     expect(edgePoint).toBeDefined();
   });
 
@@ -382,7 +382,7 @@ describe('peripheral edge routing', () => {
     );
 
     expect(interiorCrossesObstacle(repaired, ULTRASONIC_OBSTACLE)).toBe(false);
-    expect(repaired.some((p) => p.x >= ULTRASONIC_BOUNDS.right)).toBe(true);
+    expect(repaired.some(p => p.x >= ULTRASONIC_BOUNDS.right)).toBe(true);
   });
 
   it('routePathAroundObstacle reroutes start-side approach along component edge', () => {

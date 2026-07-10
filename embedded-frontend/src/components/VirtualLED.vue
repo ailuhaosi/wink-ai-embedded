@@ -1,19 +1,3 @@
-<template>
-  <div class="virtual-led">
-    <div class="component-label">LED ({{ pinLabel }})</div>
-    <div class="led-wrapper">
-      <wokwi-led 
-        :pin="typeof pinConnections.A === 'number' ? pinConnections.A : 1"
-        :color="color" 
-        :value="level" 
-        :brightness="brightness"
-        :label="label"
-        :flip="flip"
-      />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import '@wokwi/elements';
 import { computed } from 'vue';
@@ -35,6 +19,22 @@ const pinLabel = computed(() => {
   return `A:${anode}, C:${cathode}`;
 });
 </script>
+
+<template>
+  <div class="virtual-led">
+    <div class="component-label">LED ({{ pinLabel }})</div>
+    <div class="led-wrapper">
+      <wokwi-led
+        :pin="typeof pinConnections.A === 'number' ? pinConnections.A : 1"
+        :color="color"
+        :value="level"
+        :brightness="brightness"
+        :label="label"
+        :flip="flip"
+      />
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .virtual-led {

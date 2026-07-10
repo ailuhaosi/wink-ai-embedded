@@ -28,15 +28,15 @@ const validationSummary = computed(() => {
     { catalog: deviceCatalog, pinResolver: bindingPinResolver },
   );
   return {
-    errors: results.filter((r) => r.severity === 'error').length,
-    warnings: results.filter((r) => r.severity === 'warning').length,
-    infos: results.filter((r) => r.severity === 'info').length,
+    errors: results.filter(r => r.severity === 'error').length,
+    warnings: results.filter(r => r.severity === 'warning').length,
+    infos: results.filter(r => r.severity === 'info').length,
     results,
   };
 });
 
 function deviceLabel(componentId: string): string {
-  const d = manifest.value.devices.find((x) => x.componentId === componentId);
+  const d = manifest.value.devices.find(x => x.componentId === componentId);
   return d?.displayName ?? d?.modelId ?? componentId;
 }
 
@@ -49,9 +49,9 @@ function resolveSensorPinDisplay(binding: SensorBinding): string {
 }
 
 function bindingStatus(bindingId: string): 'ok' | 'warn' | 'error' {
-  const issues = validationSummary.value.results.filter((r) => r.bindingId === bindingId);
-  if (issues.some((r) => r.severity === 'error')) return 'error';
-  if (issues.some((r) => r.severity === 'warning')) return 'warn';
+  const issues = validationSummary.value.results.filter(r => r.bindingId === bindingId);
+  if (issues.some(r => r.severity === 'error')) return 'error';
+  if (issues.some(r => r.severity === 'warning')) return 'warn';
   return 'ok';
 }
 
@@ -65,7 +65,7 @@ function removeBinding(bindingId: string) {
 }
 
 function addUltrasonicBinding() {
-  const mount = manifest.value.mechanical?.parts.find((p) =>
+  const mount = manifest.value.mechanical?.parts.find(p =>
     p.modelId.includes('ultrasonic'),
   );
   if (!mount) {
@@ -88,12 +88,12 @@ function addUltrasonicBinding() {
       },
     });
   }
-  const partId =
-    mount?.partId ??
-    manifest.value.mechanical?.parts.find((p) => p.modelId.includes('ultrasonic'))
-      ?.partId ??
-    'mount_ultrasonic';
-  const radar = manifest.value.devices.find((d) => d.modelId === 'hc-sr04');
+  const partId
+    = mount?.partId
+      ?? manifest.value.mechanical?.parts.find(p => p.modelId.includes('ultrasonic'))
+        ?.partId
+        ?? 'mount_ultrasonic';
+  const radar = manifest.value.devices.find(d => d.modelId === 'hc-sr04');
   if (!radar) return;
   projectStore.addSensorBinding({
     bindingId: `bind_radar_${Date.now()}`,

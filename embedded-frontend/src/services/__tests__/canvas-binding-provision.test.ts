@@ -17,8 +17,8 @@ describe('canvas-binding-provision', () => {
   it('auto-provisions raycast binding for default demo sonar1', () => {
     const base = createEmptyManifestV2();
     const result = provisionImplicitCanvasBindings(base, [sonarComponent]);
-    expect(result.bindings?.sensors.some((s) => s.deviceComponentId === 'sonar1')).toBe(true);
-    expect(result.mechanical?.parts.some((p) => p.partId === 'mount_sonar1')).toBe(true);
+    expect(result.bindings?.sensors.some(s => s.deviceComponentId === 'sonar1')).toBe(true);
+    expect(result.mechanical?.parts.some(p => p.partId === 'mount_sonar1')).toBe(true);
   });
 
   it('does not auto-bind for M1 avoidance car template', () => {
@@ -43,23 +43,23 @@ describe('canvas-binding-provision', () => {
 describe('createAvoidanceCarWorkbenchManifest', () => {
   it('includes mount and binding for simulate-ready template', async () => {
     const { createAvoidanceCarWorkbenchManifest } = await import(
-      '@/services/templates/avoidance-car-w2-minimal'
+      '@/services/templates/avoidance-car-w2-minimal',
     );
     const { validateBindings, isBlockingResult } = await import(
-      '@/services/binding-validation.service'
+      '@/services/binding-validation.service',
     );
     const { deviceCatalog } = await import('@/catalog/device-catalog');
     const { bindingPinResolver } = await import('@/services/binding-pin-resolver');
 
     const manifest = createAvoidanceCarWorkbenchManifest();
-    expect(manifest.bindings?.sensors.some((s) => s.deviceComponentId === 'front_radar')).toBe(
+    expect(manifest.bindings?.sensors.some(s => s.deviceComponentId === 'front_radar')).toBe(
       true,
     );
     const blocking = validateBindings(
       manifest,
       { targetMode: 'simulate', blockingOnly: true },
       { catalog: deviceCatalog, pinResolver: bindingPinResolver },
-    ).filter((r) => isBlockingResult(r, { targetMode: 'simulate' }));
+    ).filter(r => isBlockingResult(r, { targetMode: 'simulate' }));
     expect(blocking).toEqual([]);
   });
 });

@@ -22,20 +22,20 @@ export interface ResolvedUltrasonicPins {
 }
 
 export interface BindingPinResolver {
-  resolveActuatorPin(
+  resolveActuatorPin: (
     manifest: EmbeddedProjectManifest,
     binding: ActuatorBinding,
-  ): ResolvedActuatorPin | null;
+  ) => ResolvedActuatorPin | null;
 
-  resolveUltrasonicPins(
+  resolveUltrasonicPins: (
     manifest: EmbeddedProjectManifest,
     bindingId: string,
-  ): ResolvedUltrasonicPins | null;
+  ) => ResolvedUltrasonicPins | null;
 
-  resolveSensorPins(
+  resolveSensorPins: (
     manifest: EmbeddedProjectManifest,
     binding: SensorBinding,
-  ): Record<string, number> | null;
+  ) => Record<string, number> | null;
 }
 
 const BOARD_COMPONENT_PREFIX = '__board__';
@@ -48,7 +48,7 @@ function normalizeConnections(manifest: EmbeddedProjectManifest): Array<{
   from: { componentId: string; pin: string };
   to: { componentId: string; pin: string };
 }> {
-  return manifest.connections.map((c) => ({
+  return manifest.connections.map(c => ({
     from: typeof c.from === 'string' ? parsePinRef(c.from) : c.from,
     to: typeof c.to === 'string' ? parsePinRef(c.to) : c.to,
   }));
@@ -77,11 +77,11 @@ function resolvePinToBoardNumber(
     ];
 
     const deviceEnd = endpoints.find(
-      (e) => e.comp === componentId && e.pin === pinName,
+      e => e.comp === componentId && e.pin === pinName,
     );
     if (!deviceEnd) continue;
 
-    const other = endpoints.find((e) => e !== deviceEnd);
+    const other = endpoints.find(e => e !== deviceEnd);
     if (!other) continue;
 
     if (other.comp === boardId || other.comp === manifest.target.boardId) {
@@ -149,7 +149,7 @@ export const bindingPinResolver: BindingPinResolver = {
   },
 
   resolveUltrasonicPins(manifest, bindingId) {
-    const binding = manifest.bindings?.sensors.find((s) => s.bindingId === bindingId);
+    const binding = manifest.bindings?.sensors.find(s => s.bindingId === bindingId);
     if (!binding) return null;
     const pins = this.resolveSensorPins(manifest, binding);
     if (!pins || pins.TRIG === undefined || pins.ECHO === undefined) return null;
@@ -158,7 +158,7 @@ export const bindingPinResolver: BindingPinResolver = {
 
   resolveSensorPins(manifest, binding) {
     const device = manifest.devices.find(
-      (d) => d.componentId === binding.deviceComponentId,
+      d => d.componentId === binding.deviceComponentId,
     );
     if (!device) return null;
 

@@ -72,8 +72,8 @@ function resolveTopology(
   boardCenterX: number,
   obstacles: Obstacle[],
   assignment: TrackAssignment,
-  startDir: CardinalDirection,
-  endDir: CardinalDirection,
+  _startDir: CardinalDirection,
+  _endDir: CardinalDirection,
 ): WireTopology {
   if (assignment.topology === 'local' || assignment.topology === 'same-side' || assignment.topology === 'cross-side') {
     const classified = classifyTopology(start, end, boardCenterX, LOCAL_THRESHOLD);

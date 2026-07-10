@@ -20,10 +20,9 @@ import {
   oledFb,
   logs,
   traces,
-  type SimFaultsConfig,
-  type PeripheralConfig,
-  type SimTrace,
+
 } from '../services/simulation-client';
+import type { SimFaultsConfig, PeripheralConfig, SimTrace } from '../services/simulation-client';
 
 interface SimulationState {
   simSpeed: number;
@@ -60,7 +59,7 @@ export const useSimulationStore = defineStore('simulation', {
   }),
 
   getters: {
-    simTimeUs: (state) => state.clockUs,
+    simTimeUs: state => state.clockUs,
   },
 
   actions: {
@@ -110,10 +109,12 @@ export const useSimulationStore = defineStore('simulation', {
         const res = await fetch(`/wasm/wasm-app-id.txt?t=${Date.now()}`);
         if (res.ok) {
           this.activeAppId = (await res.text()).trim();
-        } else {
+        }
+        else {
           this.activeAppId = 'unknown';
         }
-      } catch (e) {
+      }
+      catch (e) {
         console.warn('Failed to fetch active wasm app id:', e);
         this.activeAppId = 'unknown';
       }
@@ -128,7 +129,8 @@ export const useSimulationStore = defineStore('simulation', {
     toggle() {
       if (isRunning.value) {
         pauseSimulation();
-      } else {
+      }
+      else {
         startSimulation();
       }
     },

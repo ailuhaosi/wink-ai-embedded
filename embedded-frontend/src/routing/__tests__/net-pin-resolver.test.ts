@@ -44,7 +44,7 @@ describe('net-pin-resolver', () => {
   it('resolveNetPin honors user override on a single explicit candidate', () => {
     const pin = resolveNetPin(buttonPrimary, {
       pinConnections: { '1.l': 14, '1.r': null, '2.l': null, '2.r': null },
-      getPinPosition: (name) => positions[name],
+      getPinPosition: name => positions[name],
       targetPosition: { x: 487, y: 192 },
     });
     expect(pin).toBe('1.l');
@@ -53,12 +53,12 @@ describe('net-pin-resolver', () => {
   it('resolveNetPin auto-picks closest candidate when only defaultConnection is set', () => {
     const leftBoard = resolveNetPin(buttonPrimary, {
       pinConnections: { '1.l': null, '1.r': null, '2.l': 'VCC', '2.r': null },
-      getPinPosition: (name) => positions[name],
+      getPinPosition: name => positions[name],
       targetPosition: { x: 50, y: 220 },
     });
     const rightBoard = resolveNetPin(buttonPrimary, {
       pinConnections: { '1.l': null, '1.r': null, '2.l': 'VCC', '2.r': null },
-      getPinPosition: (name) => positions[name],
+      getPinPosition: name => positions[name],
       targetPosition: { x: 487, y: 192 },
     });
     expect(leftBoard).toBe('1.l');
@@ -68,7 +68,7 @@ describe('net-pin-resolver', () => {
   it('resolveNetPin picks closest among multiple explicit candidates', () => {
     const pin = resolveNetPin(buttonPrimary, {
       pinConnections: { '1.l': 14, '1.r': 14, '2.l': null, '2.r': null },
-      getPinPosition: (name) => positions[name],
+      getPinPosition: name => positions[name],
       targetPosition: { x: 487, y: 192 },
     });
     expect(pin).toBe('1.r');

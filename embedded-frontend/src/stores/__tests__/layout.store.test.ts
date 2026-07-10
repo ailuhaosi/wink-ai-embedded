@@ -6,7 +6,7 @@ describe('layout store mode defaults', () => {
     setActivePinia(createPinia());
   });
 
-  it('A15: simulate collapses left panel and design restores prior state', async () => {
+  it('a15: simulate collapses left panel and design restores prior state', async () => {
     const { useLayoutStore } = await import('../layout.store');
     const { useWorkbenchModeStore } = await import('../workbench-mode.store');
     const layout = useLayoutStore();
@@ -23,7 +23,7 @@ describe('layout store mode defaults', () => {
     expect(layout.leftPanelCollapsed).toBe(false);
   });
 
-  it('A15: restores collapsed-before-simulate when returning to design', async () => {
+  it('a15: restores collapsed-before-simulate when returning to design', async () => {
     const { useLayoutStore } = await import('../layout.store');
     const layout = useLayoutStore();
 
@@ -36,7 +36,7 @@ describe('layout store mode defaults', () => {
     expect(layout.leftPanelCollapsed).toBe(true);
   });
 
-  it('A16: simulate opens Trace; diagnose opens Causal', async () => {
+  it('a16: simulate opens Trace; diagnose opens Causal', async () => {
     const { useLayoutStore } = await import('../layout.store');
     const layout = useLayoutStore();
 
@@ -48,7 +48,7 @@ describe('layout store mode defaults', () => {
     expect(layout.bottomPanelActiveTab).toBe('causal');
   });
 
-  it('A4/A19: mode defaults set expected split ratios', async () => {
+  it('a4/A19: mode defaults set expected split ratios', async () => {
     const { useLayoutStore } = await import('../layout.store');
     const { useWorkbenchModeStore } = await import('../workbench-mode.store');
     const layout = useLayoutStore();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cloneFaultsConfig, type SimFaultsConfig } from '@/services/simulation-client';
+import { cloneFaultsConfig } from '@/services/simulation-client';
+import type { SimFaultsConfig } from '@/services/simulation-client';
 
 describe('cloneFaultsConfig', () => {
   it('returns a plain object cloneable via structuredClone', () => {

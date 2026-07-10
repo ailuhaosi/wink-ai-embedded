@@ -1,6 +1,7 @@
 import { GRID_SNAP, MAX_BUMP_COUNT, TRACK_SPACING } from './constants';
 import { segmentIntersectsObstacle, snapTrackCoord } from './geometry';
-import { extractSegmentsFromPoints, type SegmentOccupancyRegistry } from './segment-occupancy';
+import { extractSegmentsFromPoints } from './segment-occupancy';
+import type { SegmentOccupancyRegistry } from './segment-occupancy';
 import type { Obstacle, Point, TrackAssignment } from './types';
 
 export interface ResolveConflictOptions {
@@ -38,7 +39,7 @@ function pathHasOccupancyConflict(
   occupancy: SegmentOccupancyRegistry,
 ): boolean {
   const segments = extractSegmentsFromPoints(wireId, points);
-  return segments.some((segment) => occupancy.hasConflict(segment));
+  return segments.some(segment => occupancy.hasConflict(segment));
 }
 
 function bumpAssignment(
@@ -52,13 +53,16 @@ function bumpAssignment(
   if (next.topology === 'cross-side') {
     if (attempt % 2 === 0 && next.verticalTrackX !== undefined) {
       next.verticalTrackX = snapTrackCoord(next.verticalTrackX + delta);
-    } else if (next.exitTrackX !== undefined) {
+    }
+    else if (next.exitTrackX !== undefined) {
       next.exitTrackX = snapTrackCoord(next.exitTrackX - delta);
-    } else if (next.horizontalTrackY !== undefined) {
+    }
+    else if (next.horizontalTrackY !== undefined) {
       const bumpDir = next.bypassSide === 'top' ? -GRID_SNAP : GRID_SNAP;
       next.horizontalTrackY = snapTrackCoord(next.horizontalTrackY + bumpDir);
     }
-  } else if (next.verticalTrackX !== undefined) {
+  }
+  else if (next.verticalTrackX !== undefined) {
     const isLeft = next.verticalTrackX < 400;
     next.verticalTrackX = snapTrackCoord(next.verticalTrackX + (isLeft ? -delta : delta));
   }
@@ -77,8 +81,8 @@ export function resolveConflicts(
   let bumpCount = 0;
 
   if (
-    !pathHasObstacleCollision(points, options.obstacles) &&
-    !pathHasOccupancyConflict(points, options.wireId, options.occupancy)
+    !pathHasObstacleCollision(points, options.obstacles)
+    && !pathHasOccupancyConflict(points, options.wireId, options.occupancy)
   ) {
     return { points, resolved: true, bumpCount: 0 };
   }
@@ -96,8 +100,8 @@ export function resolveConflicts(
     }
 
     if (
-      !pathHasObstacleCollision(points, options.obstacles) &&
-      !pathHasOccupancyConflict(points, options.wireId, options.occupancy)
+      !pathHasObstacleCollision(points, options.obstacles)
+      && !pathHasOccupancyConflict(points, options.wireId, options.occupancy)
     ) {
       return { points, resolved: true, bumpCount };
     }

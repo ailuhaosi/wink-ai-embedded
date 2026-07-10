@@ -5,12 +5,12 @@ export interface Point {
 
 export type CardinalDirection = 'left' | 'right' | 'up' | 'down';
 
-export type WireTopology =
-  | 'power-tap'
-  | 'power-trunk'
-  | 'same-side'
-  | 'cross-side'
-  | 'local';
+export type WireTopology
+  = | 'power-tap'
+    | 'power-trunk'
+    | 'same-side'
+    | 'cross-side'
+    | 'local';
 
 export type RoutingChannel = 'left' | 'right' | 'cross';
 
@@ -71,8 +71,8 @@ export interface RoutingContext {
   obstacles: Obstacle[];
   assignments: Map<string, TrackAssignment>;
   occupancy: {
-    register(segment: OccupiedSegment): void;
-    hasConflict(segment: OccupiedSegment): boolean;
+    register: (segment: OccupiedSegment) => void;
+    hasConflict: (segment: OccupiedSegment) => boolean;
   };
   gpioFanout?: { index: number; total: number };
   waypoints?: Point[];

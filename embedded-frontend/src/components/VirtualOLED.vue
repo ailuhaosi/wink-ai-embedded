@@ -1,12 +1,3 @@
-<template>
-  <div class="virtual-oled">
-    <div class="component-label">SSD1306 (SDA:{{ sdaPin }}, SCL:{{ sclPin }})</div>
-    <div class="oled-wrapper">
-      <wokwi-ssd1306 ref="oledRef" />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import '@wokwi/elements';
 import { ref, computed, watch } from 'vue';
@@ -33,18 +24,19 @@ const sclPin = computed(() => {
 watch(() => props.framebuffer, (newFb) => {
   if (!oledRef.value) return;
   const el = oledRef.value;
-  
+
   let imgData = el.imageData;
   if (!imgData || imgData.width !== 128 || imgData.height !== 64) {
     try {
       imgData = new ImageData(128, 64);
-    } catch {
+    }
+    catch {
       return;
     }
   }
-  
+
   const px = imgData.data;
-  
+
   if (newFb && newFb.length === 1024) {
     for (let page = 0; page < 8; page++) {
       for (let col = 0; col < 128; col++) {
@@ -53,27 +45,37 @@ watch(() => props.framebuffer, (newFb) => {
           const row = page * 8 + bit;
           const lit = (byte >> bit) & 1;
           const idx = (row * 128 + col) * 4;
-          
-          px[idx]     = lit ? 0   : 8;
+
+          px[idx] = lit ? 0 : 8;
           px[idx + 1] = lit ? 210 : 12;
           px[idx + 2] = lit ? 255 : 24;
           px[idx + 3] = 255;
         }
       }
     }
-  } else {
+  }
+  else {
     px.fill(0);
     for (let i = 3; i < px.length; i += 4) {
       px[i] = 255;
     }
   }
-  
+
   el.imageData = imgData;
   if (typeof el.redraw === 'function') {
     el.redraw();
   }
 }, { immediate: true });
 </script>
+
+<template>
+  <div class="virtual-oled">
+    <div class="component-label">SSD1306 (SDA:{{ sdaPin }}, SCL:{{ sclPin }})</div>
+    <div class="oled-wrapper">
+      <wokwi-ssd1306 ref="oledRef" />
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .virtual-oled {

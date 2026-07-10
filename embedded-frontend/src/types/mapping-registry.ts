@@ -1,11 +1,11 @@
 import type { Vector3 } from './manifest-v2';
 
-export type ActuatorMapping =
-  | PwmToAngularVelocity
-  | PwmToLinearPosition
-  | GpioToBinaryState
-  | PwmToBrightness
-  | GpioToEmissive;
+export type ActuatorMapping
+  = | PwmToAngularVelocity
+    | PwmToLinearPosition
+    | GpioToBinaryState
+    | PwmToBrightness
+    | GpioToEmissive;
 
 export interface GpioToEmissive {
   type: 'gpio_to_emissive';
@@ -39,12 +39,12 @@ export interface PwmToBrightness {
   curve: 'linear' | 'gamma22';
 }
 
-export type SensorMapping =
-  | RaycastRangeCm
-  | TemperatureFieldSample
-  | CollisionContactBool
-  | LightIntensitySample
-  | AngularPositionToEncoder;
+export type SensorMapping
+  = | RaycastRangeCm
+    | TemperatureFieldSample
+    | CollisionContactBool
+    | LightIntensitySample
+    | AngularPositionToEncoder;
 
 export interface RaycastRangeCm {
   type: 'raycast_range_cm';

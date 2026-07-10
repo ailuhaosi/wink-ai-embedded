@@ -1,5 +1,12 @@
-import { ref, computed, watch, type Ref } from 'vue';
+import { ref, computed, watch } from 'vue';
+import type { Ref } from 'vue';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
+import type {
+  Obstacle,
+  WirePathResult,
+  NetDefinition,
+  PinConnectionValue,
+} from '@/types/peripheral-pins';
 import {
   peripheralConfigs,
   getNetDefinitions,
@@ -9,10 +16,6 @@ import {
   getRoutingChannels,
   getPowerNodeSlots,
   rotatePinOffset,
-  Obstacle,
-  WirePathResult,
-  NetDefinition,
-  PinConnectionValue,
 } from '@/types/peripheral-pins';
 import { resolveBoardBounds, resolveBoardPinEndDir, resolvePeripheralPinStartDir } from '@/routing/geometry';
 import { resolveNetConnection, resolveNetPin } from '@/routing/net-pin-resolver';
@@ -126,15 +129,15 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     22: { x: boardDescriptor.pins[22].x - boardDescriptor.x, y: boardDescriptor.pins[22].y - boardDescriptor.y },
   };
   const boardPowerPinOffsets: Record<string, { x: number; y: number }> = {
-    VCC: { x: boardDescriptor.powerPins.VCC.x - boardDescriptor.x, y: boardDescriptor.powerPins.VCC.y - boardDescriptor.y },
+    'VCC': { x: boardDescriptor.powerPins.VCC.x - boardDescriptor.x, y: boardDescriptor.powerPins.VCC.y - boardDescriptor.y },
     '3V3': { x: boardDescriptor.powerPins['3V3'].x - boardDescriptor.x, y: boardDescriptor.powerPins['3V3'].y - boardDescriptor.y },
-    GND: { x: boardDescriptor.powerPins.GND.x - boardDescriptor.x, y: boardDescriptor.powerPins.GND.y - boardDescriptor.y },
+    'GND': { x: boardDescriptor.powerPins.GND.x - boardDescriptor.x, y: boardDescriptor.powerPins.GND.y - boardDescriptor.y },
   };
 
   const commonPowerNodes = ref<Record<string, { x: number; y: number; id: string; label: string; color: string }>>({
-    VCC: { x: 328, y: 80, id: 'common-vcc', label: 'VCC', color: '#ef4444' },
+    'VCC': { x: 328, y: 80, id: 'common-vcc', label: 'VCC', color: '#ef4444' },
     '3V3': { x: 400, y: 80, id: 'common-3v3', label: '3V3', color: '#22c55e' },
-    GND: { x: 472, y: 80, id: 'common-gnd', label: 'GND', color: '#64748b' },
+    'GND': { x: 472, y: 80, id: 'common-gnd', label: 'GND', color: '#64748b' },
   });
 
   const draggedPowerNodeId = ref<string | null>(null);
@@ -181,7 +184,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     if (containerRatio > baseRatio) {
       viewHeight.value = CANVAS_HEIGHT;
       viewWidth.value = Math.round(CANVAS_HEIGHT * containerRatio);
-    } else {
+    }
+    else {
       viewWidth.value = CANVAS_WIDTH;
       viewHeight.value = Math.round(CANVAS_WIDTH / containerRatio);
     }
@@ -252,7 +256,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
   function handlePowerNodeMouseMove(event: MouseEvent) {
     if (!draggedPowerNodeId.value) return;
 
-    const { x, y } = clientToCanvas(event.clientX, event.clientY);
+    const { x } = clientToCanvas(event.clientX, event.clientY);
     const node = commonPowerNodes.value[draggedPowerNodeId.value];
     const slots = getPowerNodeSlots(boardPosition.value.x, boardPosition.value.y);
     if (node) {
@@ -341,7 +345,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
               startIndex = 1;
               endIndex = 2;
             }
-          } else if (startIndex === 0 && endIndex === 1) {
+          }
+          else if (startIndex === 0 && endIndex === 1) {
             startIndex = 1;
             endIndex = 2;
           }
@@ -583,10 +588,10 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     isComponentDragging.value = false;
     draggedCompId.value = comp.id;
     frozenTrackAssignments.value = buildTrackAssignmentMap(
-      components.value.flatMap((c) =>
+      components.value.flatMap(c =>
         getNetDefinitions(c.type)
-          .filter((net) => resolveNetConnection(net, c.pinConnections) !== null)
-          .map((net) => ({
+          .filter(net => resolveNetConnection(net, c.pinConnections) !== null)
+          .map(net => ({
             compId: c.id,
             comp: c,
             mode: net.mode,
@@ -769,7 +774,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     const routeRequests: WireRouteRequest[] = [];
 
     for (const req of requests) {
-      const netDef = getNetDefinitions(req.comp.type).find((n) => n.mode === req.mode);
+      const netDef = getNetDefinitions(req.comp.type).find(n => n.mode === req.mode);
       if (!netDef) continue;
       const pts = getWirePoints(req.comp, req.mode);
       if (!pts) continue;
@@ -782,8 +787,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
       else channel = 'cross';
 
       const wireId = `${req.compId}-${req.mode}`;
-      const bundleId =
-        req.signalType === 'i2c' && (req.mode === 'primary' || req.mode === 'secondary')
+      const bundleId
+        = req.signalType === 'i2c' && (req.mode === 'primary' || req.mode === 'secondary')
           ? `${req.compId}-i2c`
           : undefined;
 
@@ -878,7 +883,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
 
     const pinName = resolveNetPin(netDef, {
       pinConnections: comp.pinConnections,
-      getPinPosition: (name) => getPeripheralPinPosition(comp, name),
+      getPinPosition: name => getPeripheralPinPosition(comp, name),
       targetPosition: end,
     });
     if (!pinName) return null;
@@ -946,8 +951,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
   function buildActiveNetRequests(): NetRequest[] {
     const requests: NetRequest[] = [];
 
-    components.value.forEach(comp => {
-      getNetDefinitions(comp.type).forEach(net => {
+    components.value.forEach((comp) => {
+      getNetDefinitions(comp.type).forEach((net) => {
         if (resolveNetConnection(net, comp.pinConnections) === null) {
           return;
         }
@@ -955,11 +960,14 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
         let color = '#94a3b8';
         if (net.mode === 'vcc') {
           color = '#ef4444';
-        } else if (net.mode === 'gnd') {
+        }
+        else if (net.mode === 'gnd') {
           color = '#64748b';
-        } else if (net.mode === 'secondary') {
+        }
+        else if (net.mode === 'secondary') {
           color = comp.type === 'oled' ? '#a78bfa' : '#f59e0b';
-        } else {
+        }
+        else {
           color = getWireColor(comp);
         }
 
@@ -1013,11 +1021,11 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     const startDir = resolveWireStartDir(comp, pinName);
     const endDir = resolveWireEndDir(pts.end);
 
-    const isPowerToBus =
-      (netDef?.mode === 'vcc' || netDef?.mode === 'gnd' || signalType === 'power') &&
-      typeof connection === 'string' &&
-      (connection === 'VCC' || connection === '3V3' || connection === 'GND') &&
-      !(waypoints && waypoints.length > 0);
+    const isPowerToBus
+      = (netDef?.mode === 'vcc' || netDef?.mode === 'gnd' || signalType === 'power')
+        && typeof connection === 'string'
+        && (connection === 'VCC' || connection === '3V3' || connection === 'GND')
+        && !(waypoints && waypoints.length > 0);
 
     if (isPowerToBus) {
       return generatePowerBusTapPath(
@@ -1050,7 +1058,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     const obstacles: Obstacle[] = [
       { x: boardPosition.value.x, y: boardPosition.value.y, width: boardDescriptor.width, height: boardDescriptor.height },
     ];
-    components.value.forEach(comp => {
+    components.value.forEach((comp) => {
       obstacles.push(getComponentObstacle(comp));
     });
 
@@ -1076,7 +1084,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
         frozenTrackAssignments.value = buildTrackAssignmentMap(requests);
       }
       trackAssignments = frozenTrackAssignments.value;
-    } else {
+    }
+    else {
       trackAssignments = buildTrackAssignmentMap(requests);
     }
 
@@ -1124,7 +1133,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
       });
     }
 
-    requests.forEach(req => {
+    requests.forEach((req) => {
       const wireId = `${req.compId}-${req.mode}`;
       const fanout = gpioFanoutMap.get(wireId);
       const pts = getWirePoints(req.comp, req.mode, fanout);
@@ -1171,7 +1180,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
             isDragged: false,
           };
         }
-      } else {
+      }
+      else {
         const cachedWire = inactiveWireCache.value[wireId];
         if (cachedWire) {
           list.push({ ...cachedWire, isActive: false, isDragged: false });
@@ -1308,7 +1318,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
       );
     }
 
-    const occupiedRects = segmentOccupancy.getSegments().map(seg => {
+    const occupiedRects = segmentOccupancy.getSegments().map((seg) => {
       if (seg.orientation === 'v') {
         const lo = Math.min(seg.rangeStart, seg.rangeEnd);
         const hi = Math.max(seg.rangeStart, seg.rangeEnd);

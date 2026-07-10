@@ -26,19 +26,19 @@ export interface ValidationResult {
 }
 
 function deviceIds(manifest: EmbeddedProjectManifest): Set<string> {
-  return new Set(manifest.devices.map((d) => d.componentId));
+  return new Set(manifest.devices.map(d => d.componentId));
 }
 
 function jointIds(manifest: EmbeddedProjectManifest): Set<string> {
-  return new Set(manifest.mechanical?.joints.map((j) => j.jointId) ?? []);
+  return new Set(manifest.mechanical?.joints.map(j => j.jointId) ?? []);
 }
 
 function partIds(manifest: EmbeddedProjectManifest): Set<string> {
-  return new Set(manifest.mechanical?.parts.map((p) => p.partId) ?? []);
+  return new Set(manifest.mechanical?.parts.map(p => p.partId) ?? []);
 }
 
 function fieldIds(manifest: EmbeddedProjectManifest): Set<string> {
-  return new Set(manifest.environment?.fields.map((f) => f.fieldId) ?? []);
+  return new Set(manifest.environment?.fields.map(f => f.fieldId) ?? []);
 }
 
 function elevate(severity: Severity, context: ValidationContext, ruleId: string): Severity {
@@ -49,7 +49,7 @@ function elevate(severity: Severity, context: ValidationContext, ruleId: string)
   return severity;
 }
 
-function checkB01(manifest: EmbeddedProjectManifest, context: ValidationContext): ValidationResult[] {
+function checkB01(manifest: EmbeddedProjectManifest, _context: ValidationContext): ValidationResult[] {
   const results: ValidationResult[] = [];
   const ids = deviceIds(manifest);
   const allBindings = [
@@ -73,7 +73,7 @@ function checkB01(manifest: EmbeddedProjectManifest, context: ValidationContext)
   return results;
 }
 
-function checkB02(manifest: EmbeddedProjectManifest, context: ValidationContext): ValidationResult[] {
+function checkB02(manifest: EmbeddedProjectManifest, _context: ValidationContext): ValidationResult[] {
   const results: ValidationResult[] = [];
   const joints = jointIds(manifest);
   const parts = partIds(manifest);
@@ -165,7 +165,8 @@ function checkB05(manifest: EmbeddedProjectManifest): ValidationResult[] {
         message: `Ambient field "${m.fallbackAmbientFieldId}" not found`,
         bindingId: s.bindingId,
       });
-    } else if (!s.environmentPropId) {
+    }
+    else if (!s.environmentPropId) {
       results.push({
         ruleId: 'B-05',
         severity: 'info',
@@ -186,11 +187,11 @@ function checkB06(
   const gpioMappings = new Set(['gpio_to_binary_state', 'gpio_to_emissive']);
 
   for (const a of manifest.bindings?.actuators ?? []) {
-    const device = manifest.devices.find((d) => d.componentId === a.deviceComponentId);
+    const device = manifest.devices.find(d => d.componentId === a.deviceComponentId);
     if (!device) continue;
     const entry = catalog.getDevice(device.modelId);
     if (!entry) continue;
-    const pinDef = entry.pins.find((p) => p.name === a.pin);
+    const pinDef = entry.pins.find(p => p.name === a.pin);
     if (!pinDef) {
       results.push({
         ruleId: 'B-06',
@@ -331,9 +332,9 @@ function hasBindingForDevice(
   const bindings = manifest.bindings;
   if (!bindings) return false;
   return (
-    bindings.actuators.some((a) => a.deviceComponentId === componentId) ||
-    bindings.sensors.some((s) => s.deviceComponentId === componentId) ||
-    bindings.displays.some((d) => d.deviceComponentId === componentId)
+    bindings.actuators.some(a => a.deviceComponentId === componentId)
+    || bindings.sensors.some(s => s.deviceComponentId === componentId)
+    || bindings.displays.some(d => d.deviceComponentId === componentId)
   );
 }
 
@@ -359,7 +360,8 @@ function checkB08B09(
         message: `Device ${device.componentId} (${device.modelId}) has no binding (optional)`,
         componentId: device.componentId,
       });
-    } else if (coupling === 'required') {
+    }
+    else if (coupling === 'required') {
       results.push({
         ruleId: 'B-09',
         severity: elevate('warning', context, 'B-09'),
@@ -393,7 +395,7 @@ function checkB10(
   }
 
   for (const s of manifest.bindings?.sensors ?? []) {
-    const device = manifest.devices.find((d) => d.componentId === s.deviceComponentId);
+    const device = manifest.devices.find(d => d.componentId === s.deviceComponentId);
     if (!device) continue;
 
     if (device.modelId === 'hc-sr04' || s.mapping.type === 'raycast_range_cm') {
@@ -407,7 +409,8 @@ function checkB10(
           fix: 'Connect TRIG and ECHO to board GPIOs',
         });
       }
-    } else {
+    }
+    else {
       const pins = pinResolver.resolveSensorPins(manifest, s);
       if (!pins || Object.keys(pins).length === 0) {
         results.push({
@@ -453,7 +456,7 @@ export function validateBindings(
   ];
 
   if (context.blockingOnly) {
-    return results.filter((r) => isBlockingResult(r, context));
+    return results.filter(r => isBlockingResult(r, context));
   }
   return results;
 }

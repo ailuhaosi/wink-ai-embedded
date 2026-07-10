@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { manifestToCanvas } from '@/services/manifest-to-canvas.service';
 import { createAvoidanceCarWorkbenchManifest } from '@/services/templates/avoidance-car-w2-minimal';
 import { migrateManifest } from '@/services/manifest-migration';
@@ -10,7 +11,7 @@ describe('manifest-to-canvas', () => {
       createOledDashboardWorkbenchManifest(),
     );
     expect(components).toHaveLength(3);
-    expect(components.find((c) => c.id === 'oled1')?.pinConnections.DATA).toBe(21);
+    expect(components.find(c => c.id === 'oled1')?.pinConnections.DATA).toBe(21);
     expect(layoutPositions.oled1).toEqual({ x: 530, y: 120 });
   });
 
@@ -90,5 +91,33 @@ describe('manifest-to-canvas', () => {
 
     const { components } = manifestToCanvas(manifest);
     expect(components[0].pinConnections.TRIG).toBe(12);
+  });
+});
+
+describe('manifest ↔ canvas SSOT roundtrip', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('commitCanvasSnapshot preserves layout positions and is idempotent after re-project', async () => {
+    const { useProjectStore } = await import('@/stores/project.store');
+    const store = useProjectStore();
+    const source = createOledDashboardWorkbenchManifest();
+    store.setManifest(source);
+
+    const first = manifestToCanvas(store.manifest);
+    store.commitCanvasSnapshot(first.components, first.layoutPositions);
+
+    const oled = store.manifest.devices.find(d => d.componentId === 'oled1');
+    expect(oled?.position).toEqual({ x: 530, y: 120 });
+
+    const second = manifestToCanvas(store.manifest);
+    store.commitCanvasSnapshot(second.components, second.layoutPositions);
+
+    const oledAgain = store.manifest.devices.find(d => d.componentId === 'oled1');
+    expect(oledAgain?.position).toEqual({ x: 530, y: 120 });
+    expect(second.components.map(c => c.id).sort()).toEqual(
+      first.components.map(c => c.id).sort(),
+    );
   });
 });

@@ -73,7 +73,8 @@ export function buildTrackAssignments(
     const lane = laneCounters.get(entry.channel) ?? 0;
     if (entry.bundleId) {
       bundleLaneConsumed.add(entry.bundleId);
-    } else {
+    }
+    else {
       laneCounters.set(entry.channel, lane + 1);
     }
 
@@ -81,7 +82,7 @@ export function buildTrackAssignments(
     const stubLengthEnd = STUB_BASE + lane * STUB_LANE_STEP;
 
     if (entry.bundleId && entry.signalType === 'i2c') {
-      const bundlePeers = entries.filter((e) => e.bundleId === entry.bundleId);
+      const bundlePeers = entries.filter(e => e.bundleId === entry.bundleId);
       bundlePeers.forEach((peer, bundleOffset) => {
         const assignment = createAssignment(
           peer,
@@ -141,9 +142,11 @@ function createAssignment(
 
   if (entry.channel === 'left') {
     assignment.verticalTrackX = snapTrackCoord(channels.leftBus - lane * TRACK_SPACING - gap);
-  } else if (entry.channel === 'right') {
+  }
+  else if (entry.channel === 'right') {
     assignment.verticalTrackX = snapTrackCoord(channels.rightBus + lane * TRACK_SPACING + gap);
-  } else {
+  }
+  else {
     const startAbove = entry.start.y < boardCenterY;
     const bypassBase = startAbove
       ? channels.topBus - lane * TRACK_SPACING

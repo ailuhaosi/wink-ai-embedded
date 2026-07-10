@@ -18,8 +18,8 @@ describe('project.store syncFromCanvas (W2)', () => {
       oled1: { x: 540, y: 130 },
     });
 
-    expect(store.manifest.devices.some((d) => d.modelId === 'esp32-devkit-v1')).toBe(true);
-    const btn = store.manifest.devices.find((d) => d.componentId === 'btn1');
+    expect(store.manifest.devices.some(d => d.modelId === 'esp32-devkit-v1')).toBe(true);
+    const btn = store.manifest.devices.find(d => d.componentId === 'btn1');
     expect(btn?.position).toEqual({ x: 120, y: 250 });
     expect(
       store.manifest.connections.some((c) => {

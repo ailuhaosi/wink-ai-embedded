@@ -60,7 +60,8 @@ export function extractSegmentsFromPoints(wireId: string, points: Point[]): Occu
         rangeEnd: p2.y,
         layer: 0,
       });
-    } else if (p1.y === p2.y) {
+    }
+    else if (p1.y === p2.y) {
       segments.push({
         wireId,
         orientation: 'h',

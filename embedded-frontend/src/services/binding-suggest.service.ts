@@ -31,7 +31,7 @@ function hasExistingActuatorBinding(
   jointId: string,
 ): boolean {
   return (manifest.bindings?.actuators ?? []).some(
-    (a) => a.deviceComponentId === deviceComponentId && a.mechanicalJointId === jointId,
+    a => a.deviceComponentId === deviceComponentId && a.mechanicalJointId === jointId,
   );
 }
 
@@ -41,7 +41,7 @@ function hasExistingSensorBinding(
   partId: string,
 ): boolean {
   return (manifest.bindings?.sensors ?? []).some(
-    (s) => s.deviceComponentId === deviceComponentId && s.mechanicalPartId === partId,
+    s => s.deviceComponentId === deviceComponentId && s.mechanicalPartId === partId,
   );
 }
 
@@ -50,7 +50,7 @@ export function suggestBindings(manifest: EmbeddedProjectManifest): SuggestedBin
 
   for (const device of manifest.devices) {
     if (isMotorDevice(device.modelId)) {
-      const joints = manifest.mechanical?.joints.filter((j) => j.type === 'revolute') ?? [];
+      const joints = manifest.mechanical?.joints.filter(j => j.type === 'revolute') ?? [];
       for (const joint of joints) {
         if (!hasExistingActuatorBinding(manifest, device.componentId, joint.jointId)) {
           suggestions.push({
@@ -70,8 +70,8 @@ export function suggestBindings(manifest: EmbeddedProjectManifest): SuggestedBin
     }
 
     if (isUltrasonicDevice(device.modelId)) {
-      const mounts =
-        manifest.mechanical?.parts.filter((p) => p.modelId.includes('ultrasonic')) ?? [];
+      const mounts
+        = manifest.mechanical?.parts.filter(p => p.modelId.includes('ultrasonic')) ?? [];
       for (const mount of mounts) {
         if (!hasExistingSensorBinding(manifest, device.componentId, mount.partId)) {
           suggestions.push({

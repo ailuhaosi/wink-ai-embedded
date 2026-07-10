@@ -1,18 +1,3 @@
-<template>
-  <div class="virtual-button">
-    <div class="component-label">Button ({{ pinLabel }})</div>
-    <div class="btn-wrapper">
-      <wokwi-pushbutton
-        :color="color"
-        :label="label"
-        :xray="xray"
-        @button-press="handlePress"
-        @button-release="handleRelease"
-      />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import '@wokwi/elements';
 import { computed } from 'vue';
@@ -31,7 +16,7 @@ const props = defineProps<{
 }>();
 
 const signalPin = computed(() => {
-  const primary = getNetDefinitions('button').find((n) => n.mode === 'primary');
+  const primary = getNetDefinitions('button').find(n => n.mode === 'primary');
   if (!primary) return null;
   const conn = resolveNetConnection(primary, props.pinConnections);
   return typeof conn === 'number' ? conn : null;
@@ -47,16 +32,31 @@ const pinLabel = computed(() => {
 
 function handlePress() {
   if (signalPin.value === null) return;
-  const level = props.activeLow ? false : true;
+  const level = !props.activeLow;
   setPinIdeal(signalPin.value, level);
 }
 
 function handleRelease() {
   if (signalPin.value === null) return;
-  const level = props.activeLow ? true : false;
+  const level = !!props.activeLow;
   setPinIdeal(signalPin.value, level);
 }
 </script>
+
+<template>
+  <div class="virtual-button">
+    <div class="component-label">Button ({{ pinLabel }})</div>
+    <div class="btn-wrapper">
+      <wokwi-pushbutton
+        :color="color"
+        :label="label"
+        :xray="xray"
+        @button-press="handlePress"
+        @button-release="handleRelease"
+      />
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .virtual-button {

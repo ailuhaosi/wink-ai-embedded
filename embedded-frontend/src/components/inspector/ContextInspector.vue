@@ -2,7 +2,8 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { storeToRefs } from 'pinia';
-import { useInspectorStore, type InspectorTabId } from '@/stores/inspector.store';
+import { useInspectorStore } from '@/stores/inspector.store';
+import type { InspectorTabId } from '@/stores/inspector.store';
 import { useLayoutStore } from '@/stores/layout.store';
 import { Zap, Wrench, Link, TreePine, AlertTriangle, Stethoscope, Pin } from 'lucide-vue-next';
 

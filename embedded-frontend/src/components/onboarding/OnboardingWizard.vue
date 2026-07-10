@@ -18,7 +18,8 @@ onMounted(() => {
 function next() {
   if (step.value < 3) {
     step.value += 1;
-  } else {
+  }
+  else {
     finish();
   }
 }

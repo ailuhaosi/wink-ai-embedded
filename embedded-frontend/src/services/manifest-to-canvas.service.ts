@@ -11,8 +11,9 @@ import type {
 import {
   getDefaultPinConnections,
   getDefaultProps,
-  type PinConnectionValue,
+
 } from '@/types/peripheral-pins';
+import type { PinConnectionValue } from '@/types/peripheral-pins';
 import { parsePinRef } from '@/services/connection-normalize';
 
 export interface ManifestToCanvasResult {
@@ -23,7 +24,7 @@ export interface ManifestToCanvasResult {
 /** Legacy / schema aliases → catalog modelId */
 const MODEL_ID_ALIASES: Record<string, string> = {
   'push-button': 'button_stub',
-  ssd1306: 'oled_stub',
+  'ssd1306': 'oled_stub',
 };
 
 function resolveCatalogModelId(modelId: string): string {
@@ -45,9 +46,9 @@ function isBoardEndpoint(
   componentId: string,
 ): boolean {
   return (
-    componentId === manifest.target.boardId ||
-    componentId === boardComponentId(manifest) ||
-    componentId === 'esp32'
+    componentId === manifest.target.boardId
+    || componentId === boardComponentId(manifest)
+    || componentId === 'esp32'
   );
 }
 
@@ -90,7 +91,8 @@ function applyConnectionToPinMap(
   if (from.componentId === deviceComponentId && isBoardEndpoint(manifest, to.componentId)) {
     devicePin = from.pin;
     boardPin = to.pin;
-  } else if (to.componentId === deviceComponentId && isBoardEndpoint(manifest, from.componentId)) {
+  }
+  else if (to.componentId === deviceComponentId && isBoardEndpoint(manifest, from.componentId)) {
     devicePin = to.pin;
     boardPin = from.pin;
   }

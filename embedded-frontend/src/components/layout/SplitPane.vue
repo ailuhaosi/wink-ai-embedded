@@ -98,7 +98,8 @@ function onPointerUp(event: PointerEvent) {
   if (dragRatio.value <= minRatio + 0.01) {
     leftCollapsed.value = true;
     emit('collapse', 'left');
-  } else if (dragRatio.value >= 1 - minRatio - 0.01) {
+  }
+  else if (dragRatio.value >= 1 - minRatio - 0.01) {
     rightCollapsed.value = true;
     emit('collapse', 'right');
   }

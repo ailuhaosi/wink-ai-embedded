@@ -3,7 +3,7 @@ import { snapTrackCoord, resolveBypassEdgeX, verticalTrackCrossesObstacle } from
 import type { BoardOrigin, CardinalDirection, Obstacle, Point, WirePathResult } from './types';
 
 export function simplifyPath(pts: Point[]): Point[] {
-  if (pts.length <= 2) return pts.map((p) => ({ ...p }));
+  if (pts.length <= 2) return pts.map(p => ({ ...p }));
 
   const dedup: Point[] = [];
   for (const p of pts) {
@@ -33,7 +33,7 @@ export function simplifyPath(pts: Point[]): Point[] {
 
 export function pointsToSvgPath(pts: Point[]): string {
   if (pts.length < 2) return '';
-  return `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(' ');
+  return `M ${pts[0].x} ${pts[0].y} ${pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ')}`;
 }
 
 export function pointsToRoundedSvgPath(pts: Point[], radius: number = ROUND_RADIUS): string {
@@ -75,7 +75,8 @@ export function pointsToRoundedSvgPath(pts: Point[], radius: number = ROUND_RADI
 
       d += ` L ${entryX} ${entryY}`;
       d += ` Q ${curr.x} ${curr.y} ${exitX} ${exitY}`;
-    } else {
+    }
+    else {
       d += ` L ${curr.x} ${curr.y}`;
     }
   }
@@ -172,18 +173,21 @@ export function buildPowerBusTapPath2D(
   if (sourceObstacle) {
     if (startDir === 'left') {
       p1.x = Math.min(p1.x, sourceObstacle.x - OBSTACLE_PADDING);
-    } else if (startDir === 'right') {
+    }
+    else if (startDir === 'right') {
       p1.x = Math.max(p1.x, sourceObstacle.x + sourceObstacle.width + OBSTACLE_PADDING);
-    } else if (startDir === 'up') {
+    }
+    else if (startDir === 'up') {
       p1.y = Math.min(p1.y, sourceObstacle.y - OBSTACLE_PADDING);
-    } else if (startDir === 'down') {
+    }
+    else if (startDir === 'down') {
       p1.y = Math.max(p1.y, sourceObstacle.y + sourceObstacle.height + OBSTACLE_PADDING);
     }
   }
 
   if (
-    sourceObstacle &&
-    verticalTrackCrossesObstacle(
+    sourceObstacle
+    && verticalTrackCrossesObstacle(
       p1.x,
       Math.min(p1.y, railY),
       Math.max(p1.y, railY),

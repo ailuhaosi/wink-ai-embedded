@@ -85,7 +85,7 @@ function formatTime(val: number): string {
       <div v-show="bottomPanelActiveTab === 'trace'" class="console">
         <div v-if="traces.length === 0" class="empty-console">No simulation traces captured yet.</div>
         <div v-else class="trace-list">
-          <div v-for="(trace, index) in [...traces].reverse()" :key="'trace-' + index" class="trace-line">
+          <div v-for="(trace, index) in [...traces].reverse()" :key="`trace-${index}`" class="trace-line">
             <span class="trace-time">[{{ formatTime(trace.timestamp) }} ms]</span>
             <span class="trace-type">{{ getTraceLabel(trace.type) }}</span>
             <span class="trace-details">Pin/Bus: {{ trace.pinOrBus }}</span>
@@ -97,7 +97,7 @@ function formatTime(val: number): string {
         <button class="btn-clear" @click="simStore.clearLogs()">Clear</button>
         <div v-if="logs.length === 0" class="empty-console">Console is clear.</div>
         <div v-else class="log-list">
-          <div v-for="(log, idx) in logs" :key="'log-' + idx" class="log-line" :class="'log-' + log.level">
+          <div v-for="(log, idx) in logs" :key="`log-${idx}`" class="log-line" :class="`log-${log.level}`">
             <span class="log-time">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
             <span>{{ log.message }}</span>
           </div>

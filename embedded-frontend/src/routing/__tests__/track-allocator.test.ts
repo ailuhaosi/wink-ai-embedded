@@ -6,8 +6,9 @@ import {
   templateCrossSide,
   templateLocal,
   templateSameSide,
-  type TemplateInput,
+
 } from '../path-templates';
+import type { TemplateInput } from '../path-templates';
 import { buildTrackAssignments } from '../track-allocator';
 import type { WireRouteRequest } from '../types';
 
@@ -68,8 +69,8 @@ describe('path-templates', () => {
   });
 
   it('templateLocal keeps bends <= 1 for short distance', () => {
-    const points =
-      templateLocal({
+    const points
+      = templateLocal({
         start: { x: 500, y: 160 },
         end: { x: 520, y: 180 },
         startDir: 'right',
@@ -122,7 +123,7 @@ describe('track-allocator', () => {
       mkRequest({ wireId: 'w2', priority: 2, start: { x: 100, y: 160 }, end: { x: 317, y: 222 } }),
     ];
     const assignments = buildTrackAssignments(requests, CHANNELS, BOARD_CENTER_X, BOARD_CENTER_Y);
-    const xs = ['w0', 'w1', 'w2'].map((id) => assignments.get(id)?.verticalTrackX ?? 0);
+    const xs = ['w0', 'w1', 'w2'].map(id => assignments.get(id)?.verticalTrackX ?? 0);
     expect(xs[0]).toBeGreaterThan(xs[1]);
     expect(xs[1]).toBeGreaterThan(xs[2]);
   });
@@ -152,7 +153,7 @@ describe('track-allocator', () => {
     expect(y0).not.toBe(y1);
   });
 
-  it('I2C bundle outputs parallel tracks 8px apart', () => {
+  it('i2C bundle outputs parallel tracks 8px apart', () => {
     const requests = [
       mkRequest({
         wireId: 'oled-sda',

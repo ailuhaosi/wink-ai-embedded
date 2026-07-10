@@ -4,7 +4,7 @@ import {
   SegmentOccupancyRegistry,
 } from '../segment-occupancy';
 
-describe('SegmentOccupancyRegistry', () => {
+describe('segmentOccupancyRegistry', () => {
   it('registers without conflict on empty registry', () => {
     const registry = new SegmentOccupancyRegistry();
     const segment = {

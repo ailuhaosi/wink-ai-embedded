@@ -77,7 +77,7 @@ export function resolveNetPin(
   net: NetDefinition,
   ctx: ResolveNetPinContext,
 ): string | null {
-  const explicit = net.pinCandidates.filter((name) =>
+  const explicit = net.pinCandidates.filter(name =>
     connectionMatchesNet(ctx.pinConnections[name], net),
   );
 

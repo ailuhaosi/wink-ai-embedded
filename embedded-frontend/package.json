@@ -12,9 +12,26 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node scripts/run-e2e-cli.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "typecheck": "vue-tsc -b --pretty false",
     "wasm:build:oled": "node scripts/build-wasm.mjs oled_dashboard && node scripts/copy-wasm.js",
     "wasm:build:avoidance": "node scripts/build-wasm.mjs avoidance_car && node scripts/copy-wasm.js",
-    "wasm:copy": "node scripts/copy-wasm.js"
+    "wasm:copy": "node scripts/copy-wasm.js",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "cd embedded-frontend && npx lint-staged"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "src/**/*.{css,json}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@wokwi/elements": "^1.9.2",
@@ -25,9 +42,14 @@
     "vue-i18n": "^10.0.7"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^9.1.0",
     "@types/node": "^24.13.2",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.6.0",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.9.5",
+    "simple-git-hooks": "^2.13.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.10",

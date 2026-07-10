@@ -2,12 +2,14 @@ import { defineStore } from 'pinia';
 import { useLayoutStore } from './layout.store';
 import { useInspectorStore } from './inspector.store';
 import { useProjectStore, isManifestSchemaV2Enabled } from './project.store';
-import { staticCheckService, type StaticCheckContext } from '../services/static-check.service';
+import { staticCheckService } from '../services/static-check.service';
+import type { StaticCheckContext } from '../services/static-check.service';
 import {
   isBlockingResult,
   validateBindings,
-  type ValidationResult,
+
 } from '../services/binding-validation.service';
+import type { ValidationResult } from '../services/binding-validation.service';
 import { deviceCatalog } from '@/catalog/device-catalog';
 import { bindingPinResolver } from '@/services/binding-pin-resolver';
 import { useSimulationStore } from './simulation.store';
@@ -41,7 +43,7 @@ export async function canEnterSimulate(context?: StaticCheckContext): Promise<bo
   const projectStore = useProjectStore();
   if (checkContext.components.length > 0) {
     projectStore.syncFromCanvas(
-      checkContext.components.map((c) => ({
+      checkContext.components.map(c => ({
         id: c.id,
         type: c.type,
         name: c.name,
@@ -59,7 +61,7 @@ export async function canEnterSimulate(context?: StaticCheckContext): Promise<bo
     { targetMode: 'simulate', blockingOnly: true },
     { catalog: deviceCatalog, pinResolver: bindingPinResolver },
   );
-  const blocking = results.filter((r) => isBlockingResult(r, { targetMode: 'simulate' }));
+  const blocking = results.filter(r => isBlockingResult(r, { targetMode: 'simulate' }));
   return blocking.length === 0;
 }
 
@@ -75,11 +77,11 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
   }),
 
   getters: {
-    canEditCircuit: (state) => state.current === 'design',
-    canEditMechanical: (state) => state.current === 'design',
-    canEditEnvironment: (state) => state.current !== 'diagnose',
-    canEditFaults: (state) => state.current !== 'design',
-    showTransportControls: (state) => state.current !== 'design',
+    canEditCircuit: state => state.current === 'design',
+    canEditMechanical: state => state.current === 'design',
+    canEditEnvironment: state => state.current !== 'diagnose',
+    canEditFaults: state => state.current !== 'design',
+    showTransportControls: state => state.current !== 'design',
   },
 
   actions: {
@@ -123,7 +125,7 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
           const projectStore = useProjectStore();
           if (checkContext.components.length > 0) {
             projectStore.syncFromCanvas(
-              checkContext.components.map((c) => ({
+              checkContext.components.map(c => ({
                 id: c.id,
                 type: c.type,
                 name: c.name,
@@ -139,7 +141,7 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
             { targetMode: 'simulate', blockingOnly: true },
             { catalog: deviceCatalog, pinResolver: bindingPinResolver },
           );
-          const blocking = results.filter((r) =>
+          const blocking = results.filter(r =>
             isBlockingResult(r, { targetMode: 'simulate' }),
           );
 

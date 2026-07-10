@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { runStaticCheck } from '../../services/static-check.service';
 
@@ -58,7 +58,7 @@ describe('static-check.service', () => {
           id: 'oled1',
           type: 'oled',
           name: 'SSD1306 Display',
-          pinConnections: { DATA: 21, CLK: 22, DC: null, RST: null, CS: null, '3V3': '3V3', VIN: null, GND: 'GND' },
+          pinConnections: { 'DATA': 21, 'CLK': 22, 'DC': null, 'RST': null, 'CS': null, '3V3': '3V3', 'VIN': null, 'GND': 'GND' },
         },
         {
           id: 'sonar1',
@@ -135,5 +135,25 @@ describe('workbench-mode store guards', () => {
 
     modeStore.confirmPendingSwitch();
     expect(modeStore.current).toBe('design');
+  });
+
+  it('confirmPendingSwitch stops simulation then commits design', async () => {
+    const { useWorkbenchModeStore } = await import('../workbench-mode.store');
+    const { useSimulationStore } = await import('../simulation.store');
+    const modeStore = useWorkbenchModeStore();
+    const simStore = useSimulationStore();
+    const stopSpy = vi.spyOn(simStore, 'stopAndClear');
+
+    await modeStore.switchTo('simulate', {
+      isSimulationReady: true,
+      components: [{ id: 'led1', type: 'led', name: 'LED', pinConnections: { A: 2, C: 'GND' } }],
+    });
+    await modeStore.switchTo('design');
+
+    const ok = modeStore.confirmPendingSwitch();
+    expect(ok).toBe(true);
+    expect(stopSpy).toHaveBeenCalledTimes(1);
+    expect(modeStore.current).toBe('design');
+    expect(modeStore.pendingSwitchTarget).toBeNull();
   });
 });

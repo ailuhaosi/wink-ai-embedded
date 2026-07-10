@@ -114,7 +114,7 @@ function routeAllWires(requests: WireRouteRequest[]): void {
 }
 
 describe('wire-routing benchmark', () => {
-  it('UT-14: benchmarks 20-wire full recalc under 16ms avg', () => {
+  it('uT-14: benchmarks 20-wire full recalc under 16ms avg', () => {
     const requests = build20WireRequests();
     expect(requests).toHaveLength(20);
 

@@ -5,10 +5,9 @@
 import {
   boardDescriptor,
   getRoutingChannels,
-  type BoardOrigin,
-  type Obstacle,
-  type WirePathResult,
+
 } from '../types/peripheral-pins';
+import type { BoardOrigin, Obstacle, WirePathResult } from '../types/peripheral-pins';
 
 interface Point {
   x: number;
@@ -204,7 +203,7 @@ function findAStarPath3D(
 
     if (minD < 10) return Infinity;
     if (minD < 25) {
-      return 1.5 * Math.pow((25 - minD) / 15, 2);
+      return 1.5 * ((25 - minD) / 15) ** 2;
     }
     return 0;
   };
@@ -255,10 +254,10 @@ function findAStarPath3D(
           const dx = temp.x - temp.parent.x;
           const dy = temp.y - temp.parent.y;
 
-          let val = channelOccupancyMap.get(occupancyKey) || 0;
-          let count = val & 0xff;
-          let dirs = (val >> 8) & 0xf;
-          count = Math.min(count + 1, 0xff);
+          const val = channelOccupancyMap.get(occupancyKey) || 0;
+          const countBase = val & 0xFF;
+          let dirs = (val >> 8) & 0xF;
+          const count = Math.min(countBase + 1, 0xFF);
 
           if (dx === 0 && dy === -1) dirs |= 1;
           else if (dx === 0 && dy === 1) dirs |= 2;
@@ -302,26 +301,27 @@ function findAStarPath3D(
       let stepCost = 1.0;
       stepCost += cCost;
 
-      const hasTurned =
-        (curr.dir.dx !== 0 || curr.dir.dy !== 0) &&
-        (curr.dir.dx !== dir.dx || curr.dir.dy !== dir.dy);
+      const hasTurned
+        = (curr.dir.dx !== 0 || curr.dir.dy !== 0)
+          && (curr.dir.dx !== dir.dx || curr.dir.dy !== dir.dy);
       if (hasTurned) {
         stepCost += 3.0;
       }
 
       if (channelOccupancyMap) {
         const val = channelOccupancyMap.get(gridKey) || 0;
-        const count = val & 0xff;
+        const count = val & 0xFF;
 
         if (count > 0) {
-          const dirs = (val >> 8) & 0xf;
+          const dirs = (val >> 8) & 0xF;
           let isCrossing = false;
           if (dir.dx !== 0 && (dirs & 3)) isCrossing = true;
           if (dir.dy !== 0 && (dirs & 12)) isCrossing = true;
 
           if (isCrossing) {
             stepCost += 3.0;
-          } else {
+          }
+          else {
             stepCost += count * 0.3;
           }
         }
@@ -329,14 +329,15 @@ function findAStarPath3D(
         const sideKeys: string[] = [];
         if (dir.dx !== 0 && dir.dy === 0) {
           sideKeys.push(`${nx},${ny - 1}`, `${nx},${ny + 1}`);
-        } else if (dir.dy !== 0 && dir.dx === 0) {
+        }
+        else if (dir.dy !== 0 && dir.dx === 0) {
           sideKeys.push(`${nx - 1},${ny}`, `${nx + 1},${ny}`);
         }
 
         for (const sKey of sideKeys) {
           const sVal = channelOccupancyMap.get(sKey) || 0;
           if (sVal > 0) {
-            const sDirs = (sVal >> 8) & 0xf;
+            const sDirs = (sVal >> 8) & 0xF;
             let matchingDir = false;
             if (dir.dx === 0 && dir.dy === -1 && (sDirs & 1)) matchingDir = true;
             else if (dir.dx === 0 && dir.dy === 1 && (sDirs & 2)) matchingDir = true;
@@ -360,9 +361,9 @@ function findAStarPath3D(
       });
     }
 
-    const isTerminal =
-      (curr.x === startGridX && curr.y === startGridY) ||
-      (curr.x === endGridX && curr.y === endGridY);
+    const isTerminal
+      = (curr.x === startGridX && curr.y === startGridY)
+        || (curr.x === endGridX && curr.y === endGridY);
     if (!isTerminal) {
       neighbors.push({
         nx: curr.x,
@@ -380,10 +381,10 @@ function findAStarPath3D(
       }
 
       const gScore = curr.g + neighbor.stepCost;
-      const hScore =
-        Math.abs(neighbor.nx - endGridX) +
-        Math.abs(neighbor.ny - endGridY) +
-        (neighbor.nLayer !== 0 ? 3.0 : 0);
+      const hScore
+        = Math.abs(neighbor.nx - endGridX)
+          + Math.abs(neighbor.ny - endGridY)
+          + (neighbor.nLayer !== 0 ? 3.0 : 0);
       const fScore = gScore + hScore;
 
       const existingNode = openSet.get(nKey);
@@ -396,7 +397,8 @@ function findAStarPath3D(
         nNode.dir = neighbor.dir;
         openHeap.push(nNode);
         openSet.set(nKey, nNode);
-      } else if (gScore < existingNode.g) {
+      }
+      else if (gScore < existingNode.g) {
         existingNode.g = gScore;
         existingNode.f = fScore;
         existingNode.parent = curr;
@@ -472,12 +474,14 @@ export function generateFallbackOrthogonalPath(
       const xChan = channels.leftBus - channelOffset;
       points.push({ x: xChan, y: p1.y });
       points.push({ x: xChan, y: p2.y });
-    } else {
+    }
+    else {
       const xChan = channels.rightBus + channelOffset;
       points.push({ x: xChan, y: p1.y });
       points.push({ x: xChan, y: p2.y });
     }
-  } else {
+  }
+  else {
     const startAbove = start.y < boardCenterY;
     const bypassY = startAbove
       ? channels.topBus - lane * channelSpacing
@@ -491,7 +495,8 @@ export function generateFallbackOrthogonalPath(
       points.push({ x: xLeft, y: bypassY });
       points.push({ x: xRight, y: bypassY });
       points.push({ x: xRight, y: p2.y });
-    } else {
+    }
+    else {
       points.push({ x: xRight, y: p1.y });
       points.push({ x: xRight, y: bypassY });
       points.push({ x: xLeft, y: bypassY });
@@ -544,18 +549,21 @@ function generateChannelPath(
     const xChan = channels.leftBus - laneOffset;
     points.push({ x: xChan, y: p1.y });
     points.push({ x: xChan, y: p2.y });
-  } else if (!isStartLeft && !isEndLeft) {
+  }
+  else if (!isStartLeft && !isEndLeft) {
     const xChan = channels.rightBus + laneOffset;
     points.push({ x: xChan, y: p1.y });
     points.push({ x: xChan, y: p2.y });
-  } else {
+  }
+  else {
     const startToEndY = end.y - start.y;
     const absDiffY = Math.abs(startToEndY);
 
     let bypassY: number;
     if (absDiffY < 60) {
       bypassY = boardCenterY + (isStartTop ? -60 : 60) + laneOffset;
-    } else {
+    }
+    else {
       bypassY = isStartTop ? channels.topBus - laneOffset : channels.bottomBus + laneOffset;
     }
 
@@ -567,7 +575,8 @@ function generateChannelPath(
       points.push({ x: xLeft, y: bypassY });
       points.push({ x: xRight, y: bypassY });
       points.push({ x: xRight, y: p2.y });
-    } else {
+    }
+    else {
       points.push({ x: xRight, y: p1.y });
       points.push({ x: xRight, y: bypassY });
       points.push({ x: xLeft, y: bypassY });
@@ -581,7 +590,7 @@ function generateChannelPath(
 }
 
 function simplifyPath(pts: Point[]): Point[] {
-  if (pts.length <= 2) return pts.map((p) => ({ ...p }));
+  if (pts.length <= 2) return pts.map(p => ({ ...p }));
 
   const dedup: Point[] = [];
   for (const p of pts) {
@@ -648,7 +657,8 @@ function pointsToRoundedSvgPath(pts: Point[], radius: number = 8): string {
 
       d += ` L ${entryX} ${entryY}`;
       d += ` Q ${curr.x} ${curr.y} ${exitX} ${exitY}`;
-    } else {
+    }
+    else {
       d += ` L ${curr.x} ${curr.y}`;
     }
   }
@@ -725,7 +735,8 @@ export function generateSmartPCBPathLegacy(
       if (subPath) {
         if (rawPath3D.length > 0 && subPath.length > 0) {
           rawPath3D = rawPath3D.concat(subPath.slice(1));
-        } else {
+        }
+        else {
           rawPath3D = rawPath3D.concat(subPath);
         }
 
@@ -737,13 +748,16 @@ export function generateSmartPCBPathLegacy(
           const len = Math.sqrt(dx * dx + dy * dy);
           if (len > 0) {
             currentInitDir = { dx: Math.round(dx / len), dy: Math.round(dy / len) };
-          } else {
+          }
+          else {
             currentInitDir = undefined;
           }
-        } else {
+        }
+        else {
           currentInitDir = undefined;
         }
-      } else {
+      }
+      else {
         routeSuccess = false;
         break;
       }
@@ -757,7 +771,8 @@ export function generateSmartPCBPathLegacy(
   if (rawPath3D.length === 0) {
     const channel2D = generateChannelPath(start, end, startDir, endDir, lane, boardOrigin);
     rawPath3D = channel2D.map((p: Point) => ({ x: p.x, y: p.y, layer: 0 }));
-  } else {
+  }
+  else {
     rawPath3D = [
       { x: start.x, y: start.y, layer: 0 },
       ...rawPath3D,
@@ -786,7 +801,8 @@ export function generateSmartPCBPathLegacy(
 
       currentLayer = pt.layer;
       currentPts = [{ x: pt.x, y: pt.y }];
-    } else {
+    }
+    else {
       currentPts.push({ x: pt.x, y: pt.y });
     }
   }
@@ -809,7 +825,7 @@ export function generateSmartPCBPathLegacy(
     if (tEnd) teardrops.push(tEnd);
   }
 
-  const primaryPath = segments.map((seg) => seg.d).join(' ');
+  const primaryPath = segments.map(seg => seg.d).join(' ');
 
   return {
     path: primaryPath,

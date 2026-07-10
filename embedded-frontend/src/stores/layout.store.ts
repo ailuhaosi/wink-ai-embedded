@@ -105,7 +105,8 @@ export const useLayoutStore = defineStore('layout', {
       if (windowWidth < 1440) {
         this.rightPanelMode = 'icon';
         this.rightPanelCollapsed = true;
-      } else {
+      }
+      else {
         this.rightPanelMode = 'full';
         this.rightPanelCollapsed = false;
       }

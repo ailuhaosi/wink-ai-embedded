@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   boardDescriptor,
-  type Obstacle,
+
 } from '../../types/peripheral-pins';
+import type { Obstacle } from '../../types/peripheral-pins';
 import { generateSmartPCBPathLegacy } from '../wire-routing-legacy';
 
 const BOARD_X = boardDescriptor.x;
@@ -31,7 +32,7 @@ function snapshotResult(result: ReturnType<typeof generateSmartPCBPathLegacy>) {
 }
 
 describe('legacy golden baseline', () => {
-  it('LED primary digital wire (default layout)', () => {
+  it('lED primary digital wire (default layout)', () => {
     const result = generateSmartPCBPathLegacy(
       { x: 130, y: 150 },
       { x: 317, y: 192 },
@@ -47,7 +48,7 @@ describe('legacy golden baseline', () => {
     expect(snapshotResult(result)).toMatchSnapshot();
   });
 
-  it('OLED I2C SDA wire (default layout)', () => {
+  it('oLED I2C SDA wire (default layout)', () => {
     const result = generateSmartPCBPathLegacy(
       { x: 570, y: 195 },
       { x: 487, y: 162 },
@@ -63,7 +64,7 @@ describe('legacy golden baseline', () => {
     expect(snapshotResult(result)).toMatchSnapshot();
   });
 
-  it('OLED I2C SCL wire (default layout)', () => {
+  it('oLED I2C SCL wire (default layout)', () => {
     const result = generateSmartPCBPathLegacy(
       { x: 580, y: 195 },
       { x: 487, y: 192 },

@@ -57,7 +57,7 @@ describe('wire-routing', () => {
 
     expect(result.path.length).toBeGreaterThan(0);
     expect(result.vias).toEqual([]);
-    expect(result.segments.every((s) => s.layer === 0)).toBe(true);
+    expect(result.segments.every(s => s.layer === 0)).toBe(true);
   });
 
   it('routes cross-side i2c wire', () => {
@@ -146,7 +146,7 @@ describe('wire-routing', () => {
     vi.unstubAllEnvs();
   });
 
-  it('UT-12: falls back to legacy via URL query param', () => {
+  it('uT-12: falls back to legacy via URL query param', () => {
     vi.stubGlobal('window', { location: { search: '?legacy_routing=true' } });
 
     const result = generateSmartPCBPath(

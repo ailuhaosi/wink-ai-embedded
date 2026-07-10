@@ -33,7 +33,7 @@ function mkLeftRequest(overrides: Partial<WireRouteRequest>): WireRouteRequest {
 }
 
 describe('boundary cases UT-B01–B06', () => {
-  it('UT-B01: start.x === boardCenterX classifies into left bucket', () => {
+  it('uT-B01: start.x === boardCenterX classifies into left bucket', () => {
     const requests = [
       mkLeftRequest({
         wireId: 'center-edge',
@@ -47,7 +47,7 @@ describe('boundary cases UT-B01–B06', () => {
     expect(assignment!.verticalTrackX).toBeLessThan(BOARD_CENTER_X);
   });
 
-  it('UT-B02: equal start/end Y degenerates Z to vertical + horizontal', () => {
+  it('uT-B02: equal start/end Y degenerates Z to vertical + horizontal', () => {
     const y = 180;
     const points = templateSameSide({
       start: { x: 130, y },
@@ -66,27 +66,26 @@ describe('boundary cases UT-B01–B06', () => {
       obstacles: defaultObstacles(),
     });
 
-    const uniqueY = new Set(points.map((p) => p.y));
+    const uniqueY = new Set(points.map(p => p.y));
     expect(uniqueY.size).toBeLessThanOrEqual(4);
-    expect(points.some((p) => p.y === y || Math.abs(p.y - y) <= 20)).toBe(true);
+    expect(points.some(p => p.y === y || Math.abs(p.y - y) <= 20)).toBe(true);
   });
 
-  it('UT-B03: ten left-bucket wires get distinct track lanes', () => {
+  it('uT-B03: ten left-bucket wires get distinct track lanes', () => {
     const requests = Array.from({ length: 10 }, (_, i) =>
       mkLeftRequest({
         wireId: `left-${i}`,
         start: { x: 90, y: 80 + i * 18 },
         end: { x: 317, y: 162 + i * 18 },
-      }),
-    );
+      }));
     const assignments = buildTrackAssignments(requests, CHANNELS, BOARD_CENTER_X, BOARD_CENTER_Y);
-    const xs = requests.map((r) => assignments.get(r.wireId)?.verticalTrackX);
-    expect(xs.every((x) => x !== undefined)).toBe(true);
+    const xs = requests.map(r => assignments.get(r.wireId)?.verticalTrackX);
+    expect(xs.every(x => x !== undefined)).toBe(true);
     const unique = new Set(xs);
     expect(unique.size).toBe(10);
   });
 
-  it('UT-B04: 90°/180° rotation yields correct stub direction', () => {
+  it('uT-B04: 90°/180° rotation yields correct stub direction', () => {
     const baseDir = 'down';
     const rotated90 = rotateCardinalDirection(baseDir, 90);
     const rotated180 = rotateCardinalDirection(baseDir, 180);
@@ -109,7 +108,7 @@ describe('boundary cases UT-B01–B06', () => {
     expect(leftStub.p1.x).toBeLessThan(start.x);
   });
 
-  it('UT-B05: start === end returns minimal path without divide-by-zero', () => {
+  it('uT-B05: start === end returns minimal path without divide-by-zero', () => {
     const point = { x: 200, y: 200 };
     const result = generateWirePath({
       start: point,
@@ -136,7 +135,7 @@ describe('boundary cases UT-B01–B06', () => {
     expect(result.vias).toEqual([]);
   });
 
-  it('UT-B06: I2C cross-side horizontal segments stay 8px apart', () => {
+  it('uT-B06: I2C cross-side horizontal segments stay 8px apart', () => {
     const requests: WireRouteRequest[] = [
       mkLeftRequest({
         wireId: 'oled-sda',

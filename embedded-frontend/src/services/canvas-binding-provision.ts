@@ -14,9 +14,9 @@ function hasBindingForDevice(manifest: EmbeddedProjectManifest, componentId: str
   const b = manifest.bindings;
   if (!b) return false;
   return (
-    b.actuators.some((a) => a.deviceComponentId === componentId) ||
-    b.sensors.some((s) => s.deviceComponentId === componentId) ||
-    b.displays.some((d) => d.deviceComponentId === componentId)
+    b.actuators.some(a => a.deviceComponentId === componentId)
+    || b.sensors.some(s => s.deviceComponentId === componentId)
+    || b.displays.some(d => d.deviceComponentId === componentId)
   );
 }
 
@@ -33,7 +33,7 @@ export function provisionImplicitCanvasBindings(
     return manifest;
   }
 
-  let next = manifest;
+  const next = manifest;
   const mechanicalParts = [...(next.mechanical?.parts ?? [])];
   const sensorBindings = [...(next.bindings?.sensors ?? [])];
   let changed = false;
@@ -47,14 +47,14 @@ export function provisionImplicitCanvasBindings(
     // hc-sr04 on canvas → implicit virtual mount + raycast binding
     if (modelId === 'hc-sr04') {
       const partId = `mount_${comp.id}`;
-      if (!mechanicalParts.some((p) => p.partId === partId)) {
+      if (!mechanicalParts.some(p => p.partId === partId)) {
         const mount = createUltrasonicMount(partId);
         mechanicalParts.push(...mount!.parts);
         changed = true;
       }
       const bindings = createUltrasonicBinding(partId, comp.id);
       const sensor = bindings!.sensors[0];
-      if (sensor && !sensorBindings.some((s) => s.deviceComponentId === comp.id)) {
+      if (sensor && !sensorBindings.some(s => s.deviceComponentId === comp.id)) {
         sensorBindings.push({
           ...sensor,
           bindingId: `bind_${comp.id}`,

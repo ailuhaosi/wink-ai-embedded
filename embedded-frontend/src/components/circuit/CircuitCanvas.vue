@@ -1,5 +1,112 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, toRef } from 'vue';
+import { RotateCcw, RotateCw } from 'lucide-vue-next';
+import type { CircuitComponentInstance } from '@/types/circuit-component';
+import { useCircuitCanvas } from '@/composables/useCircuitCanvas';
+
+const props = defineProps<{
+  pinStates: Record<number, boolean>;
+  readonly: boolean;
+  routingMode: 'auto' | 'manual';
+}>();
+const emit = defineEmits<{
+  buttonPress: [comp: CircuitComponentInstance];
+  buttonRelease: [comp: CircuitComponentInstance];
+  layoutChange: [];
+}>();
+const components = defineModel<CircuitComponentInstance[]>('components', { required: true });
+const selectedComponentId = defineModel<string>('selectedComponentId', { required: true });
+
+const readonlyRef = computed(() => props.readonly);
+const routingModeRef = computed(() => props.routingMode);
+const pinStatesRef = toRef(props, 'pinStates');
+
+const {
+  canvasContainerRef,
+  canvasOledRef,
+  viewWidth,
+  viewHeight,
+  peripheralScaleX,
+  peripheralScaleY,
+  boardPosition,
+  isDraggingBoard,
+  commonPowerNodes,
+  draggedPowerNodeId,
+  draggedCompId,
+  isComponentDragging,
+  wireWaypoints,
+  selectedWireId,
+  wiresToRender,
+  routingChannels,
+  routingDebugOverlay,
+  powerBusVisual,
+  syncPowerBusLayout,
+  tidyRouting,
+  updateCanvasScale,
+  assignLayoutForNewComponent,
+  removeLayoutForComponent,
+  getLayoutPositions,
+  setLayoutPositions,
+  selectComponent,
+  setRotation,
+  rotateComponent,
+  handlePowerNodeClick,
+  handleWireClick,
+  handleCanvasClick,
+  startDragBoard,
+  onPeripheralMouseDown,
+  removeWaypoint,
+  startDragWaypoint,
+  getCanvasX,
+  getCanvasY,
+  getComponentSize,
+  getWireVisual,
+} = useCircuitCanvas({
+  components,
+  selectedComponentId,
+  pinStates: pinStatesRef,
+  routingMode: routingModeRef,
+  readonly: readonlyRef,
+  onLayoutChange: () => emit('layoutChange'),
+});
+
+let canvasResizeObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  syncPowerBusLayout(true);
+  requestAnimationFrame(() => {
+    updateCanvasScale();
+    const container = canvasContainerRef.value;
+    if (container && typeof ResizeObserver !== 'undefined') {
+      canvasResizeObserver = new ResizeObserver(() => {
+        updateCanvasScale();
+      });
+      canvasResizeObserver.observe(container);
+    }
+  });
+});
+
+onUnmounted(() => {
+  canvasResizeObserver?.disconnect();
+  canvasResizeObserver = null;
+});
+
+defineExpose({
+  tidyRouting,
+  updateCanvasScale,
+  canvasOledRef,
+  setRotation,
+  rotateComponent,
+  selectComponent,
+  assignLayoutForNewComponent,
+  removeLayoutForComponent,
+  getLayoutPositions,
+  setLayoutPositions,
+});
+</script>
+
 <template>
-  <div class="canvas-container" ref="canvasContainerRef">
+  <div ref="canvasContainerRef" class="canvas-container">
     <svg class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none" @click="handleCanvasClick">
       <!-- Grid background -->
       <defs>
@@ -97,7 +204,7 @@
       <g v-if="routingDebugOverlay" class="routing-debug-overlay" pointer-events="none">
         <line
           v-for="(track, idx) in routingDebugOverlay.verticalTracks"
-          :key="'dbg-v-' + idx"
+          :key="`dbg-v-${idx}`"
           :x1="track.x1"
           :y1="track.y1"
           :x2="track.x2"
@@ -109,7 +216,7 @@
         />
         <line
           v-for="(track, idx) in routingDebugOverlay.horizontalTracks"
-          :key="'dbg-h-' + idx"
+          :key="`dbg-h-${idx}`"
           :x1="track.x1"
           :y1="track.y1"
           :x2="track.x2"
@@ -121,7 +228,7 @@
         />
         <rect
           v-for="(seg, idx) in routingDebugOverlay.occupiedRects"
-          :key="'dbg-occ-' + idx"
+          :key="`dbg-occ-${idx}`"
           :x="seg.x"
           :y="seg.y"
           :width="seg.width"
@@ -132,7 +239,7 @@
         />
         <text
           v-for="(label, idx) in routingDebugOverlay.labels"
-          :key="'dbg-lbl-' + idx"
+          :key="`dbg-lbl-${idx}`"
           :x="label.x"
           :y="label.y"
           fill="#a5f3fc"
@@ -159,7 +266,7 @@
         <template v-if="selectedWireId === wire.id || wire.isDragged">
           <path
             v-for="(td, idx) in wire.teardrops"
-            :key="'td-' + idx"
+            :key="`td-${idx}`"
             :d="td"
             :fill="wire.color"
             opacity="0.8"
@@ -167,7 +274,7 @@
         </template>
 
         <!-- Wire Segments (Top / Bottom Layers) -->
-        <g v-for="(seg, idx) in wire.segments" :key="'seg-' + idx">
+        <g v-for="(seg, idx) in wire.segments" :key="`seg-${idx}`">
           <!-- Glow: selected wire, dragged, or highlighted component bundle -->
           <path
             v-if="selectedWireId === wire.id || wire.isDragged || getWireVisual(wire).highlighted"
@@ -217,7 +324,7 @@
 
         <!-- Vias: only when selected or dragged -->
         <template v-if="selectedWireId === wire.id || wire.isDragged">
-          <g v-for="(via, idx) in wire.vias" :key="'via-' + idx">
+          <g v-for="(via, idx) in wire.vias" :key="`via-${idx}`">
             <circle :cx="via.x" :cy="via.y" r="5.5" fill="#e2e8f0" stroke="#d97706" stroke-width="1.2" />
             <circle :cx="via.x" :cy="via.y" r="2.5" fill="#1e293b" />
           </g>
@@ -230,7 +337,7 @@
         <!-- Waypoint draggable handles -->
         <circle
           v-for="(wp, wpIdx) in (wireWaypoints[wire.id] || [])"
-          :key="'wp-' + wpIdx"
+          :key="`wp-${wpIdx}`"
           :cx="wp.x"
           :cy="wp.y"
           r="5.5"
@@ -256,8 +363,8 @@
           stroke="#080c14"
           stroke-width="2"
           style="cursor: move; pointer-events: all;"
+          :class="{ dragging: draggedPowerNodeId === powerType }"
           @mousedown="handlePowerNodeClick($event, powerType)"
-          :class="{ 'dragging': draggedPowerNodeId === powerType }"
         />
         <circle
           :cx="node.x"
@@ -292,28 +399,28 @@
     </svg>
 
     <!-- Real-time Interactive Peripherals Positioned on Canvas -->
-    <div class="peripherals-layer" :style="{ transform: `scale(${peripheralScaleX}, ${peripheralScaleY})`, transformOrigin: 'top left', width: viewWidth + 'px', height: viewHeight + 'px' }">
+    <div class="peripherals-layer" :style="{ transform: `scale(${peripheralScaleX}, ${peripheralScaleY})`, transformOrigin: 'top left', width: `${viewWidth}px`, height: `${viewHeight}px` }">
       <div
         v-for="comp in components"
-        :key="'canvas-comp-' + comp.id"
+        :key="`canvas-comp-${comp.id}`"
         :style="{
-          position: 'absolute',
-          left: `${getCanvasX(comp)}px`,
-          top: `${getCanvasY(comp)}px`,
+          'position': 'absolute',
+          'left': `${getCanvasX(comp)}px`,
+          'top': `${getCanvasY(comp)}px`,
           '--rot': `${comp.rotation || 0}deg`,
-          transformOrigin: `${getComponentSize(comp.type).width / 2}px ${getComponentSize(comp.type).height / 2}px`,
-          zIndex: 10
+          'transformOrigin': `${getComponentSize(comp.type).width / 2}px ${getComponentSize(comp.type).height / 2}px`,
+          'zIndex': 10,
         }"
-        @mousedown.capture="onPeripheralMouseDown($event, comp)"
         class="canvas-peripheral-wrapper"
         :class="{ 'selected-peripheral': selectedComponentId === comp.id, 'dragging': draggedCompId === comp.id && isComponentDragging }"
+        @mousedown.capture="onPeripheralMouseDown($event, comp)"
       >
         <!-- Rotation toolbar (visible when selected) -->
         <div v-if="selectedComponentId === comp.id" class="rotation-toolbar" @mousedown.stop>
-          <button @click.stop="rotateComponent(comp, -90)" class="rot-btn" title="逆时针旋转 90°">
+          <button class="rot-btn" title="逆时针旋转 90°" @click.stop="rotateComponent(comp, -90)">
             <RotateCcw class="rot-icon" />
           </button>
-          <button @click.stop="rotateComponent(comp, 90)" class="rot-btn" title="顺时针旋转 90°">
+          <button class="rot-btn" title="顺时针旋转 90°" @click.stop="rotateComponent(comp, 90)">
             <RotateCw class="rot-icon" />
           </button>
         </div>
@@ -346,115 +453,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, toRef } from 'vue';
-import { RotateCcw, RotateCw } from 'lucide-vue-next';
-import type { CircuitComponentInstance } from '@/types/circuit-component';
-import { useCircuitCanvas } from '@/composables/useCircuitCanvas';
-
-const components = defineModel<CircuitComponentInstance[]>('components', { required: true });
-const selectedComponentId = defineModel<string>('selectedComponentId', { required: true });
-
-const props = defineProps<{
-  pinStates: Record<number, boolean>;
-  readonly: boolean;
-  routingMode: 'auto' | 'manual';
-}>();
-
-const emit = defineEmits<{
-  buttonPress: [comp: CircuitComponentInstance];
-  buttonRelease: [comp: CircuitComponentInstance];
-  layoutChange: [];
-}>();
-
-const readonlyRef = computed(() => props.readonly);
-const routingModeRef = computed(() => props.routingMode);
-const pinStatesRef = toRef(props, 'pinStates');
-
-const {
-  canvasContainerRef,
-  canvasOledRef,
-  viewWidth,
-  viewHeight,
-  peripheralScaleX,
-  peripheralScaleY,
-  boardPosition,
-  isDraggingBoard,
-  commonPowerNodes,
-  draggedPowerNodeId,
-  draggedCompId,
-  isComponentDragging,
-  wireWaypoints,
-  selectedWireId,
-  wiresToRender,
-  routingChannels,
-  routingDebugOverlay,
-  powerBusVisual,
-  syncPowerBusLayout,
-  tidyRouting,
-  updateCanvasScale,
-  assignLayoutForNewComponent,
-  removeLayoutForComponent,
-  getLayoutPositions,
-  setLayoutPositions,
-  selectComponent,
-  setRotation,
-  rotateComponent,
-  handlePowerNodeClick,
-  handleWireClick,
-  handleCanvasClick,
-  startDragBoard,
-  onPeripheralMouseDown,
-  removeWaypoint,
-  startDragWaypoint,
-  getCanvasX,
-  getCanvasY,
-  getComponentSize,
-  getWireVisual,
-} = useCircuitCanvas({
-  components,
-  selectedComponentId,
-  pinStates: pinStatesRef,
-  routingMode: routingModeRef,
-  readonly: readonlyRef,
-  onLayoutChange: () => emit('layoutChange'),
-});
-
-let canvasResizeObserver: ResizeObserver | null = null;
-
-onMounted(() => {
-  syncPowerBusLayout(true);
-  requestAnimationFrame(() => {
-    updateCanvasScale();
-    const container = canvasContainerRef.value;
-    if (container && typeof ResizeObserver !== 'undefined') {
-      canvasResizeObserver = new ResizeObserver(() => {
-        updateCanvasScale();
-      });
-      canvasResizeObserver.observe(container);
-    }
-  });
-});
-
-onUnmounted(() => {
-  canvasResizeObserver?.disconnect();
-  canvasResizeObserver = null;
-});
-
-defineExpose({
-  tidyRouting,
-  updateCanvasScale,
-  canvasOledRef,
-  setRotation,
-  rotateComponent,
-  selectComponent,
-  assignLayoutForNewComponent,
-  removeLayoutForComponent,
-  getLayoutPositions,
-  setLayoutPositions,
-});
-</script>
 
 <style scoped>
 .board-draggable {

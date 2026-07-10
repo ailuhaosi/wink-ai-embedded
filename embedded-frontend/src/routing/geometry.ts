@@ -35,7 +35,7 @@ export function segmentIntersectsObstacle(
   obstacles: Obstacle[],
   padding = OBSTACLE_PADDING,
 ): boolean {
-  const expanded = obstacles.map((obs) => expandObstacle(obs, padding));
+  const expanded = obstacles.map(obs => expandObstacle(obs, padding));
 
   for (const obs of expanded) {
     const left = obs.x;
@@ -49,7 +49,8 @@ export function segmentIntersectsObstacle(
       const segTop = Math.min(p1.y, p2.y);
       const segBottom = Math.max(p1.y, p2.y);
       if (segBottom > top && segTop < bottom) return true;
-    } else if (p1.y === p2.y) {
+    }
+    else if (p1.y === p2.y) {
       const y = p1.y;
       if (y <= top || y >= bottom) continue;
       const segLeft = Math.min(p1.x, p2.x);
@@ -164,7 +165,8 @@ function dedupeCollinearPoints(points: Point[]): Point[] {
     const last = result.length >= 2 ? result[result.length - 2] : null;
     if (last && ((last.x === prev.x && prev.x === curr.x) || (last.y === prev.y && prev.y === curr.y))) {
       result[result.length - 1] = curr;
-    } else if (prev.x !== curr.x || prev.y !== curr.y) {
+    }
+    else if (prev.x !== curr.x || prev.y !== curr.y) {
       result.push(curr);
     }
   }
@@ -189,8 +191,8 @@ export function routePathAroundObstacle(
   const expanded = expandObstacle(obstacle, OBSTACLE_PADDING);
   const edgeLeft = expanded.x;
   const edgeRight = expanded.x + expanded.width;
-  const edgeTop = expanded.y;
-  const edgeBottom = expanded.y + expanded.height;
+  const _edgeTop = expanded.y;
+  const _edgeBottom = expanded.y + expanded.height;
 
   const result: Point[] = [points[0]];
 
@@ -201,21 +203,21 @@ export function routePathAroundObstacle(
     const isPinExit = options.skipFirstSegment && i === 1;
 
     if (
-      !isPinLanding &&
-      !isPinExit &&
-      segmentIntersectsObstacle(prev, curr, [obstacle], 0)
+      !isPinLanding
+      && !isPinExit
+      && segmentIntersectsObstacle(prev, curr, [obstacle], 0)
     ) {
       const useLeftEdge = prev.x < obstacle.x + obstacle.width / 2;
       const edgeX = snapTrackCoord(useLeftEdge ? edgeLeft : edgeRight);
 
-      const horizontalCross =
-        prev.y === curr.y &&
-        Math.min(prev.x, curr.x) < obstacle.x + obstacle.width &&
-        Math.max(prev.x, curr.x) > obstacle.x;
-      const verticalCross =
-        prev.x === curr.x &&
-        Math.min(prev.y, curr.y) < obstacle.y + obstacle.height &&
-        Math.max(prev.y, curr.y) > obstacle.y;
+      const horizontalCross
+        = prev.y === curr.y
+          && Math.min(prev.x, curr.x) < obstacle.x + obstacle.width
+          && Math.max(prev.x, curr.x) > obstacle.x;
+      const verticalCross
+        = prev.x === curr.x
+          && Math.min(prev.y, curr.y) < obstacle.y + obstacle.height
+          && Math.max(prev.y, curr.y) > obstacle.y;
 
       if (horizontalCross) {
         if (prev.x !== edgeX) {
@@ -224,7 +226,8 @@ export function routePathAroundObstacle(
         if (result[result.length - 1].y !== curr.y) {
           result.push({ x: edgeX, y: snapTrackCoord(curr.y) });
         }
-      } else if (verticalCross) {
+      }
+      else if (verticalCross) {
         // Detour via left/right edge (not top/bottom) when a vertical segment cuts through the body.
         if (prev.x !== edgeX) {
           result.push({ x: edgeX, y: snapTrackCoord(prev.y) });

@@ -93,9 +93,9 @@ export const powerOptions: ('VCC' | '3V3' | 'GND')[] = ['VCC', '3V3', 'GND'];
 export function getDefaultPinConnections(type: string): Record<string, PinConnectionValue> {
   const config = peripheralConfigs[type];
   if (!config) return {};
-  
+
   const connections: Record<string, PinConnectionValue> = {};
-  config.pins.forEach(pin => {
+  config.pins.forEach((pin) => {
     if (pin.default !== null && pin.default !== undefined) {
       connections[pin.name] = pin.default;
     }
@@ -106,9 +106,9 @@ export function getDefaultPinConnections(type: string): Record<string, PinConnec
 export function getDefaultProps(type: string): Record<string, any> {
   const config = peripheralConfigs[type];
   if (!config) return {};
-  
+
   const props: Record<string, any> = {};
-  Object.keys(config.props).forEach(key => {
+  Object.keys(config.props).forEach((key) => {
     props[key] = config.props[key].default;
   });
   return props;
@@ -150,9 +150,9 @@ export const boardDescriptor: BoardDescriptor = {
     22: { x: 487, y: 192 },
   },
   powerPins: {
-    VCC: { x: 487, y: 222 },
+    'VCC': { x: 487, y: 222 },
     '3V3': { x: 487, y: 222 },
-    GND: { x: 317, y: 252 },
+    'GND': { x: 317, y: 252 },
   },
 };
 
@@ -196,9 +196,9 @@ export function getPowerNodeSlots(boardX: number, boardY: number): PowerNodeSlot
   return {
     railY,
     positions: {
-      VCC: { x: cx - gap, y: railY },
+      'VCC': { x: cx - gap, y: railY },
       '3V3': { x: cx, y: railY },
-      GND: { x: cx + gap, y: railY },
+      'GND': { x: cx + gap, y: railY },
     },
   };
 }
@@ -224,7 +224,7 @@ export function rotatePinOffset(
   relY: number,
   W: number,
   H: number,
-  rotation: number
+  rotation: number,
 ): { x: number; y: number } {
   const cx = W / 2;
   const cy = H / 2;
@@ -303,7 +303,8 @@ export function generateOrthogonalPath(
 
     if (dx === 0 || dy === 0) {
       d += ` L ${curr.x} ${curr.y}`;
-    } else {
+    }
+    else {
       d += ` L ${curr.x} ${prev.y} L ${curr.x} ${curr.y}`;
     }
   }
@@ -327,9 +328,9 @@ export interface WirePathResult {
 }
 
 export {
-  generateSmartPCBPath,
   generatePowerBusTapPath,
   generatePowerBusTrunkPath,
+  generateSmartPCBPath,
   pointsToRoundedSvgPath,
   pointsToSvgPath,
 } from '../routing/wire-routing';

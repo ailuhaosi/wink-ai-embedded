@@ -16,7 +16,7 @@ import { suggestBindings } from '@/services/binding-suggest.service';
 const deps = { catalog: deviceCatalog, pinResolver: bindingPinResolver };
 
 describe('binding-validation B-01~B-10', () => {
-  it('B-01: rejects unknown deviceComponentId', () => {
+  it('b-01: rejects unknown deviceComponentId', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       bindings: {
@@ -38,10 +38,10 @@ describe('binding-validation B-01~B-10', () => {
       },
     };
     const r = validateBindings(manifest, { targetMode: 'simulate' }, deps);
-    expect(r.some((x) => x.ruleId === 'B-01' && x.severity === 'error')).toBe(true);
+    expect(r.some(x => x.ruleId === 'B-01' && x.severity === 'error')).toBe(true);
   });
 
-  it('B-03: rejects duplicate PWM actuator on same pin', () => {
+  it('b-03: rejects duplicate PWM actuator on same pin', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       devices: [
@@ -69,10 +69,10 @@ describe('binding-validation B-01~B-10', () => {
         ],
       },
     };
-    expect(validateBindings(manifest, { targetMode: 'simulate' }, deps).some((x) => x.ruleId === 'B-03')).toBe(true);
+    expect(validateBindings(manifest, { targetMode: 'simulate' }, deps).some(x => x.ruleId === 'B-03')).toBe(true);
   });
 
-  it('B-04: missing mechanicalPartId is warning in design, error in simulate', () => {
+  it('b-04: missing mechanicalPartId is warning in design, error in simulate', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       bindings: {
@@ -92,13 +92,13 @@ describe('binding-validation B-01~B-10', () => {
         ],
       },
     };
-    const design = validateBindings(manifest, { targetMode: 'design' }, deps).find((x) => x.ruleId === 'B-04');
+    const design = validateBindings(manifest, { targetMode: 'design' }, deps).find(x => x.ruleId === 'B-04');
     expect(design?.severity).toBe('warning');
-    const sim = validateBindings(manifest, { targetMode: 'simulate' }, deps).find((x) => x.ruleId === 'B-04');
+    const sim = validateBindings(manifest, { targetMode: 'simulate' }, deps).find(x => x.ruleId === 'B-04');
     expect(sim?.severity).toBe('error');
   });
 
-  it('B-06: rejects PWM mapping on GPIO-only pin', () => {
+  it('b-06: rejects PWM mapping on GPIO-only pin', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       devices: [{ componentId: 'led1', modelId: 'led' }],
@@ -120,10 +120,10 @@ describe('binding-validation B-01~B-10', () => {
         joints: [],
       },
     };
-    expect(validateBindings(manifest, { targetMode: 'simulate' }, deps).some((x) => x.ruleId === 'B-06')).toBe(true);
+    expect(validateBindings(manifest, { targetMode: 'simulate' }, deps).some(x => x.ruleId === 'B-06')).toBe(true);
   });
 
-  it('B-07: pwm_to_angular_velocity requires mechanicalJointId', () => {
+  it('b-07: pwm_to_angular_velocity requires mechanicalJointId', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       devices: [{ componentId: 'motors', modelId: 'motor_driver_stub' }],
@@ -140,29 +140,29 @@ describe('binding-validation B-01~B-10', () => {
         ],
       },
     };
-    expect(validateBindings(manifest, { targetMode: 'simulate' }, deps).some((x) => x.ruleId === 'B-07')).toBe(true);
+    expect(validateBindings(manifest, { targetMode: 'simulate' }, deps).some(x => x.ruleId === 'B-07')).toBe(true);
   });
 
-  it('A5: B-09 blocks simulate when hc-sr04 has no binding', () => {
+  it('a5: B-09 blocks simulate when hc-sr04 has no binding', () => {
     const results = validateBindings(AVOIDANCE_CAR_W2_MINIMAL, { targetMode: 'simulate' }, deps);
-    const b09 = results.find((x) => x.ruleId === 'B-09');
+    const b09 = results.find(x => x.ruleId === 'B-09');
     expect(b09).toBeDefined();
     expect(isBlockingResult(b09!, { targetMode: 'simulate' })).toBe(true);
   });
 
-  it('A5b: B-10 blocks simulate when binding exists but TRIG/ECHO not wired', () => {
+  it('a5b: B-10 blocks simulate when binding exists but TRIG/ECHO not wired', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       connections: [],
       mechanical: createUltrasonicMount(),
       bindings: createUltrasonicBinding('mount_ultrasonic'),
     };
-    const b10 = validateBindings(manifest, { targetMode: 'simulate' }, deps).find((x) => x.ruleId === 'B-10');
+    const b10 = validateBindings(manifest, { targetMode: 'simulate' }, deps).find(x => x.ruleId === 'B-10');
     expect(b10).toBeDefined();
     expect(isBlockingResult(b10!, { targetMode: 'simulate' })).toBe(true);
   });
 
-  it('A6: passes when ultrasonic binding + connections complete', () => {
+  it('a6: passes when ultrasonic binding + connections complete', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       mechanical: createUltrasonicMount(),
@@ -172,11 +172,11 @@ describe('binding-validation B-01~B-10', () => {
       manifest,
       { targetMode: 'simulate', blockingOnly: true },
       deps,
-    ).filter((r) => isBlockingResult(r, { targetMode: 'simulate' }));
+    ).filter(r => isBlockingResult(r, { targetMode: 'simulate' }));
     expect(blocking).toEqual([]);
   });
 
-  it('A7: suggestBindings proposes ultrasonic raycast when mount exists', () => {
+  it('a7: suggestBindings proposes ultrasonic raycast when mount exists', () => {
     const manifest: EmbeddedProjectManifest = {
       ...AVOIDANCE_CAR_W2_MINIMAL,
       mechanical: createUltrasonicMount(),
@@ -187,7 +187,7 @@ describe('binding-validation B-01~B-10', () => {
   });
 });
 
-describe('A10 VITE_MANIFEST_SCHEMA_V2 gate', () => {
+describe('a10 VITE_MANIFEST_SCHEMA_V2 gate', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_MANIFEST_SCHEMA_V2', 'false');
   });
@@ -239,7 +239,7 @@ describe('workbench binding gate with V2 enabled', () => {
     });
 
     expect(ok).toBe(false);
-    expect(modeStore.lastBindingValidationIssues.some((x) => x.ruleId === 'B-09')).toBe(true);
+    expect(modeStore.lastBindingValidationIssues.some(x => x.ruleId === 'B-09')).toBe(true);
   });
 
   it('allows simulate after binding + mount configured', async () => {

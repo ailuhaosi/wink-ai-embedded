@@ -24,7 +24,8 @@ export async function readManifestFromFile(
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch {
+  }
+  catch {
     throw new Error('Invalid JSON project file');
   }
   return parseManifestJson(parsed);

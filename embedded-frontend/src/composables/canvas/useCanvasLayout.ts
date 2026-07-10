@@ -22,7 +22,6 @@ export function useCanvasLayout(ctx: CanvasContext) {
 
   function setLayoutPositions(positions: Record<string, LayoutPosition>) {
     ctx.layoutState.value = { ...positions };
-    ctx.inactiveWireCache.value = {};
   }
 
   function removeLayoutForComponent(id: string) {
@@ -31,17 +30,14 @@ export function useCanvasLayout(ctx: CanvasContext) {
 
   function selectComponent(comp: CircuitComponentInstance) {
     ctx.selectedComponentId.value = comp.id;
-    ctx.selectedWireId.value = null;
   }
 
   function setRotation(comp: CircuitComponentInstance, deg: number) {
     comp.rotation = deg;
-    ctx.inactiveWireCache.value = {};
   }
 
   function rotateComponent(comp: CircuitComponentInstance, delta: number) {
     comp.rotation = (((comp.rotation || 0) + delta) % 360 + 360) % 360;
-    ctx.inactiveWireCache.value = {};
   }
 
   function getCanvasX(comp: CircuitComponentInstance): number {

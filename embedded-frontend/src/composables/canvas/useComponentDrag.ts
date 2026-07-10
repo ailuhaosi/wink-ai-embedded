@@ -88,7 +88,6 @@ export function useComponentDrag(
     ctx.draggedCompId.value = null;
     ctx.isComponentDragging.value = false;
     ctx.frozenTrackAssignments.value = null;
-    ctx.inactiveWireCache.value = {};
     window.removeEventListener('mousemove', handleComponentMouseMove);
     window.removeEventListener('mouseup', handleComponentMouseUp);
     if (didDrag) {

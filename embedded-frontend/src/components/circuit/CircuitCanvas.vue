@@ -9,7 +9,6 @@ import CanvasPeripheralsHost from '@/components/peripherals/CanvasPeripheralsHos
 const props = defineProps<{
   pinStates: Record<number, boolean>;
   readonly: boolean;
-  routingMode: 'auto' | 'manual';
 }>();
 const emit = defineEmits<{
   buttonPress: [comp: CircuitComponentInstance];
@@ -22,7 +21,6 @@ const selectedComponentId = defineModel<string>('selectedComponentId', { require
 const { t } = useI18n();
 
 const readonlyRef = computed(() => props.readonly);
-const routingModeRef = computed(() => props.routingMode);
 const pinStatesRef = toRef(props, 'pinStates');
 
 const {
@@ -38,14 +36,11 @@ const {
   draggedPowerNodeId,
   draggedCompId,
   isComponentDragging,
-  wireWaypoints,
-  selectedWireId,
   wiresToRender,
   routingChannels,
   routingDebugOverlay,
   powerBusVisual,
   syncPowerBusLayout,
-  tidyRouting,
   updateCanvasScale,
   assignLayoutForNewComponent,
   removeLayoutForComponent,
@@ -55,12 +50,8 @@ const {
   setRotation,
   rotateComponent,
   handlePowerNodeClick,
-  handleWireClick,
-  handleCanvasClick,
   startDragBoard,
   onPeripheralMouseDown,
-  removeWaypoint,
-  startDragWaypoint,
   getCanvasX,
   getCanvasY,
   getComponentSize,
@@ -69,7 +60,6 @@ const {
   components,
   selectedComponentId,
   pinStates: pinStatesRef,
-  routingMode: routingModeRef,
   readonly: readonlyRef,
   onLayoutChange: () => emit('layoutChange'),
 });
@@ -96,7 +86,6 @@ onUnmounted(() => {
 });
 
 defineExpose({
-  tidyRouting,
   updateCanvasScale,
   setRotation,
   rotateComponent,
@@ -110,7 +99,7 @@ defineExpose({
 
 <template>
   <div ref="canvasContainerRef" class="canvas-container">
-    <svg ref="circuitSvgRef" class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none" @click="handleCanvasClick">
+    <svg ref="circuitSvgRef" class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none">
       <!-- Grid background -->
       <defs>
         <pattern id="grid" :width="20" :height="20" patternUnits="userSpaceOnUse">
@@ -164,7 +153,13 @@ defineExpose({
       />
 
       <!-- ESP32 Board Node -->
-      <g :transform="`translate(${boardPosition.x}, ${boardPosition.y})`" class="board-node board-draggable" :class="{ 'board-dragging': isDraggingBoard }" @mousedown="startDragBoard($event)">
+      <g
+        :transform="`translate(${boardPosition.x}, ${boardPosition.y})`"
+        class="board-node board-draggable"
+        :class="{ 'board-dragging': isDraggingBoard }"
+        style="pointer-events: all;"
+        @mousedown="startDragBoard($event)"
+      >
         <!-- Outer board shadow and body -->
         <rect x="0" y="0" width="180" height="200" rx="10" fill="#1e293b" stroke="#334155" stroke-width="2" />
         <rect x="15" y="-10" width="150" height="25" rx="3" fill="#0f172a" />
@@ -257,30 +252,15 @@ defineExpose({
         :key="wire.id"
         class="smart-wire-group"
         :class="{
-          'selected-wire': selectedWireId === wire.id,
-          'inactive-wire': !wire.isActive,
           'highlighted-wire': getWireVisual(wire).highlighted,
           'dimmed-wire': getWireVisual(wire).dimmed,
           'power-wire': wire.signalType === 'power',
           'i2c-wire': wire.signalType === 'i2c',
         }"
       >
-        <!-- Teardrops: only when wire is selected or being dragged -->
-        <template v-if="selectedWireId === wire.id || wire.isDragged">
-          <path
-            v-for="(td, idx) in wire.teardrops"
-            :key="`td-${idx}`"
-            :d="td"
-            :fill="wire.color"
-            opacity="0.8"
-          />
-        </template>
-
-        <!-- Wire Segments (Top / Bottom Layers) -->
         <g v-for="(seg, idx) in wire.segments" :key="`seg-${idx}`">
-          <!-- Glow: selected wire, dragged, or highlighted component bundle -->
           <path
-            v-if="selectedWireId === wire.id || wire.isDragged || getWireVisual(wire).highlighted"
+            v-if="getWireVisual(wire).highlighted"
             :d="seg.d"
             fill="none"
             :stroke="seg.layer === 0 ? wire.color : '#3b82f6'"
@@ -291,7 +271,6 @@ defineExpose({
             stroke-linejoin="round"
             filter="url(#neon-glow)"
           />
-          <!-- Dark outline for crossings -->
           <path
             :d="seg.d"
             fill="none"
@@ -302,7 +281,6 @@ defineExpose({
             stroke-linejoin="round"
             :stroke-dasharray="seg.layer === 1 ? '6,4' : undefined"
           />
-          <!-- Visible wire segment -->
           <path
             :d="seg.d"
             fill="none"
@@ -313,45 +291,10 @@ defineExpose({
             stroke-linejoin="round"
             :stroke-dasharray="seg.layer === 1 ? '6,4' : (wire.signalType === 'i2c' ? '4,3' : undefined)"
           />
-          <!-- Thick transparent path for click strike zone -->
-          <path
-            :d="seg.d"
-            fill="none"
-            stroke="transparent"
-            stroke-width="12"
-            stroke-linecap="round"
-            class="wire-click-zone"
-            @click="handleWireClick($event, wire.id)"
-          />
         </g>
 
-        <!-- Vias: only when selected or dragged -->
-        <template v-if="selectedWireId === wire.id || wire.isDragged">
-          <g v-for="(via, idx) in wire.vias" :key="`via-${idx}`">
-            <circle :cx="via.x" :cy="via.y" r="5.5" fill="#e2e8f0" stroke="#d97706" stroke-width="1.2" />
-            <circle :cx="via.x" :cy="via.y" r="2.5" fill="#1e293b" />
-          </g>
-        </template>
-
-        <!-- Start & End connection dots -->
         <circle :cx="wire.start.x" :cy="wire.start.y" :r="wire.width + getWireVisual(wire).widthBoost + 1.2" :fill="wire.color" :fill-opacity="getWireVisual(wire).opacity" stroke="#080c14" stroke-width="1.2" />
         <circle :cx="wire.end.x" :cy="wire.end.y" :r="wire.width + getWireVisual(wire).widthBoost + 1.2" :fill="wire.color" :fill-opacity="getWireVisual(wire).opacity" stroke="#080c14" stroke-width="1.2" />
-
-        <!-- Waypoint draggable handles -->
-        <circle
-          v-for="(wp, wpIdx) in (wireWaypoints[wire.id] || [])"
-          :key="`wp-${wpIdx}`"
-          :cx="wp.x"
-          :cy="wp.y"
-          r="5.5"
-          fill="#f59e0b"
-          stroke="#080c14"
-          stroke-width="1.5"
-          class="waypoint-handle"
-          style="cursor: move;"
-          @mousedown="startDragWaypoint(wire.id, wpIdx)"
-          @dblclick.stop="removeWaypoint(wire.id, wpIdx)"
-        />
       </g>
     </svg>
 
@@ -529,10 +472,9 @@ defineExpose({
   pointer-events: none;
 }
 
-.smart-wire-group.inactive-wire path,
-.smart-wire-group.inactive-wire circle {
-  stroke-opacity: 0.15;
-  fill-opacity: 0.15;
+.smart-wire-group.dimmed-wire path,
+.smart-wire-group.dimmed-wire circle {
+  transition: stroke-opacity 0.15s ease, fill-opacity 0.15s ease;
 }
 
 .smart-wire-group.highlighted-wire {
@@ -541,28 +483,6 @@ defineExpose({
 
 .smart-wire-group.power-wire path[stroke]:not([stroke="transparent"]) {
   stroke-linecap: round;
-}
-
-.smart-wire-group.selected-wire {
-  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 1)) drop-shadow(0 0 12px rgba(56, 189, 248, 0.8)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.5));
-  animation: wirePulse 1.5s ease-in-out infinite;
-}
-
-.smart-wire-group.selected-wire path {
-  stroke-width: calc(var(--wire-width, 2) + 2);
-}
-
-.wire-click-zone {
-  cursor: copy;
-}
-
-@keyframes wirePulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 4px rgba(56, 189, 248, 1)) drop-shadow(0 0 12px rgba(56, 189, 248, 0.8)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.5));
-  }
-  50% {
-    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 1)) drop-shadow(0 0 18px rgba(56, 189, 248, 0.9)) drop-shadow(0 0 30px rgba(56, 189, 248, 0.7));
-  }
 }
 
 .canvas-container {
@@ -577,9 +497,6 @@ defineExpose({
   left: 0;
   pointer-events: none;
   z-index: 5;
-}
-.circuit-svg .wire-click-zone {
-  pointer-events: stroke;
 }
 .power-nodes-layer {
   position: absolute;

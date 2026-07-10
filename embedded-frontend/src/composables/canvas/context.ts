@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { boardDescriptor } from '@/types/peripheral-pins';
 import {
   CANVAS_WIDTH,
@@ -7,10 +7,10 @@ import {
   boardPowerPinOffsets,
   INITIAL_COMMON_POWER_NODES,
 } from './constants';
-import type { CanvasContext, LayoutPosition, Point, UseCircuitCanvasOptions, WireRenderItem } from './types';
+import type { CanvasContext, LayoutPosition, UseCircuitCanvasOptions } from './types';
 
 export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasContext {
-  const { components, selectedComponentId, pinStates, routingMode, readonly, onLayoutChange } = options;
+  const { components, selectedComponentId, pinStates, readonly, onLayoutChange } = options;
 
   const layoutState = ref<Record<string, LayoutPosition>>({});
   const nextPositionOffset = ref<Record<string, number>>({});
@@ -22,16 +22,6 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
   const viewHeight = ref(CANVAS_HEIGHT);
   const peripheralScaleX = ref(1);
   const peripheralScaleY = ref(1);
-
-  const wireWaypoints = ref<Record<string, Point[]>>({});
-  const draggedWireId = ref<string | null>(null);
-  const draggingWaypoint = ref<{ wireId: string; index: number } | null>(null);
-  const selectedWireId = ref<string | null>(null);
-  const dragThreshold = 8;
-  const wireDragStart = ref({ x: 0, y: 0 });
-  const pendingWaypoint = ref<{ wireId: string; x: number; y: number } | null>(null);
-  const draggingSegment = ref<{ wireId: string; startIndex: number; endIndex: number; startOffset: number } | null>(null);
-  const inactiveWireCache = ref<Record<string, WireRenderItem>>({});
 
   const boardPosition = ref({ x: boardDescriptor.x, y: boardDescriptor.y });
   const isDraggingBoard = ref(false);
@@ -45,16 +35,12 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
   const componentDragOrigin = ref({ x: 0, y: 0 });
   const isComponentDragging = ref(false);
   const frozenTrackAssignments = ref<Map<string, import('@/routing/types').TrackAssignment> | null>(null);
-
-  watch(routingMode, () => {
-    inactiveWireCache.value = {};
-  });
+  const dragThreshold = 8;
 
   return {
     components,
     selectedComponentId,
     pinStates,
-    routingMode,
     readonly,
     onLayoutChange,
     layoutState,
@@ -67,15 +53,6 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
     viewHeight,
     peripheralScaleX,
     peripheralScaleY,
-    wireWaypoints,
-    draggedWireId,
-    draggingWaypoint,
-    selectedWireId,
-    dragThreshold,
-    wireDragStart,
-    pendingWaypoint,
-    draggingSegment,
-    inactiveWireCache,
     boardPosition,
     isDraggingBoard,
     boardDragOffset,
@@ -88,5 +65,6 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
     componentDragOrigin,
     isComponentDragging,
     frozenTrackAssignments,
+    dragThreshold,
   };
 }

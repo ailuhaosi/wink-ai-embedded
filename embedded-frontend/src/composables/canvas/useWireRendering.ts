@@ -161,18 +161,6 @@ export function useWireRendering(
     };
   }
 
-  function getWirePointsById(wireId: string): Point[] | null {
-    const [compId, mode] = wireId.split('-');
-    const comp = ctx.components.value.find(c => c.id === compId);
-    if (!comp) return null;
-
-    const pts = getWirePoints(comp, mode as 'primary' | 'secondary' | 'vcc' | 'gnd');
-    if (!pts) return null;
-
-    const waypoints = ctx.wireWaypoints.value[wireId] || [];
-    return [pts.start, ...waypoints, pts.end];
-  }
-
   function buildWireRouteRequests(
     requests: Array<{
       compId: string;
@@ -309,10 +297,7 @@ export function useWireRendering(
     return requests;
   }
 
-  function buildWireVisual(wire: WireRenderItem, sel: string | null, activeWireId: string | null): WireVisualState {
-    if (activeWireId === wire.id || wire.isDragged) {
-      return DEFAULT_WIRE_VISUAL;
-    }
+  function buildWireVisual(wire: WireRenderItem, sel: string | null): WireVisualState {
     if (!sel) {
       return DEFAULT_WIRE_VISUAL;
     }
@@ -414,17 +399,9 @@ export function useWireRendering(
       trackAssignments = buildTrackAssignmentMap(requests);
     }
 
-    requests.sort((a, b) => {
-      const aId = `${a.compId}-${a.mode}`;
-      const bId = `${b.compId}-${b.mode}`;
-
-      if (ctx.draggedWireId.value) {
-        if (aId === ctx.draggedWireId.value) return -1;
-        if (bId === ctx.draggedWireId.value) return 1;
-      }
-
-      return priorityOrder[a.signalType] - priorityOrder[b.signalType];
-    });
+    requests.sort((a, b) =>
+      priorityOrder[a.signalType] - priorityOrder[b.signalType],
+    );
 
     const list: WireRenderItem[] = [];
 
@@ -453,8 +430,6 @@ export function useWireRendering(
         vias: result.vias,
         teardrops: result.teardrops,
         signalType: 'power',
-        isActive: true,
-        isDragged: false,
       });
     }
 
@@ -464,7 +439,6 @@ export function useWireRendering(
       const pts = getWirePoints(req.comp, req.mode, fanout);
       if (!pts) return;
 
-      const waypoints = ctx.wireWaypoints.value[wireId] || [];
       const assignment = trackAssignments.get(wireId) ?? {
         wireId,
         topology: 'cross-side',
@@ -473,65 +447,7 @@ export function useWireRendering(
         stubLengthEnd: 18,
       };
 
-      const isDragged = wireId === ctx.draggedWireId.value;
-      const isActive = !(ctx.routingMode.value === 'manual' && ctx.draggedWireId.value && wireId !== ctx.draggedWireId.value);
-
-      let pcbResult: WirePathResult | null = null;
-
-      if (isDragged) {
-        const cachedWire = ctx.inactiveWireCache.value[wireId];
-        if (cachedWire) {
-          list.push({ ...cachedWire, isActive: true, isDragged: true });
-          return;
-        }
-      }
-
-      if (isActive) {
-        pcbResult = getWirePCBPath(req.comp, req.mode, assignment, obstacles, segmentOccupancy, waypoints, fanout);
-        if (pcbResult) {
-          ctx.inactiveWireCache.value[wireId] = {
-            id: wireId,
-            path: pcbResult.path,
-            color: req.color,
-            start: pts.start,
-            end: pts.end,
-            width: pcbResult.width,
-            segments: pcbResult.segments,
-            vias: pcbResult.vias,
-            teardrops: pcbResult.teardrops,
-            signalType: req.signalType,
-            compId: req.compId,
-            isActive: true,
-            isDragged: false,
-          };
-        }
-      }
-      else {
-        const cachedWire = ctx.inactiveWireCache.value[wireId];
-        if (cachedWire) {
-          list.push({ ...cachedWire, isActive: false, isDragged: false });
-          return;
-        }
-        pcbResult = getWirePCBPath(req.comp, req.mode, assignment, obstacles, undefined, waypoints, fanout);
-        if (pcbResult) {
-          ctx.inactiveWireCache.value[wireId] = {
-            id: wireId,
-            path: pcbResult.path,
-            color: req.color,
-            start: pts.start,
-            end: pts.end,
-            width: pcbResult.width,
-            segments: pcbResult.segments,
-            vias: pcbResult.vias,
-            teardrops: pcbResult.teardrops,
-            signalType: req.signalType,
-            compId: req.compId,
-            isActive: false,
-            isDragged: false,
-          };
-        }
-      }
-
+      const pcbResult = getWirePCBPath(req.comp, req.mode, assignment, obstacles, segmentOccupancy, undefined, fanout);
       if (!pcbResult) return;
 
       list.push({
@@ -546,8 +462,6 @@ export function useWireRendering(
         teardrops: pcbResult.teardrops,
         signalType: req.signalType,
         compId: req.compId,
-        isActive,
-        isDragged,
       });
     });
 
@@ -673,10 +587,9 @@ export function useWireRendering(
 
   const wireVisualMap = computed(() => {
     const sel = ctx.selectedComponentId.value;
-    const activeWireId = ctx.selectedWireId.value;
     const map = new Map<string, WireVisualState>();
     for (const wire of wiresToRender.value) {
-      map.set(wire.id, buildWireVisual(wire, sel, activeWireId));
+      map.set(wire.id, buildWireVisual(wire, sel));
     }
     return map;
   });
@@ -685,18 +598,12 @@ export function useWireRendering(
     return wireVisualMap.value.get(wire.id) ?? DEFAULT_WIRE_VISUAL;
   }
 
-  function clearInactiveWireCache() {
-    ctx.inactiveWireCache.value = {};
-  }
-
   return {
     wiresToRender,
     routingChannels,
     routingDebugOverlay,
     powerBusVisual,
     getWireVisual,
-    clearInactiveWireCache,
-    getWirePointsById,
     buildTrackAssignmentMap,
   };
 }

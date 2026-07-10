@@ -7,11 +7,18 @@
       "diagnose": "诊断",
       "designDesc": "编辑",
       "simulateDesc": "仿真",
-      "diagnoseDesc": "诊断"
+      "diagnoseDesc": "诊断",
+      "switcherLabel": "工作台模式",
+      "designHint": "编辑电路、外设布局与绑定",
+      "simulateHint": "运行 Wasm 仿真并观察行为",
+      "diagnoseHint": "只读查看诊断信息与日志"
     },
     "designSubMode": {
+      "groupLabel": "设计视图偏好",
       "circuitFirst": "接线优先",
-      "structureFirst": "结构优先"
+      "structureFirst": "结构优先",
+      "circuitFirstHint": "左侧电路画布占更大比例，适合接线与布局",
+      "structureFirstHint": "右侧产品世界占更大比例，适合机械结构搭建"
     },
     "controls": {
       "play": "运行",
@@ -21,9 +28,6 @@
       "step": "单步",
       "speed": "速度",
       "time": "时间",
-      "wireAuto": "自动",
-      "wireManual": "手动",
-      "tidy": "整理走线",
       "grid": "网格"
     },
     "confirm": {
@@ -31,6 +35,14 @@
       "stopSimulationBody": "返回设计模式将停止当前仿真，运行时状态将被清除。",
       "cancel": "取消",
       "stopAndReturn": "停止并返回"
+    },
+    "diagnose": {
+      "readOnlyHint": "诊断模式为只读视图，不可编辑电路或注入故障",
+      "backToDesign": "返回设计"
+    },
+    "help": {
+      "menu": "帮助",
+      "replayOnboarding": "重新显示引导"
     },
     "inspector": {
       "circuit": "电路",
@@ -120,7 +132,11 @@
       "open": "打开项目",
       "saved": "项目已保存",
       "loaded": "项目已加载",
-      "loadError": "无法打开项目文件"
+      "loadError": "无法打开项目文件",
+      "details": "项目详情",
+      "targetBoard": "目标板",
+      "safetyLevel": "安全等级",
+      "wasmApp": "Wasm 应用"
     },
     "canvas": {
       "rotateCcw": "逆时针旋转 90°",

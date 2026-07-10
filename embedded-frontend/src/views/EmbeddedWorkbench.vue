@@ -32,7 +32,6 @@ import { WorkbenchModeId } from '@/constants/workbench-mode';
 import type { WorkbenchModeValue } from '@/constants/workbench-mode';
 import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
 import { useLayoutStore } from '@/stores/layout.store';
-import { useCanvasStore } from '@/stores/canvas.store';
 import { useSimulationStore } from '@/stores/simulation.store';
 import { useProjectStore } from '@/stores/project.store';
 import {
@@ -54,7 +53,6 @@ import {
 const { t } = useI18n();
 const modeStore = useWorkbenchModeStore();
 const layoutStore = useLayoutStore();
-const canvasStore = useCanvasStore();
 const simStore = useSimulationStore();
 const projectStore = useProjectStore();
 const { pendingSwitchTarget } = storeToRefs(modeStore);
@@ -66,17 +64,8 @@ const pendingSimulateAfterInit = ref(false);
 let modeSwitchBannerTimer: ReturnType<typeof setTimeout> | null = null;
 const showStopConfirm = computed(() => pendingSwitchTarget.value === WorkbenchModeId.Design);
 
-const routingMode = computed({
-  get: () => canvasStore.routingMode,
-  set: (mode: 'auto' | 'manual') => canvasStore.setRoutingMode(mode),
-});
-
 const circuitCanvasRef = ref<InstanceType<typeof CircuitCanvas> | null>(null);
 const onboardingRef = ref<InstanceType<typeof OnboardingWizard> | null>(null);
-
-function tidyRouting() {
-  circuitCanvasRef.value?.tidyRouting();
-}
 
 const activeComponents = ref<CircuitComponentInstance[]>([]);
 
@@ -391,7 +380,6 @@ onUnmounted(() => {
       @mode-change="handleModeChange"
       @toggle-simulation="toggleSimulation"
       @reset="handleReset"
-      @tidy="tidyRouting"
       @replay-onboarding="replayOnboarding"
       @save-project="onSaveProject"
       @open-project="onOpenProject"
@@ -426,7 +414,6 @@ onUnmounted(() => {
                 v-model:selected-component-id="selectedCompId"
                 :pin-states="pinStates"
                 :readonly="!modeStore.canEditCircuit"
-                :routing-mode="routingMode"
                 @button-press="handleButtonPress"
                 @button-release="handleButtonRelease"
                 @layout-change="syncCanvasToManifest"

@@ -13,7 +13,6 @@ function createMockContext(components: CircuitComponentInstance[]): CanvasContex
     components: ref(components),
     selectedComponentId: ref(''),
     pinStates: ref({}),
-    routingMode: ref('auto'),
     readonly: ref(false),
     layoutState: ref({}),
     nextPositionOffset: ref({}),
@@ -25,15 +24,6 @@ function createMockContext(components: CircuitComponentInstance[]): CanvasContex
     viewHeight: ref(580),
     peripheralScaleX: ref(1),
     peripheralScaleY: ref(1),
-    wireWaypoints: ref({}),
-    draggedWireId: ref(null),
-    draggingWaypoint: ref(null),
-    selectedWireId: ref(null),
-    dragThreshold: 8,
-    wireDragStart: ref({ x: 0, y: 0 }),
-    pendingWaypoint: ref(null),
-    draggingSegment: ref(null),
-    inactiveWireCache: ref({}),
     boardPosition: ref({ x: 280, y: 60 }),
     isDraggingBoard: ref(false),
     boardDragOffset: ref({ x: 0, y: 0 }),
@@ -46,6 +36,7 @@ function createMockContext(components: CircuitComponentInstance[]): CanvasContex
     componentDragOrigin: ref({ x: 0, y: 0 }),
     isComponentDragging: ref(false),
     frozenTrackAssignments: ref(null),
+    dragThreshold: 8,
   };
 }
 

@@ -23,8 +23,6 @@ export interface WireRenderItem {
   teardrops: Array<string>;
   signalType: 'digital' | 'i2c' | 'power';
   compId?: string;
-  isActive?: boolean;
-  isDragged?: boolean;
 }
 
 export interface WireVisualState {
@@ -46,7 +44,6 @@ export interface UseCircuitCanvasOptions {
   components: Ref<CircuitComponentInstance[]>;
   selectedComponentId: Ref<string>;
   pinStates: Ref<Record<number, boolean>>;
-  routingMode: Ref<'auto' | 'manual'>;
   readonly: Ref<boolean>;
   onLayoutChange?: () => void;
 }
@@ -55,7 +52,6 @@ export interface CanvasContext {
   components: Ref<CircuitComponentInstance[]>;
   selectedComponentId: Ref<string>;
   pinStates: Ref<Record<number, boolean>>;
-  routingMode: Ref<'auto' | 'manual'>;
   readonly: Ref<boolean>;
   onLayoutChange?: () => void;
   layoutState: Ref<Record<string, LayoutPosition>>;
@@ -68,15 +64,6 @@ export interface CanvasContext {
   viewHeight: Ref<number>;
   peripheralScaleX: Ref<number>;
   peripheralScaleY: Ref<number>;
-  wireWaypoints: Ref<Record<string, Point[]>>;
-  draggedWireId: Ref<string | null>;
-  draggingWaypoint: Ref<{ wireId: string; index: number } | null>;
-  selectedWireId: Ref<string | null>;
-  dragThreshold: number;
-  wireDragStart: Ref<{ x: number; y: number }>;
-  pendingWaypoint: Ref<{ wireId: string; x: number; y: number } | null>;
-  draggingSegment: Ref<{ wireId: string; startIndex: number; endIndex: number; startOffset: number } | null>;
-  inactiveWireCache: Ref<Record<string, WireRenderItem>>;
   boardPosition: Ref<{ x: number; y: number }>;
   isDraggingBoard: Ref<boolean>;
   boardDragOffset: Ref<{ x: number; y: number }>;
@@ -89,4 +76,5 @@ export interface CanvasContext {
   componentDragOrigin: Ref<{ x: number; y: number }>;
   isComponentDragging: Ref<boolean>;
   frozenTrackAssignments: Ref<Map<string, import('@/routing/types').TrackAssignment> | null>;
+  dragThreshold: number;
 }

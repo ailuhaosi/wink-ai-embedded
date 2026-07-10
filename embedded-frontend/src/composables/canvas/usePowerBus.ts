@@ -26,7 +26,6 @@ export function usePowerBus(
     event.stopPropagation();
     const { x, y } = viewport.clientToCanvas(event.clientX, event.clientY);
     ctx.draggedPowerNodeId.value = powerType;
-    ctx.wireDragStart.value = { x, y };
 
     window.addEventListener('mousemove', handlePowerNodeMouseMove);
     window.addEventListener('mouseup', handlePowerNodeMouseUp);

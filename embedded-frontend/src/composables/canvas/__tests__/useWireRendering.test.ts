@@ -2,6 +2,7 @@ import '@/peripherals';
 import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
+import type { PinConnectionValue } from '@/types/peripheral-pins';
 import { registry } from '@/peripherals';
 import { boardPinOffsets, boardPowerPinOffsets, CANVAS_HEIGHT, CANVAS_WIDTH } from '../constants';
 import type { CanvasContext } from '../types';
@@ -65,7 +66,7 @@ function createMockLayout() {
 function makeComponent(
   type: string,
   id: string,
-  pinConnections: Record<string, number | string>,
+  pinConnections: Record<string, PinConnectionValue>,
 ): CircuitComponentInstance {
   return {
     id,

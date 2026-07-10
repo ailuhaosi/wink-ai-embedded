@@ -36,6 +36,19 @@ export const traces = ref<SimTrace[]>([]);
 
 let worker: Worker | null = null;
 
+/** Worker postMessage requires plain data — Vue reactive proxies cannot be cloned. */
+export function cloneFaultsConfig(faults: SimFaultsConfig): SimFaultsConfig {
+  return {
+    bounce_us: Number(faults.bounce_us),
+    warmup_us: Number(faults.warmup_us),
+    sample_interval_us: Number(faults.sample_interval_us),
+    adc_noise_v: Number(faults.adc_noise_v),
+    rc_tau_s: Number(faults.rc_tau_s),
+    i2c_drop_permil: Number(faults.i2c_drop_permil),
+    prng_seed: Number(faults.prng_seed),
+  };
+}
+
 export function initSimulation() {
   if (worker) {
     worker.terminate();
@@ -146,25 +159,29 @@ export function observePins(pins: number[], peripherals: PeripheralConfig[]) {
   if (worker) {
     const oledPeripheral = peripherals.find(p => p.type === 'oled');
     const ultrasonicPeripheral = peripherals.find(p => p.type === 'ultrasonic');
-    
-    const oledConfig = oledPeripheral ? {
-      sda: oledPeripheral.pinConnections.DATA,
-      scl: oledPeripheral.pinConnections.CLK
-    } : null;
-    
-    const ultrasonicConfig = ultrasonicPeripheral ? {
-      trig: ultrasonicPeripheral.pinConnections.TRIG,
-      echo: ultrasonicPeripheral.pinConnections.ECHO
-    } : null;
-    
+
+    const oledConfig = oledPeripheral
+      ? {
+          sda: oledPeripheral.pinConnections.DATA ?? null,
+          scl: oledPeripheral.pinConnections.CLK ?? null,
+        }
+      : null;
+
+    const ultrasonicConfig = ultrasonicPeripheral
+      ? {
+          trig: ultrasonicPeripheral.pinConnections.TRIG ?? null,
+          echo: ultrasonicPeripheral.pinConnections.ECHO ?? null,
+        }
+      : null;
+
     worker.postMessage({
       type: 'OBSERVE_PINS',
-      payload: { 
-        pins, 
-        oled: !!oledPeripheral, 
+      payload: {
+        pins: [...pins],
+        oled: !!oledPeripheral,
         oledConfig,
-        ultrasonicConfig 
-      }
+        ultrasonicConfig,
+      },
     });
   }
 }
@@ -173,7 +190,7 @@ export function setFaults(faults: SimFaultsConfig) {
   if (worker) {
     worker.postMessage({
       type: 'SET_FAULTS',
-      payload: faults
+      payload: cloneFaultsConfig(faults),
     });
   }
 }

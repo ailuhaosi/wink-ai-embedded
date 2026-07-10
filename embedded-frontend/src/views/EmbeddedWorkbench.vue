@@ -943,14 +943,32 @@ watch(activeComponents, (comps) => {
   observePins(pins, comps);
 }, { deep: true, immediate: true });
 
+function syncSimulationFromCanvas() {
+  const pins: number[] = [];
+  activeComponents.value.forEach((c) => {
+    Object.values(c.pinConnections).forEach((val) => {
+      if (typeof val === 'number') {
+        pins.push(val);
+      }
+    });
+  });
+  observePins(pins, activeComponents.value);
+  injectFaults();
+}
+
 // Simulation handlers
 function toggleSimulation() {
   if (isRunning.value) {
     pauseSimulation();
-  } else {
-    injectFaults();
-    startSimulation();
+    return;
   }
+  if (!isInitialized.value) {
+    const msg = simStore.initError ?? t('workbench.staticCheck.notInitialized');
+    showModeSwitchBanner(msg);
+    return;
+  }
+  syncSimulationFromCanvas();
+  startSimulation();
 }
 
 function handleReset() {
@@ -1117,8 +1135,11 @@ function onLoadTemplate(templateId: string) {
     ultrasonicDistance.value = 25;
   }
   modeStore.setDesignSubMode('structure-first');
-  // Re-initialize simulator to load the latest Wasm binary for this template
-  simStore.init();
+  // Template only changes canvas/manifest — do not restart the worker (that disables Play
+  // until INIT_DONE). Rebuild wasm via npm run wasm:build:* then refresh the page.
+  if (isInitialized.value) {
+    syncSimulationFromCanvas();
+  }
 }
 
 function confirmStopSimulation() {
@@ -1158,8 +1179,11 @@ function handleWindowResize() {
 }
 
 watch(isInitialized, (ready) => {
-  if (!ready || !pendingSimulateAfterInit.value) return;
-  void handleModeChange('simulate');
+  if (!ready) return;
+  syncSimulationFromCanvas();
+  if (pendingSimulateAfterInit.value) {
+    void handleModeChange('simulate');
+  }
 });
 
 onMounted(() => {

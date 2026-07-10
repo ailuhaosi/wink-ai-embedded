@@ -102,7 +102,9 @@
     "status": {
       "simulating": "仿真中",
       "standby": "待机",
-      "faulted": "故障"
+      "faulted": "故障",
+      "engineLoading": "引擎加载中",
+      "engineFailed": "引擎加载失败"
     },
     "project": {
       "save": "保存项目",

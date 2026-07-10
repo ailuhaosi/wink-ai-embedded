@@ -24,7 +24,7 @@ const simStore = useSimulationStore();
 const canvasStore = useCanvasStore();
 const projectStore = useProjectStore();
 const { current, designSubMode } = storeToRefs(modeStore);
-const { isInitialized, isRunning, isFaulted, clockUs, activeAppId } = storeToRefs(simStore);
+const { isInitialized, isRunning, isFaulted, clockUs, activeAppId, initError } = storeToRefs(simStore);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
@@ -91,7 +91,9 @@ function onProjectFileChange(event: Event) {
         <button type="button" class="replay-onboarding-btn" @click="emit('replayOnboarding')">
           {{ t('workbench.onboarding.replay') }}
         </button>
-        <span v-if="isFaulted" class="status-tag status-danger">{{ t('workbench.status.faulted') }}</span>
+        <span v-if="!isInitialized && initError" class="status-tag status-danger" :title="initError">{{ t('workbench.status.engineFailed') }}</span>
+        <span v-else-if="!isInitialized" class="status-tag status-warn">{{ t('workbench.status.engineLoading') }}</span>
+        <span v-else-if="isFaulted" class="status-tag status-danger">{{ t('workbench.status.faulted') }}</span>
         <span v-else-if="isRunning" class="status-tag status-success">{{ t('workbench.status.simulating') }}</span>
         <span v-else class="status-tag status-idle">{{ t('workbench.status.standby') }}</span>
       </div>
@@ -141,10 +143,22 @@ function onProjectFileChange(event: Event) {
         </template>
 
         <template v-else>
-          <button class="btn" :class="{ 'btn-running': isRunning }" :disabled="!isInitialized" @click="emit('toggleSimulation')">
+          <button
+            class="btn"
+            :class="{ 'btn-running': isRunning, 'btn-disabled-hint': !isInitialized && !isRunning }"
+            :disabled="!isInitialized"
+            :title="!isInitialized ? t('workbench.staticCheck.notInitialized') : undefined"
+            @click="emit('toggleSimulation')"
+          >
             <Play v-if="!isRunning" class="icon" />
             <Pause v-else class="icon" />
-            <span>{{ isRunning ? t('workbench.controls.pause') : t('workbench.controls.play') }}</span>
+            <span>{{
+              !isInitialized && !isRunning
+                ? t('workbench.status.engineLoading')
+                : isRunning
+                  ? t('workbench.controls.pause')
+                  : t('workbench.controls.play')
+            }}</span>
           </button>
           <button class="btn btn-secondary" :disabled="!isInitialized" @click="emit('reset')">
             <RotateCcw class="icon" /><span>{{ t('workbench.controls.reset') }}</span>
@@ -398,5 +412,10 @@ function onProjectFileChange(event: Event) {
 
 .status-success { background: rgba(0, 255, 136, 0.15); color: var(--color-accent); }
 .status-danger { background: rgba(255, 74, 90, 0.15); color: var(--color-danger); }
+.status-warn { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
 .status-idle { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
+.btn-disabled-hint:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 </style>

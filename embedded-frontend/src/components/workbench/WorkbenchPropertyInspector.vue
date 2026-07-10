@@ -22,9 +22,10 @@ const emit = defineEmits<{
 
 const rotationDegrees = [0, 90, 180, 270] as const;
 
-const inspectorExtra = computed(
-  () => registry.get(props.selectedComp?.type)?.inspectorExtra,
-);
+const inspectorExtra = computed(() => {
+  const type = props.selectedComp?.type;
+  return type ? registry.get(type)?.inspectorExtra : undefined;
+});
 </script>
 
 <template>

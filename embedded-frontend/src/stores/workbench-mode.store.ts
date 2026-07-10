@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { useLayoutStore } from './layout.store';
 import { useInspectorStore } from './inspector.store';
-import { useProjectStore, isManifestSchemaV2Enabled } from './project.store';
+import { useProjectStore } from './project.store';
 import { staticCheckService } from '../services/static-check.service';
 import type { StaticCheckContext } from '../services/static-check.service';
 import {
@@ -39,8 +39,6 @@ export async function canEnterSimulate(context?: StaticCheckContext): Promise<bo
 
   const staticResult = staticCheckService.runDetailed(checkContext);
   if (!staticResult.ok) return false;
-
-  if (!isManifestSchemaV2Enabled()) return true;
 
   const projectStore = useProjectStore();
   if (checkContext.components.length > 0) {
@@ -123,45 +121,43 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
         }
         this.lastStaticCheckIssues = [];
 
-        if (isManifestSchemaV2Enabled()) {
-          const projectStore = useProjectStore();
-          if (checkContext.components.length > 0) {
-            projectStore.syncFromCanvas(
-              checkContext.components.map(c => ({
-                id: c.id,
-                type: c.type,
-                name: c.name,
-                pinConnections: c.pinConnections as Record<string, number | 'VCC' | '3V3' | 'GND' | null>,
-                props: {},
-                rotation: 0,
-              })),
-            );
-          }
+        const projectStore = useProjectStore();
+        if (checkContext.components.length > 0) {
+          projectStore.syncFromCanvas(
+            checkContext.components.map(c => ({
+              id: c.id,
+              type: c.type,
+              name: c.name,
+              pinConnections: c.pinConnections as Record<string, number | 'VCC' | '3V3' | 'GND' | null>,
+              props: {},
+              rotation: 0,
+            })),
+          );
+        }
 
-          const results = validateBindings(
+        const results = validateBindings(
+          projectStore.manifest,
+          { targetMode: 'simulate', blockingOnly: true },
+          { catalog: deviceCatalog, pinResolver: bindingPinResolver },
+        );
+        const blocking = results.filter(r =>
+          isBlockingResult(r, { targetMode: 'simulate' }),
+        );
+
+        if (blocking.length > 0) {
+          this.lastBindingValidationIssues = blocking;
+          projectStore.lastValidationResults = validateBindings(
             projectStore.manifest,
-            { targetMode: 'simulate', blockingOnly: true },
+            { targetMode: 'simulate' },
             { catalog: deviceCatalog, pinResolver: bindingPinResolver },
           );
-          const blocking = results.filter(r =>
-            isBlockingResult(r, { targetMode: 'simulate' }),
-          );
-
-          if (blocking.length > 0) {
-            this.lastBindingValidationIssues = blocking;
-            projectStore.lastValidationResults = validateBindings(
-              projectStore.manifest,
-              { targetMode: 'simulate' },
-              { catalog: deviceCatalog, pinResolver: bindingPinResolver },
-            );
-            const layout = useLayoutStore();
-            layout.bottomPanelExpanded = true;
-            layout.activateBottomTab('diagnostics');
-            useInspectorStore().activateTab('diagnostics', true);
-            return false;
-          }
-          this.lastBindingValidationIssues = [];
+          const layout = useLayoutStore();
+          layout.bottomPanelExpanded = true;
+          layout.activateBottomTab('diagnostics');
+          useInspectorStore().activateTab('diagnostics', true);
+          return false;
         }
+        this.lastBindingValidationIssues = [];
       }
 
       if (target === 'design' && this.current === 'simulate') {

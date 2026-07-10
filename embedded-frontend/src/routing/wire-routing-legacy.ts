@@ -1,6 +1,6 @@
 /**
- * Legacy A* + channel fallback wire routing (pre-HCTR).
- * Preserved for rollback via VITE_LEGACY_WIRE_ROUTING or ?legacy_routing=true.
+ * HCTR conflict-resolution fallback (A* + channel routing).
+ * Used only when the primary HCTR path cannot resolve segment conflicts.
  */
 import {
   boardDescriptor,

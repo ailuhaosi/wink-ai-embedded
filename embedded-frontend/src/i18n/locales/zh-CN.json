@@ -50,9 +50,12 @@
     },
     "assets": {
       "boards": "开发板",
+      "boardDesc": "目标开发板",
       "peripherals": "外设",
       "mechanical": "机械",
+      "mechanicalDesc": "3D 零件",
       "environment": "环境",
+      "environmentDesc": "环境道具",
       "active": "活动对象",
       "noActive": "暂无活动设备"
     },
@@ -118,6 +121,10 @@
       "saved": "项目已保存",
       "loaded": "项目已加载",
       "loadError": "无法打开项目文件"
+    },
+    "canvas": {
+      "rotateCcw": "逆时针旋转 90°",
+      "rotateCw": "顺时针旋转 90°"
     }
   }
 }

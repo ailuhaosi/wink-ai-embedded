@@ -13,7 +13,6 @@ export type Severity = 'error' | 'warning' | 'info';
 export interface ValidationContext {
   targetMode: 'design' | 'simulate' | 'diagnose';
   blockingOnly?: boolean;
-  featureFlags?: { manifestSchemaV2: boolean };
 }
 
 export interface ValidationResult {

@@ -255,5 +255,3 @@ export {
   pointsToRoundedSvgPath,
   pointsToSvgPath,
 } from '../routing/wire-routing';
-
-export { generateFallbackOrthogonalPath } from '../routing/wire-routing-legacy';

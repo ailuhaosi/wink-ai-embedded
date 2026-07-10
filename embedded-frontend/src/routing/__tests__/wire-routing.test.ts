@@ -127,42 +127,4 @@ describe('wire-routing', () => {
     expect(result.path).toContain(`${waypoint.x}`);
     expect(result.path).toContain(`${waypoint.y}`);
   });
-
-  it('falls back to legacy when env flag is set', () => {
-    vi.stubEnv('VITE_LEGACY_WIRE_ROUTING', 'true');
-    const result = generateSmartPCBPath(
-      { x: 130, y: 150 },
-      { x: 317, y: 192 },
-      'down',
-      'left',
-      0,
-      defaultObstacles(),
-      new Map(),
-      'digital',
-      undefined,
-      BOARD_ORIGIN,
-    );
-    expect(result.path.length).toBeGreaterThan(0);
-    vi.unstubAllEnvs();
-  });
-
-  it('uT-12: falls back to legacy via URL query param', () => {
-    vi.stubGlobal('window', { location: { search: '?legacy_routing=true' } });
-
-    const result = generateSmartPCBPath(
-      { x: 130, y: 150 },
-      { x: 317, y: 192 },
-      'down',
-      'left',
-      0,
-      defaultObstacles(),
-      new Map(),
-      'digital',
-      undefined,
-      BOARD_ORIGIN,
-    );
-    expect(result.path.length).toBeGreaterThan(0);
-
-    vi.unstubAllGlobals();
-  });
 });

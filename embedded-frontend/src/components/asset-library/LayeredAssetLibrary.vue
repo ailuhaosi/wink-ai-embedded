@@ -5,7 +5,7 @@ import { storeToRefs } from 'pinia';
 import AccordionSection from './AccordionSection.vue';
 import AssetItem from './AssetItem.vue';
 import { deviceCatalog } from '@/catalog/device-catalog';
-import { useProjectStore, isManifestSchemaV2Enabled } from '@/stores/project.store';
+import { useProjectStore } from '@/stores/project.store';
 import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
 
 const emit = defineEmits<{
@@ -17,14 +17,13 @@ const projectStore = useProjectStore();
 const modeStore = useWorkbenchModeStore();
 const { manifest } = storeToRefs(projectStore);
 
-const featureWorld = computed(() => isManifestSchemaV2Enabled());
 const canDrag = computed(() => modeStore.canEditCircuit);
 
 const boards = computed(() =>
   deviceCatalog.listBoards().map(b => ({
     id: b.id,
     name: b.displayName,
-    desc: 'Target board',
+    desc: t('workbench.assets.boardDesc'),
   })),
 );
 
@@ -76,29 +75,23 @@ function activeDevices() {
       />
     </AccordionSection>
 
-    <AccordionSection
-      :title="t('workbench.assets.mechanical')"
-      :disabled="!featureWorld"
-    >
+    <AccordionSection :title="t('workbench.assets.mechanical')">
       <AssetItem
         v-for="m in mechanicalParts"
         :key="m.id"
         :name="m.displayName"
-        desc="3D part"
-        :disabled="!canDrag || !featureWorld"
+        :desc="t('workbench.assets.mechanicalDesc')"
+        :disabled="!canDrag"
       />
     </AccordionSection>
 
-    <AccordionSection
-      :title="t('workbench.assets.environment')"
-      :disabled="!featureWorld"
-    >
+    <AccordionSection :title="t('workbench.assets.environment')">
       <AssetItem
         v-for="e in envProps"
         :key="e.id"
         :name="e.displayName"
-        desc="Environment prop"
-        :disabled="!canDrag || !featureWorld"
+        :desc="t('workbench.assets.environmentDesc')"
+        :disabled="!canDrag"
       />
     </AccordionSection>
 

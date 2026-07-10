@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, toRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { RotateCcw, RotateCw } from 'lucide-vue-next';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import { useCircuitCanvas } from '@/composables/useCircuitCanvas';
@@ -17,6 +18,8 @@ const emit = defineEmits<{
 }>();
 const components = defineModel<CircuitComponentInstance[]>('components', { required: true });
 const selectedComponentId = defineModel<string>('selectedComponentId', { required: true });
+
+const { t } = useI18n();
 
 const readonlyRef = computed(() => props.readonly);
 const routingModeRef = computed(() => props.routingMode);
@@ -417,10 +420,10 @@ defineExpose({
       >
         <!-- Rotation toolbar (visible when selected) -->
         <div v-if="selectedComponentId === comp.id" class="rotation-toolbar" @mousedown.stop>
-          <button class="rot-btn" title="逆时针旋转 90°" @click.stop="rotateComponent(comp, -90)">
+          <button class="rot-btn" :title="t('workbench.canvas.rotateCcw')" @click.stop="rotateComponent(comp, -90)">
             <RotateCcw class="rot-icon" />
           </button>
-          <button class="rot-btn" title="顺时针旋转 90°" @click.stop="rotateComponent(comp, 90)">
+          <button class="rot-btn" :title="t('workbench.canvas.rotateCw')" @click.stop="rotateComponent(comp, 90)">
             <RotateCw class="rot-icon" />
           </button>
         </div>

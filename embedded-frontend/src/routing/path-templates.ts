@@ -1,7 +1,6 @@
 import { LOCAL_THRESHOLD } from './constants';
 import {
   buildBottomPinSideApproachPath,
-  classifyTopology,
   isPinNearBottomEdge,
   manhattanDistance,
   pinCoord,

@@ -16,6 +16,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "typecheck": "vue-tsc -b --pretty false",
+    "typecheck:strict-dirs": "tsc -p tsconfig.strict-dirs.json --noEmit",
     "wasm:build:oled": "node scripts/build-wasm.mjs oled_dashboard && node scripts/copy-wasm.js",
     "wasm:build:avoidance": "node scripts/build-wasm.mjs avoidance_car && node scripts/copy-wasm.js",
     "wasm:copy": "node scripts/copy-wasm.js",

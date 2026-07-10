@@ -187,34 +187,7 @@ describe('binding-validation B-01~B-10', () => {
   });
 });
 
-describe('a10 VITE_MANIFEST_SCHEMA_V2 gate', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_MANIFEST_SCHEMA_V2', 'false');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('project store skips validation when flag false', async () => {
-    vi.resetModules();
-    const { useProjectStore } = await import('@/stores/project.store');
-    const { createPinia, setActivePinia } = await import('pinia');
-    setActivePinia(createPinia());
-    const store = useProjectStore();
-    store.setManifest(AVOIDANCE_CAR_W2_MINIMAL);
-    expect(store.lastValidationResults).toEqual([]);
-    expect(store.getBlockingValidationResults()).toEqual([]);
-  });
-});
-
-describe('workbench binding gate with V2 enabled', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_MANIFEST_SCHEMA_V2', 'true');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
+describe('workbench binding gate', () => {
   it('blocks design → simulate when hc-sr04 lacks binding', async () => {
     vi.resetModules();
     const { createPinia, setActivePinia } = await import('pinia');

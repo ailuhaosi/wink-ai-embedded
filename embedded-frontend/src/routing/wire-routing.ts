@@ -33,19 +33,6 @@ export interface GenerateWirePathOptions {
   channelOccupancyMap?: Map<string, number>;
 }
 
-function useLegacyRouting(): boolean {
-  if (import.meta.env.VITE_LEGACY_WIRE_ROUTING === 'true') {
-    return true;
-  }
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('legacy_routing') === 'true') {
-      return true;
-    }
-  }
-  return false;
-}
-
 function warnDeprecatedChannelMap(channelOccupancyMap?: Map<string, number>): void {
   if (import.meta.env.DEV && channelOccupancyMap) {
     console.warn(
@@ -70,7 +57,7 @@ function resolveTopology(
   start: Point,
   end: Point,
   boardCenterX: number,
-  obstacles: Obstacle[],
+  _obstacles: Obstacle[],
   assignment: TrackAssignment,
   _startDir: CardinalDirection,
   _endDir: CardinalDirection,
@@ -86,21 +73,6 @@ function resolveTopology(
 
 export function generateWirePath(options: GenerateWirePathOptions): WirePathResult {
   warnDeprecatedChannelMap(options.channelOccupancyMap);
-
-  if (useLegacyRouting()) {
-    return generateSmartPCBPathLegacy(
-      options.start,
-      options.end,
-      options.startDir,
-      options.endDir,
-      options.lane ?? 0,
-      options.obstacles,
-      options.channelOccupancyMap,
-      options.signalType,
-      options.waypoints,
-      options.boardOrigin,
-    );
-  }
 
   if (options.start.x === options.end.x && options.start.y === options.end.y) {
     return buildWirePathResultFrom2D(

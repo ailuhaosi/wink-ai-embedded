@@ -67,10 +67,6 @@ function buildCanvasDeviceEntries(
   });
 }
 
-function isManifestSchemaV2Enabled(): boolean {
-  return import.meta.env.VITE_MANIFEST_SCHEMA_V2 === 'true';
-}
-
 interface ProjectState {
   manifest: EmbeddedProjectManifest;
   lastValidationResults: ValidationResult[];
@@ -87,7 +83,6 @@ export const useProjectStore = defineStore('project', {
   getters: {
     projectName: state => state.manifest.name,
     targetBoard: state => state.manifest.target.boardId,
-    manifestSchemaV2Enabled: () => isManifestSchemaV2Enabled(),
     bindingValidationSummary(state): { errors: number; warnings: number; infos: number } {
       const r = state.lastValidationResults;
       return {
@@ -219,10 +214,6 @@ export const useProjectStore = defineStore('project', {
     },
 
     refreshValidation(targetMode: 'design' | 'simulate' | 'diagnose') {
-      if (!isManifestSchemaV2Enabled()) {
-        this.lastValidationResults = [];
-        return;
-      }
       this.lastValidationResults = validateBindings(
         this.manifest,
         { targetMode },
@@ -233,7 +224,6 @@ export const useProjectStore = defineStore('project', {
     getBlockingValidationResults(
       targetMode: 'design' | 'simulate' | 'diagnose' = 'simulate',
     ): ValidationResult[] {
-      if (!isManifestSchemaV2Enabled()) return [];
       return validateBindings(
         this.manifest,
         { targetMode, blockingOnly: true },
@@ -246,5 +236,3 @@ export const useProjectStore = defineStore('project', {
     },
   },
 });
-
-export { isManifestSchemaV2Enabled };

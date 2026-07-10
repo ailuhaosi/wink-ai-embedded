@@ -191,8 +191,6 @@ export function routePathAroundObstacle(
   const expanded = expandObstacle(obstacle, OBSTACLE_PADDING);
   const edgeLeft = expanded.x;
   const edgeRight = expanded.x + expanded.width;
-  const _edgeTop = expanded.y;
-  const _edgeBottom = expanded.y + expanded.height;
 
   const result: Point[] = [points[0]];
 

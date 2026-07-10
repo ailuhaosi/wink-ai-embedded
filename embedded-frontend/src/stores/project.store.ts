@@ -27,6 +27,7 @@ import type { ValidationResult } from '@/services/binding-validation.service';
 import { suggestBindings } from '@/services/binding-suggest.service';
 import type { SuggestedBinding } from '@/services/binding-suggest.service';
 import { provisionImplicitCanvasBindings } from '@/services/canvas-binding-provision';
+import { isPowerConnection } from '@/constants/power-rail';
 
 function resolveBoardDeviceEntry(
   manifest: EmbeddedProjectManifest,
@@ -132,7 +133,7 @@ export const useProjectStore = defineStore('project', {
               buildConnectionFromPin(comp.id, pinName, value, this.manifest),
             );
           }
-          else if (value === 'VCC' || value === '3V3' || value === 'GND') {
+          else if (isPowerConnection(value)) {
             connections.push(
               buildConnectionFromPowerPin(comp.id, pinName, value, this.manifest),
             );

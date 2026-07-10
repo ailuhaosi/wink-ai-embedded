@@ -15,6 +15,7 @@ import {
 } from '@/types/peripheral-pins';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 import { parsePinRef } from '@/services/connection-normalize';
+import { isPowerConnection } from '@/constants/power-rail';
 
 export interface ManifestToCanvasResult {
   components: CircuitComponentInstance[];
@@ -71,7 +72,7 @@ function parseGpioPin(pinName: string): number | null {
 function parseBoardPinValue(pinName: string): PinConnectionValue | null {
   const gpio = parseGpioPin(pinName);
   if (gpio !== null) return gpio;
-  if (pinName === 'VCC' || pinName === '3V3' || pinName === 'GND') {
+  if (isPowerConnection(pinName)) {
     return pinName;
   }
   return null;

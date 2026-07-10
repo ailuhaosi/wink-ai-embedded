@@ -1,4 +1,5 @@
 import type { NetDefinition, PinConnectionValue } from '../types/peripheral-pins';
+import { PowerRail, isPowerConnection } from '@/constants/power-rail';
 
 export interface Point {
   x: number;
@@ -25,12 +26,12 @@ export function connectionMatchesNet(
     return typeof connection === 'number';
   }
   if (net.mode === 'vcc') {
-    return connection === 'VCC' || connection === '3V3';
+    return connection === PowerRail.VCC || connection === PowerRail.V3V3;
   }
   if (net.mode === 'gnd') {
-    return connection === 'GND';
+    return connection === PowerRail.GND;
   }
-  return connection === 'VCC' || connection === '3V3' || connection === 'GND';
+  return isPowerConnection(connection);
 }
 
 /** Logical connection value for a net (explicit pin entry or net default). */

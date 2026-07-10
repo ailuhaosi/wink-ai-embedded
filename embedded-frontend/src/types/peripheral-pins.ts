@@ -1,4 +1,8 @@
-export type PinConnectionValue = number | 'VCC' | '3V3' | 'GND' | null;
+import { POWER_RAIL_VALUES } from '@/constants/power-rail';
+import type { PowerRailValue } from '@/constants/power-rail';
+import { OLED_WIDTH, OLED_HEIGHT } from '@/constants/oled';
+
+export type PinConnectionValue = number | PowerRailValue | null;
 
 export interface PeripheralPinDef {
   name: string;
@@ -71,7 +75,7 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
     },
   },
   oled: {
-    size: { width: 128, height: 64 },
+    size: { width: OLED_WIDTH, height: OLED_HEIGHT },
     pins: [
       { name: 'DATA', description: 'I2C SDA', required: true, signalType: 'i2c', default: 21, relX: 40, relY: 75 },
       { name: 'CLK', description: 'I2C SCL', required: true, signalType: 'i2c', default: 22, relX: 50, relY: 75 },
@@ -88,7 +92,7 @@ export const peripheralConfigs: Record<string, PeripheralConfig> = {
 
 export const availableGPIOs = [12, 13, 14, 21, 22];
 
-export const powerOptions: ('VCC' | '3V3' | 'GND')[] = ['VCC', '3V3', 'GND'];
+export const powerOptions: PowerRailValue[] = [...POWER_RAIL_VALUES];
 
 export function getDefaultPinConnections(type: string): Record<string, PinConnectionValue> {
   const config = peripheralConfigs[type];

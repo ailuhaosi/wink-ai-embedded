@@ -13,8 +13,10 @@ import type { ValidationResult } from '../services/binding-validation.service';
 import { deviceCatalog } from '@/catalog/device-catalog';
 import { bindingPinResolver } from '@/services/binding-pin-resolver';
 import { useSimulationStore } from './simulation.store';
+import { WorkbenchModeId } from '@/constants/workbench-mode';
+import type { WorkbenchModeValue } from '@/constants/workbench-mode';
 
-export type WorkbenchMode = 'design' | 'simulate' | 'diagnose';
+export type WorkbenchMode = WorkbenchModeValue;
 export type DesignSubMode = 'circuit-first' | 'structure-first';
 
 interface ModeState {

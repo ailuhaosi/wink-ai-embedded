@@ -23,6 +23,7 @@ import { SegmentOccupancyRegistry } from '@/routing/segment-occupancy';
 import { buildTrackAssignments } from '@/routing/track-allocator';
 import { generateWirePath } from '@/routing/wire-routing';
 import type { RoutingChannel, TrackAssignment, WireRouteRequest } from '@/routing/types';
+import { POWER_RAIL_VALUES, isPowerConnection } from '@/constants/power-rail';
 
 interface LayoutPosition {
   x: number;
@@ -153,7 +154,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
 
   function syncPowerBusLayout(resetPositions = false) {
     const slots = getPowerNodeSlots(boardPosition.value.x, boardPosition.value.y);
-    const powerKeys = ['VCC', '3V3', 'GND'] as const;
+    const powerKeys = POWER_RAIL_VALUES;
     for (const key of powerKeys) {
       const node = commonPowerNodes.value[key];
       const pos = slots.positions[key];
@@ -860,7 +861,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     if (typeof connection === 'number') {
       return applyGpioFanout(getPinPosition(connection), fanout);
     }
-    if (connection === 'VCC' || connection === '3V3' || connection === 'GND') {
+    if (isPowerConnection(connection)) {
       const commonNode = commonPowerNodes.value[connection];
       if (commonNode) {
         return { x: commonNode.x, y: commonNode.y };
@@ -1024,7 +1025,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     const isPowerToBus
       = (netDef?.mode === 'vcc' || netDef?.mode === 'gnd' || signalType === 'power')
         && typeof connection === 'string'
-        && (connection === 'VCC' || connection === '3V3' || connection === 'GND')
+        && isPowerConnection(connection)
         && !(waypoints && waypoints.length > 0);
 
     if (isPowerToBus) {

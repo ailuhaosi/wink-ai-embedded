@@ -1,4 +1,5 @@
 import type { PeripheralDefinition, PeripheralPropsSchema } from '../types';
+import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
 
 const ultrasonicProps: PeripheralPropsSchema = {
@@ -23,5 +24,6 @@ export const ultrasonicDefinition: PeripheralDefinition = {
     { name: 'GND', description: 'Ground', required: true, signalType: 'power', defaultConnection: 'GND' },
   ],
   props: ultrasonicProps,
+  canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
 };

@@ -1,5 +1,6 @@
 import { OLED_WIDTH, OLED_HEIGHT } from '@/constants/oled';
 import type { PeripheralDefinition } from '../types';
+import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
 
 export const oledDefinition: PeripheralDefinition = {
@@ -19,5 +20,6 @@ export const oledDefinition: PeripheralDefinition = {
     { name: 'GND', description: 'Ground', required: true, signalType: 'power', defaultConnection: 'GND' },
   ],
   props: {},
+  canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
 };

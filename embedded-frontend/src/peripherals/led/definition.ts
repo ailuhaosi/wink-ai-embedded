@@ -1,4 +1,5 @@
 import type { PeripheralDefinition, PeripheralPropsSchema } from '../types';
+import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
 
 const ledProps: PeripheralPropsSchema = {
@@ -36,5 +37,6 @@ export const ledDefinition: PeripheralDefinition = {
     { name: 'C', description: 'Cathode (-)', required: true, signalType: 'power', defaultConnection: 'GND' },
   ],
   props: ledProps,
+  canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
 };

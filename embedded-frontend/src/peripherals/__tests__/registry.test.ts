@@ -123,5 +123,10 @@ describe('built-in peripheral packages', () => {
     expect(registry.get('button')?.world?.component).toBeTruthy();
     expect(registry.get('oled')?.world?.component).toBeTruthy();
     expect(registry.get('ultrasonic')?.world?.component).toBeTruthy();
+
+    expect(registry.get('led')?.canvas?.component).toBeTruthy();
+    expect(registry.get('button')?.canvas?.component).toBeTruthy();
+    expect(registry.get('oled')?.canvas?.component).toBeTruthy();
+    expect(registry.get('ultrasonic')?.canvas?.component).toBeTruthy();
   });
 });

@@ -1,4 +1,5 @@
 import type { PeripheralDefinition, PeripheralPropsSchema } from '../types';
+import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
 
 const buttonProps: PeripheralPropsSchema = {
@@ -38,5 +39,6 @@ export const buttonDefinition: PeripheralDefinition = {
     { name: '2.r', description: 'Right pin 2', required: false, signalType: 'digital', defaultConnection: null },
   ],
   props: buttonProps,
+  canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
 };

@@ -38,6 +38,7 @@ interface SimulationState {
   oledFb: Uint8Array | null;
   logs: Array<{ level: string; message: string; timestamp: number }>;
   traces: SimTrace[];
+  activeAppId: string;
 }
 
 let runtimeSyncStarted = false;
@@ -55,6 +56,7 @@ export const useSimulationStore = defineStore('simulation', {
     oledFb: null,
     logs: [],
     traces: [],
+    activeAppId: 'unknown',
   }),
 
   getters: {
@@ -103,9 +105,24 @@ export const useSimulationStore = defineStore('simulation', {
       }, { immediate: true, deep: true });
     },
 
+    async fetchActiveAppId() {
+      try {
+        const res = await fetch(`/wasm/wasm-app-id.txt?t=${Date.now()}`);
+        if (res.ok) {
+          this.activeAppId = (await res.text()).trim();
+        } else {
+          this.activeAppId = 'unknown';
+        }
+      } catch (e) {
+        console.warn('Failed to fetch active wasm app id:', e);
+        this.activeAppId = 'unknown';
+      }
+    },
+
     init() {
       this.ensureRuntimeSync();
       initSimulation();
+      void this.fetchActiveAppId();
     },
 
     toggle() {

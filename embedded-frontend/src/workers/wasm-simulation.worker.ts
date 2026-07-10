@@ -326,10 +326,17 @@ self.onmessage = async (e: MessageEvent<any>) => {
     }
       
     case 'SET_ULTRASONIC_DISTANCE': {
-      const { pin, distanceCm } = payload;
-      ultrasonicDistances.set(pin, distanceCm);
+      const { trigPin, echoPin, distanceCm } = payload as {
+        trigPin: number;
+        echoPin: number;
+        distanceCm: number;
+      };
+      ultrasonicDistances.set(trigPin, distanceCm);
+      ultrasonicDistances.set(echoPin, distanceCm);
       if (realModule && hasEmscriptenExport(realModule, 'pal_wasm_set_ultrasonic_distance')) {
-        callEmscriptenExport(realModule, 'pal_wasm_set_ultrasonic_distance', pin, distanceCm);
+        // echoPin first: C-side dal_ultrasonic reads echo_pin via pal_gpio_pulse_in
+        callEmscriptenExport(realModule, 'pal_wasm_set_ultrasonic_distance', echoPin, distanceCm);
+        callEmscriptenExport(realModule, 'pal_wasm_set_ultrasonic_distance', trigPin, distanceCm);
       }
       break;
     }

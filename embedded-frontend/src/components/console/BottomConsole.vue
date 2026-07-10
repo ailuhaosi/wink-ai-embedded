@@ -5,7 +5,7 @@ import { storeToRefs } from 'pinia';
 import { useLayoutStore } from '@/stores/layout.store';
 import { useSimulationStore } from '@/stores/simulation.store';
 import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
-import { Activity, Terminal, GitBranch, Hammer, ShieldCheck } from 'lucide-vue-next';
+import { Activity, Terminal, GitBranch, Hammer, ShieldCheck, Stethoscope } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const layoutStore = useLayoutStore();
@@ -13,7 +13,7 @@ const simStore = useSimulationStore();
 const modeStore = useWorkbenchModeStore();
 const { bottomPanelActiveTab, bottomPanelHeight, bottomPanelExpanded } = storeToRefs(layoutStore);
 const { traces, logs } = storeToRefs(simStore);
-const { lastStaticCheckIssues } = storeToRefs(modeStore);
+const { lastStaticCheckIssues, lastBindingValidationIssues } = storeToRefs(modeStore);
 
 const tabs = computed(() => [
   { id: 'trace' as const, label: t('workbench.console.trace'), icon: Activity },
@@ -21,6 +21,7 @@ const tabs = computed(() => [
   { id: 'logs' as const, label: t('workbench.console.logs'), icon: Terminal },
   { id: 'build' as const, label: t('workbench.console.build'), icon: Hammer },
   { id: 'static-check' as const, label: t('workbench.console.staticCheck'), icon: ShieldCheck },
+  { id: 'diagnostics' as const, label: t('workbench.console.diagnostics'), icon: Stethoscope },
 ]);
 
 let resizeStartY = 0;
@@ -108,6 +109,18 @@ function formatTime(val: number): string {
         <ul v-else class="issue-list">
           <li v-for="issue in lastStaticCheckIssues" :key="issue.id" class="issue-item">
             {{ issue.id === 'sim-init-failed' ? issue.message : t(issue.message) }}
+          </li>
+        </ul>
+      </div>
+
+      <div v-show="bottomPanelActiveTab === 'diagnostics'" class="console">
+        <div v-if="lastBindingValidationIssues.length === 0" class="empty-console">
+          {{ t('workbench.bindings.noBlockingIssues') }}
+        </div>
+        <ul v-else class="issue-list">
+          <li v-for="(issue, idx) in lastBindingValidationIssues" :key="`${issue.ruleId}-${idx}`" class="issue-item">
+            [{{ issue.ruleId }}] {{ issue.message }}
+            <span v-if="issue.fix" class="issue-fix"> — {{ issue.fix }}</span>
           </li>
         </ul>
       </div>
@@ -210,6 +223,7 @@ function formatTime(val: number): string {
 
 .issue-list { list-style: none; padding: 0; margin: 0; }
 .issue-item { color: var(--color-danger); padding: 4px 0; }
+.issue-fix { color: var(--text-muted); font-size: 11px; }
 
 .placeholder-panel {
   color: var(--text-muted);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Cpu, Play, Pause, RotateCcw, Zap, MousePointer2, LayoutGrid } from 'lucide-vue-next';
+import { Cpu, Play, Pause, RotateCcw, Zap, MousePointer2, LayoutGrid, FolderOpen, Save } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
 import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
 import { useSimulationStore } from '@/stores/simulation.store';
@@ -13,6 +14,8 @@ const emit = defineEmits<{
   reset: [];
   tidy: [];
   replayOnboarding: [];
+  saveProject: [];
+  openProject: [file: File];
 }>();
 
 const { t } = useI18n();
@@ -21,7 +24,9 @@ const simStore = useSimulationStore();
 const canvasStore = useCanvasStore();
 const projectStore = useProjectStore();
 const { current, designSubMode } = storeToRefs(modeStore);
-const { isInitialized, isRunning, isFaulted, clockUs } = storeToRefs(simStore);
+const { isInitialized, isRunning, isFaulted, clockUs, activeAppId } = storeToRefs(simStore);
+
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 const modes = [
   { id: 'design' as const, label: t('workbench.mode.design'), desc: t('workbench.mode.designDesc') },
@@ -41,6 +46,19 @@ async function onModeClick(mode: 'design' | 'simulate' | 'diagnose') {
 function setSubMode(subMode: 'circuit-first' | 'structure-first') {
   modeStore.setDesignSubMode(subMode);
 }
+
+function triggerOpenProject() {
+  fileInputRef.value?.click();
+}
+
+function onProjectFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) {
+    emit('openProject', file);
+  }
+  input.value = '';
+}
 </script>
 
 <template>
@@ -52,8 +70,24 @@ function setSubMode(subMode: 'circuit-first' | 'structure-first') {
         <span class="project-name">{{ projectStore.projectName }}</span>
         <span class="badge font-mono">Target: {{ projectStore.targetBoard }}</span>
         <span class="badge font-mono">Safety: {{ projectStore.safetyLevel }}</span>
+        <span class="badge font-mono badge--wasm">Wasm App: {{ activeAppId }}</span>
       </div>
       <div class="status-indicators">
+        <button type="button" class="project-io-btn" @click="emit('saveProject')">
+          <Save class="icon" />
+          <span>{{ t('workbench.project.save') }}</span>
+        </button>
+        <button type="button" class="project-io-btn" @click="triggerOpenProject">
+          <FolderOpen class="icon" />
+          <span>{{ t('workbench.project.open') }}</span>
+        </button>
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".json,application/json"
+          class="project-file-input"
+          @change="onProjectFileChange"
+        />
         <button type="button" class="replay-onboarding-btn" @click="emit('replayOnboarding')">
           {{ t('workbench.onboarding.replay') }}
         </button>
@@ -178,6 +212,12 @@ function setSubMode(subMode: 'circuit-first' | 'structure-first') {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-muted);
+}
+
+.badge--wasm {
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
 .mode-switcher {
@@ -311,6 +351,28 @@ function setSubMode(subMode: 'circuit-first' | 'structure-first') {
 .time-display { color: var(--color-highlight); }
 
 .status-indicators { display: flex; align-items: center; gap: 8px; }
+
+.project-io-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.project-io-btn:hover {
+  color: var(--color-highlight);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.project-file-input {
+  display: none;
+}
 
 .replay-onboarding-btn {
   border: none;

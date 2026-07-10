@@ -1,6 +1,15 @@
 import { defineStore } from 'pinia';
 import { useLayoutStore } from './layout.store';
+import { useInspectorStore } from './inspector.store';
+import { useProjectStore, isManifestSchemaV2Enabled } from './project.store';
 import { staticCheckService, type StaticCheckContext } from '../services/static-check.service';
+import {
+  isBlockingResult,
+  validateBindings,
+  type ValidationResult,
+} from '../services/binding-validation.service';
+import { deviceCatalog } from '@/catalog/device-catalog';
+import { bindingPinResolver } from '@/services/binding-pin-resolver';
 import { useSimulationStore } from './simulation.store';
 
 export type WorkbenchMode = 'design' | 'simulate' | 'diagnose';
@@ -13,6 +22,45 @@ interface ModeState {
   userOverriddenRatio: boolean;
   pendingSwitchTarget: WorkbenchMode | null;
   lastStaticCheckIssues: ReturnType<typeof staticCheckService.runDetailed>['issues'];
+  lastBindingValidationIssues: ValidationResult[];
+}
+
+export async function canEnterSimulate(context?: StaticCheckContext): Promise<boolean> {
+  const simStore = useSimulationStore();
+  const checkContext: StaticCheckContext = context ?? {
+    isSimulationReady: simStore.isInitialized,
+    initError: simStore.initError,
+    components: [],
+  };
+
+  const staticResult = staticCheckService.runDetailed(checkContext);
+  if (!staticResult.ok) return false;
+
+  if (!isManifestSchemaV2Enabled()) return true;
+
+  const projectStore = useProjectStore();
+  if (checkContext.components.length > 0) {
+    projectStore.syncFromCanvas(
+      checkContext.components.map((c) => ({
+        id: c.id,
+        type: c.type,
+        name: c.name,
+        pinConnections: c.pinConnections as Record<
+          string,
+          number | 'VCC' | '3V3' | 'GND' | null
+        >,
+        props: {},
+        rotation: 0,
+      })),
+    );
+  }
+  const results = validateBindings(
+    projectStore.manifest,
+    { targetMode: 'simulate', blockingOnly: true },
+    { catalog: deviceCatalog, pinResolver: bindingPinResolver },
+  );
+  const blocking = results.filter((r) => isBlockingResult(r, { targetMode: 'simulate' }));
+  return blocking.length === 0;
 }
 
 export const useWorkbenchModeStore = defineStore('workbench-mode', {
@@ -23,6 +71,7 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
     userOverriddenRatio: false,
     pendingSwitchTarget: null,
     lastStaticCheckIssues: [],
+    lastBindingValidationIssues: [],
   }),
 
   getters: {
@@ -51,9 +100,6 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
     ): Promise<boolean> {
       if (target === this.current) return true;
 
-      // W1 gate: entering simulate from design (or diagnose→simulate after edit) needs static check.
-      // diagnose → simulate is allowed without re-check only when already validated earlier;
-      // still run check if context is provided so UI stays consistent.
       if (target === 'simulate' && this.current !== 'simulate') {
         const simStore = useSimulationStore();
         const checkContext: StaticCheckContext = context ?? {
@@ -61,15 +107,57 @@ export const useWorkbenchModeStore = defineStore('workbench-mode', {
           initError: simStore.initError,
           components: [],
         };
-        const result = staticCheckService.runDetailed(checkContext);
-        if (!result.ok) {
-          this.lastStaticCheckIssues = result.issues;
+
+        const staticResult = staticCheckService.runDetailed(checkContext);
+        if (!staticResult.ok) {
+          this.lastStaticCheckIssues = staticResult.issues;
+          this.lastBindingValidationIssues = [];
           const layout = useLayoutStore();
           layout.bottomPanelExpanded = true;
           layout.bottomPanelActiveTab = 'static-check';
           return false;
         }
         this.lastStaticCheckIssues = [];
+
+        if (isManifestSchemaV2Enabled()) {
+          const projectStore = useProjectStore();
+          if (checkContext.components.length > 0) {
+            projectStore.syncFromCanvas(
+              checkContext.components.map((c) => ({
+                id: c.id,
+                type: c.type,
+                name: c.name,
+                pinConnections: c.pinConnections as Record<string, number | 'VCC' | '3V3' | 'GND' | null>,
+                props: {},
+                rotation: 0,
+              })),
+            );
+          }
+
+          const results = validateBindings(
+            projectStore.manifest,
+            { targetMode: 'simulate', blockingOnly: true },
+            { catalog: deviceCatalog, pinResolver: bindingPinResolver },
+          );
+          const blocking = results.filter((r) =>
+            isBlockingResult(r, { targetMode: 'simulate' }),
+          );
+
+          if (blocking.length > 0) {
+            this.lastBindingValidationIssues = blocking;
+            projectStore.lastValidationResults = validateBindings(
+              projectStore.manifest,
+              { targetMode: 'simulate' },
+              { catalog: deviceCatalog, pinResolver: bindingPinResolver },
+            );
+            const layout = useLayoutStore();
+            layout.bottomPanelExpanded = true;
+            layout.activateBottomTab('diagnostics');
+            useInspectorStore().activateTab('diagnostics', true);
+            return false;
+          }
+          this.lastBindingValidationIssues = [];
+        }
       }
 
       if (target === 'design' && this.current === 'simulate') {

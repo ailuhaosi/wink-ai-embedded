@@ -1,18 +1,201 @@
 import { defineStore } from 'pinia';
+import type { CircuitComponentInstance } from '@/types/circuit-component';
+import type {
+  ConnectionEntry,
+  EmbeddedProjectManifest,
+  SensorBinding,
+  ActuatorBinding,
+} from '@/types/manifest-v2';
+import { createEmptyManifestV2 } from '@/types/manifest-v2';
+import { migrateManifest } from '@/services/manifest-migration';
+import {
+  buildConnectionFromPin,
+  buildConnectionFromPowerPin,
+} from '@/services/binding-pin-resolver';
+import {
+  modelIdForCanvasType,
+  deviceCatalog,
+} from '@/catalog/device-catalog';
+import {
+  validateBindings,
+  type ValidationResult,
+} from '@/services/binding-validation.service';
+import { bindingPinResolver } from '@/services/binding-pin-resolver';
+import { DEFAULT_ROUTING } from '@/services/connection-normalize';
+import { suggestBindings, type SuggestedBinding } from '@/services/binding-suggest.service';
+import { provisionImplicitCanvasBindings } from '@/services/canvas-binding-provision';
 
-/** W1 shell — W2 will connect Manifest v2 */
+function isManifestSchemaV2Enabled(): boolean {
+  return import.meta.env.VITE_MANIFEST_SCHEMA_V2 === 'true';
+}
+
 interface ProjectState {
-  projectName: string;
-  targetBoard: string;
+  manifest: EmbeddedProjectManifest;
+  lastValidationResults: ValidationResult[];
   safetyLevel: string;
-  mechanicalParts: unknown[];
 }
 
 export const useProjectStore = defineStore('project', {
   state: (): ProjectState => ({
-    projectName: 'Untitled Project',
-    targetBoard: 'ESP32-S3',
+    manifest: createEmptyManifestV2(),
+    lastValidationResults: [],
     safetyLevel: 'S2',
-    mechanicalParts: [],
   }),
+
+  getters: {
+    projectName: (state) => state.manifest.name,
+    targetBoard: (state) => state.manifest.target.boardId,
+    manifestSchemaV2Enabled: () => isManifestSchemaV2Enabled(),
+    bindingValidationSummary(state): { errors: number; warnings: number; infos: number } {
+      const r = state.lastValidationResults;
+      return {
+        errors: r.filter((x) => x.severity === 'error').length,
+        warnings: r.filter((x) => x.severity === 'warning').length,
+        infos: r.filter((x) => x.severity === 'info').length,
+      };
+    },
+  },
+
+  actions: {
+    loadManifest(raw: unknown) {
+      this.manifest = migrateManifest(raw);
+      this.refreshValidation('design');
+    },
+
+    applyManifestPatch(patch: Partial<EmbeddedProjectManifest>) {
+      this.manifest = migrateManifest({ ...this.manifest, ...patch });
+      this.refreshValidation('design');
+    },
+
+    setManifest(manifest: EmbeddedProjectManifest) {
+      this.manifest = migrateManifest(manifest);
+      this.refreshValidation('design');
+    },
+
+    syncFromCanvas(components: CircuitComponentInstance[]) {
+      const boardId = this.manifest.target.boardId;
+      const devices = components.map((c) => ({
+        componentId: c.id,
+        modelId: modelIdForCanvasType(c.type),
+        displayName: c.name,
+        rotation: c.rotation,
+      }));
+
+      const connections: ConnectionEntry[] = [];
+      for (const comp of components) {
+        for (const [pinName, value] of Object.entries(comp.pinConnections)) {
+          if (typeof value === 'number') {
+            connections.push(
+              buildConnectionFromPin(comp.id, pinName, value, this.manifest),
+            );
+          } else if (value === 'VCC' || value === '3V3' || value === 'GND') {
+            connections.push(
+              buildConnectionFromPowerPin(comp.id, pinName, value, this.manifest),
+            );
+          }
+        }
+      }
+
+      const boardEntry = deviceCatalog.getBoard(boardId);
+      if (boardEntry && !devices.some((d) => d.componentId === 'esp32')) {
+        // Keep board device if canvas doesn't model it explicitly
+      }
+
+      this.manifest = provisionImplicitCanvasBindings(
+        {
+          ...this.manifest,
+          devices,
+          connections,
+        },
+        components,
+      );
+      this.refreshValidation('design');
+    },
+
+    addSensorBinding(binding: SensorBinding) {
+      if (!this.manifest.bindings) {
+        this.manifest.bindings = { actuators: [], sensors: [], displays: [] };
+      }
+      this.manifest.bindings.sensors.push(binding);
+      this.refreshValidation('design');
+    },
+
+    addActuatorBinding(binding: ActuatorBinding) {
+      if (!this.manifest.bindings) {
+        this.manifest.bindings = { actuators: [], sensors: [], displays: [] };
+      }
+      this.manifest.bindings.actuators.push(binding);
+      this.refreshValidation('design');
+    },
+
+    removeBinding(bindingId: string) {
+      if (!this.manifest.bindings) return;
+      this.manifest.bindings.actuators = this.manifest.bindings.actuators.filter(
+        (b) => b.bindingId !== bindingId,
+      );
+      this.manifest.bindings.sensors = this.manifest.bindings.sensors.filter(
+        (b) => b.bindingId !== bindingId,
+      );
+      this.manifest.bindings.displays = this.manifest.bindings.displays.filter(
+        (b) => b.bindingId !== bindingId,
+      );
+      this.refreshValidation('design');
+    },
+
+    applySuggestion(suggestion: SuggestedBinding) {
+      const bindingId = `bind_${Date.now()}`;
+      if (suggestion.suggestedMapping.type === 'raycast_range_cm') {
+        this.addSensorBinding({
+          bindingId,
+          deviceComponentId: suggestion.deviceComponentId,
+          mechanicalPartId: suggestion.mechanicalPartId,
+          mapping: suggestion.suggestedMapping,
+        });
+      } else if (
+        suggestion.suggestedMapping.type === 'pwm_to_angular_velocity' ||
+        suggestion.suggestedMapping.type === 'pwm_to_linear_position' ||
+        suggestion.suggestedMapping.type === 'gpio_to_binary_state' ||
+        suggestion.suggestedMapping.type === 'pwm_to_brightness' ||
+        suggestion.suggestedMapping.type === 'gpio_to_emissive'
+      ) {
+        this.addActuatorBinding({
+          bindingId,
+          deviceComponentId: suggestion.deviceComponentId,
+          pin: suggestion.pin ?? 'PWM_LEFT',
+          mechanicalJointId: suggestion.mechanicalJointId,
+          mechanicalPartId: suggestion.mechanicalPartId,
+          mapping: suggestion.suggestedMapping,
+        });
+      }
+    },
+
+    refreshValidation(targetMode: 'design' | 'simulate' | 'diagnose') {
+      if (!isManifestSchemaV2Enabled()) {
+        this.lastValidationResults = [];
+        return;
+      }
+      this.lastValidationResults = validateBindings(
+        this.manifest,
+        { targetMode },
+        { catalog: deviceCatalog, pinResolver: bindingPinResolver },
+      );
+    },
+
+    getBlockingValidationResults(
+      targetMode: 'design' | 'simulate' | 'diagnose' = 'simulate',
+    ): ValidationResult[] {
+      if (!isManifestSchemaV2Enabled()) return [];
+      return validateBindings(
+        this.manifest,
+        { targetMode, blockingOnly: true },
+        { catalog: deviceCatalog, pinResolver: bindingPinResolver },
+      );
+    },
+
+    getSuggestions(): SuggestedBinding[] {
+      return suggestBindings(this.manifest);
+    },
+  },
 });
+
+export { isManifestSchemaV2Enabled };

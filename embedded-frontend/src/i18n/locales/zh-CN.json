@@ -45,11 +45,32 @@
       "causal": "因果链",
       "logs": "日志",
       "build": "构建",
-      "staticCheck": "静态检查"
+      "staticCheck": "静态检查",
+      "diagnostics": "绑定诊断"
+    },
+    "assets": {
+      "boards": "开发板",
+      "peripherals": "外设",
+      "mechanical": "机械",
+      "environment": "环境",
+      "active": "活动对象",
+      "noActive": "暂无活动设备"
+    },
+    "bindings": {
+      "title": "绑定检查器",
+      "actuators": "执行器",
+      "sensors": "传感器",
+      "device": "设备",
+      "pin": "引脚",
+      "pins": "引脚",
+      "pinsUnresolved": "未解析",
+      "autoSuggest": "自动建议绑定",
+      "noBlockingIssues": "无阻塞性绑定问题"
     },
     "world": {
       "title": "3D 产品世界",
       "subtitle": "拖入底盘零件，开始搭建你的产品",
+      "templateOledDashboard": "OLED 仪表盘演示",
       "templateAvoidance": "避障小车模板",
       "templateTempAlarm": "温感报警模板",
       "hint": "或使用上方模板快速开始（W2 起可从左侧 Mechanical 库拖入零件）",
@@ -82,6 +103,13 @@
       "simulating": "仿真中",
       "standby": "待机",
       "faulted": "故障"
+    },
+    "project": {
+      "save": "保存项目",
+      "open": "打开项目",
+      "saved": "项目已保存",
+      "loaded": "项目已加载",
+      "loadError": "无法打开项目文件"
     }
   }
 }

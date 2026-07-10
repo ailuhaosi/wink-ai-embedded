@@ -67,10 +67,10 @@ function closeOverlay() {
     <div v-if="!isIconMode || !rightPanelCollapsed" class="inspector-content">
       <div v-if="activeTab === 'circuit'"><slot name="circuit" /></div>
       <div v-else-if="activeTab === 'mechanical'" class="placeholder">{{ t('workbench.world.placeholderW3a') }}</div>
-      <div v-else-if="activeTab === 'bindings'" class="placeholder">{{ t('workbench.world.placeholderW2') }}</div>
+      <div v-else-if="activeTab === 'bindings'"><slot name="bindings" /></div>
       <div v-else-if="activeTab === 'environment'" class="placeholder">{{ t('workbench.world.placeholderW4') }}</div>
       <div v-else-if="activeTab === 'faults'"><slot name="faults" /></div>
-      <div v-else-if="activeTab === 'diagnostics'" class="placeholder">{{ t('workbench.world.placeholderW5') }}</div>
+      <div v-else-if="activeTab === 'diagnostics'"><slot name="diagnostics" /></div>
     </div>
 
     <div v-if="isIconMode && !rightPanelCollapsed" class="overlay-backdrop" @click="closeOverlay" />

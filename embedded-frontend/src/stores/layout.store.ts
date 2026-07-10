@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import type { WorkbenchMode } from './workbench-mode.store';
 import { useWorkbenchModeStore } from './workbench-mode.store';
 
-export type BottomPanelTab = 'trace' | 'causal' | 'logs' | 'build' | 'static-check';
+export type BottomPanelTab = 'trace' | 'causal' | 'logs' | 'build' | 'static-check' | 'diagnostics';
 export type RightPanelMode = 'full' | 'icon';
 export type SplitDirection = 'horizontal' | 'vertical';
 export type PipPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';

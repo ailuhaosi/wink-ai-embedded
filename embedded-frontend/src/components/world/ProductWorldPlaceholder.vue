@@ -15,6 +15,9 @@ const { t } = useI18n();
       <h3>{{ t('workbench.world.title') }}</h3>
       <p>{{ t('workbench.world.subtitle') }}</p>
       <div class="quick-actions">
+        <button @click="emit('loadTemplate', 'tpl_oled_dashboard')">
+          📟 {{ t('workbench.world.templateOledDashboard') }}
+        </button>
         <button @click="emit('loadTemplate', 'tpl_avoidance_car')">
           🚗 {{ t('workbench.world.templateAvoidance') }}
         </button>

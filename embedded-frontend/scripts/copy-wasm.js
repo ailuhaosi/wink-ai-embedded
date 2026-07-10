@@ -38,4 +38,8 @@ if (!success) {
   console.warn('  cmake --build build-wasm\n');
 } else {
   console.log(`✓ WASM simulation assets copied successfully!`);
+  const appIdPath = path.join(destDir, 'wasm-app-id.txt');
+  if (fs.existsSync(appIdPath)) {
+    console.log(`Active wasm app id: ${fs.readFileSync(appIdPath, 'utf8').trim()}`);
+  }
 }

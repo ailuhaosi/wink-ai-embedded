@@ -7,6 +7,8 @@
       @reset="handleReset"
       @tidy="tidyRouting"
       @replay-onboarding="replayOnboarding"
+      @save-project="onSaveProject"
+      @open-project="onOpenProject"
     />
 
     <!-- Legacy Top Control Bar -->
@@ -95,8 +97,9 @@
     </header>
 
     <div class="main-layout" :class="{ 'left-collapsed': !legacyMode && layoutStore.leftPanelCollapsed }">
-      <!-- Left Panel: Device Catalog -->
+      <!-- Left Panel: Layered Asset Library (W2) or legacy catalog -->
       <aside v-show="legacyMode || !layoutStore.leftPanelCollapsed" class="panel left-panel">
+        <template v-if="legacyMode">
         <div class="panel-header">
           <Layers class="panel-header-icon" />
           <span>Device Library</span>
@@ -137,6 +140,16 @@
             </div>
           </div>
         </div>
+        </template>
+        <template v-else>
+          <div class="panel-header">
+            <Layers class="panel-header-icon" />
+            <span>{{ t('workbench.assets.peripherals') }}</span>
+          </div>
+          <div class="panel-content scrollable">
+            <LayeredAssetLibrary @add-peripheral="addFromLibrary" />
+          </div>
+        </template>
       </aside>
 
       <!-- Center Workspace (Canvas and Visuals) -->
@@ -350,6 +363,12 @@
               </div>
             </div>
           </div>
+        </template>
+        <template #bindings>
+          <BindingsInspector />
+        </template>
+        <template #diagnostics>
+          <BindingsInspector />
         </template>
         <template #faults>
           <div class="inspector-section fault-section">
@@ -661,7 +680,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { 
@@ -678,6 +697,8 @@ import SplitPane from '@/components/layout/SplitPane.vue';
 import ConfirmDialog from '@/components/layout/ConfirmDialog.vue';
 import BottomConsole from '@/components/console/BottomConsole.vue';
 import ContextInspector from '@/components/inspector/ContextInspector.vue';
+import BindingsInspector from '@/components/inspector/BindingsInspector.vue';
+import LayeredAssetLibrary from '@/components/asset-library/LayeredAssetLibrary.vue';
 import ProductWorldPlaceholder from '@/components/world/ProductWorldPlaceholder.vue';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard.vue';
 import { resetOnboarding } from '@/composables/useOnboarding';
@@ -686,6 +707,16 @@ import { useLayoutStore } from '@/stores/layout.store';
 import { useCanvasStore } from '@/stores/canvas.store';
 import { useSimulationStore } from '@/stores/simulation.store';
 import { useInspectorStore } from '@/stores/inspector.store';
+import { useProjectStore } from '@/stores/project.store';
+import { createAvoidanceCarWorkbenchManifest } from '@/services/templates/avoidance-car-w2-minimal';
+import {
+  createOledDashboardWorkbenchManifest,
+  createOledDashboardCanvasComponents,
+  OLED_DASHBOARD_TEMPLATE_ID,
+} from '@/services/templates/oled-dashboard-demo';
+import { downloadManifest, readManifestFromFile } from '@/services/manifest.service';
+import { manifestToCanvas } from '@/services/manifest-to-canvas.service';
+import type { EmbeddedProjectManifest } from '@/types/manifest-v2';
 
 import VirtualLED from '../components/VirtualLED.vue';
 import VirtualButton from '../components/VirtualButton.vue';
@@ -708,6 +739,7 @@ const layoutStore = useLayoutStore();
 const canvasStore = useCanvasStore();
 const simStore = useSimulationStore();
 const inspectorStore = useInspectorStore();
+const projectStore = useProjectStore();
 const { pendingSwitchTarget } = storeToRefs(modeStore);
 
 const modeAnimating = ref(false);
@@ -748,42 +780,9 @@ const catalog = ref<CatalogItem[]>([
 ]);
 
 
-const activeComponents = ref<CircuitComponentInstance[]>([
-  {
-    id: 'led1',
-    type: 'led',
-    name: 'Virtual LED',
-    pinConnections: { A: 13, C: 'GND' },
-    props: { color: 'red', brightness: 1.0, label: '', flip: false },
-    rotation: 0
-  },
-  {
-    id: 'btn1',
-    type: 'button',
-    name: 'Push Button',
-    pinConnections: { '1.l': null, '2.l': 'VCC', '1.r': null, '2.r': null },
-    props: { color: 'green', label: '', xray: false, activeLow: true },
-    rotation: 0
-  },
-  {
-    id: 'oled1',
-    type: 'oled',
-    name: 'SSD1306 Display',
-    pinConnections: { DATA: 21, CLK: 22, DC: null, RST: null, CS: null, '3V3': '3V3', VIN: null, GND: 'GND' },
-    props: {},
-    rotation: 0
-  },
-  {
-    id: 'sonar1',
-    type: 'ultrasonic',
-    name: 'HC-SR04 Sensor',
-    pinConnections: { VCC: 'VCC', TRIG: 12, ECHO: 13, GND: 'GND' },
-    props: { distance: 25 },
-    rotation: 0
-  }
-]);
+const activeComponents = ref<CircuitComponentInstance[]>([]);
 
-const selectedCompId = ref<string>('led1');
+const selectedCompId = ref<string>('');
 const selectedComp = computed(() => activeComponents.value.find(c => c.id === selectedCompId.value));
 
 const activeTab = ref<'canvas' | 'sim'>('canvas');
@@ -862,6 +861,10 @@ watch([ultrasonicDistance, activeComponents], ([dist, comps]) => {
   }
 }, { deep: true, immediate: true });
 
+function addFromLibrary(payload: { type: string; name: string }) {
+  addComponent({ type: payload.type, name: payload.name, desc: '' });
+}
+
 // Component management
 function addComponent(item: CatalogItem) {
   if (!modeStore.canEditCircuit) return;
@@ -924,8 +927,9 @@ function getPinLabel(comp: CircuitComponentInstance) {
   return digitalPins.join(', ');
 }
 
-// Watch active components to register them in worker
+// Watch active components to register them in worker + sync manifest
 watch(activeComponents, (comps) => {
+  projectStore.syncFromCanvas(comps);
   const pins: number[] = [];
   
   comps.forEach(c => {
@@ -944,6 +948,7 @@ function toggleSimulation() {
   if (isRunning.value) {
     pauseSimulation();
   } else {
+    injectFaults();
     startSimulation();
   }
 }
@@ -1036,15 +1041,20 @@ async function handleModeChange(mode: 'design' | 'simulate' | 'diagnose'): Promi
     pendingSimulateAfterInit.value = false;
     modeSwitchBanner.value = null;
   } else if (mode === 'simulate') {
-    const issues = modeStore.lastStaticCheckIssues;
-    const waitingForSim = issues.some((issue) => issue.id === 'sim-not-ready');
-    if (waitingForSim) {
-      pendingSimulateAfterInit.value = true;
-      showModeSwitchBanner(t('workbench.staticCheck.waitingForEngine'));
-    } else if (issues.length > 0) {
-      showModeSwitchBanner(t(issues[0].message));
+    const bindingIssues = modeStore.lastBindingValidationIssues;
+    if (bindingIssues.length > 0) {
+      showModeSwitchBanner(`[${bindingIssues[0].ruleId}] ${bindingIssues[0].message}`);
     } else {
-      showModeSwitchBanner(t('workbench.staticCheck.failed'));
+      const issues = modeStore.lastStaticCheckIssues;
+      const waitingForSim = issues.some((issue) => issue.id === 'sim-not-ready');
+      if (waitingForSim) {
+        pendingSimulateAfterInit.value = true;
+        showModeSwitchBanner(t('workbench.staticCheck.waitingForEngine'));
+      } else if (issues.length > 0) {
+        showModeSwitchBanner(t(issues[0].message));
+      } else {
+        showModeSwitchBanner(t('workbench.staticCheck.failed'));
+      }
     }
   }
   setTimeout(() => {
@@ -1061,9 +1071,54 @@ function onSplitRatioChange(ratio: number) {
   requestAnimationFrame(() => circuitCanvasRef.value?.updateCanvasScale());
 }
 
+function applyManifestToWorkbench(manifest: EmbeddedProjectManifest) {
+  projectStore.setManifest(manifest);
+  const { components } = manifestToCanvas(manifest);
+  activeComponents.value = components;
+  selectedCompId.value = components[0]?.id ?? '';
+
+  const sonar = components.find((c) => c.type === 'ultrasonic');
+  if (sonar && typeof sonar.props.distance === 'number') {
+    ultrasonicDistance.value = sonar.props.distance;
+  }
+
+  void nextTick(() => {
+    for (const comp of components) {
+      circuitCanvasRef.value?.assignLayoutForNewComponent(comp.id, comp.type);
+    }
+    circuitCanvasRef.value?.updateCanvasScale();
+  });
+}
+
+function onSaveProject() {
+  downloadManifest(projectStore.manifest);
+  showModeSwitchBanner(t('workbench.project.saved'));
+}
+
+async function onOpenProject(file: File) {
+  try {
+    const manifest = await readManifestFromFile(file);
+    applyManifestToWorkbench(manifest);
+    showModeSwitchBanner(t('workbench.project.loaded'));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : t('workbench.project.loadError');
+    showModeSwitchBanner(`${t('workbench.project.loadError')}: ${message}`);
+  }
+}
+
 function onLoadTemplate(templateId: string) {
-  console.log('[Workbench] Load template:', templateId);
+  if (templateId === OLED_DASHBOARD_TEMPLATE_ID || templateId === 'tpl_oled_dashboard') {
+    projectStore.setManifest(createOledDashboardWorkbenchManifest());
+    activeComponents.value = createOledDashboardCanvasComponents();
+    selectedCompId.value = 'btn1';
+    faults.value = { ...faults.value, bounce_us: 0, i2c_drop_permil: 0 };
+  } else if (templateId === 'tpl_avoidance_car') {
+    applyManifestToWorkbench(createAvoidanceCarWorkbenchManifest());
+    ultrasonicDistance.value = 25;
+  }
   modeStore.setDesignSubMode('structure-first');
+  // Re-initialize simulator to load the latest Wasm binary for this template
+  simStore.init();
 }
 
 function confirmStopSimulation() {

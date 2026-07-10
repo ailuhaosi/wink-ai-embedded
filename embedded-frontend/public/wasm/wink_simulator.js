@@ -1597,32 +1597,6 @@ async function createWasm() {
           return 1;
       }
 
-  var _js_pal_os_busy_wait_us = function(us) {
-    let innerFunc =  () => {
-  
-          if (typeof Module !== 'undefined' && typeof Module.js_pal_os_busy_wait_us === 'function') {
-              return Module.js_pal_os_busy_wait_us(us);
-          }
-          /* 桩：把微秒转 ms 后 setTimeout 让出；真实宿主可切换到 spin-wait。
-         * 注意：推进值按"请求的微秒数"（非 setTimeout 实际等待），与 C 侧
-         * busy_wait 语义一致——调用者期望至少 us 微秒已过去。 */
-          var waitMs = Math.max(1, Math.floor(us / 1000));
-          var advanceUs = BigInt(us);
-          return new Promise(function (resolve) {
-              setTimeout(function () {
-                  if (typeof Module !== 'undefined' && typeof Module._pal_wasm_advance_virtual_clock === 'function') {
-                      Module._pal_wasm_advance_virtual_clock(advanceUs);
-                  }
-                  resolve();
-              }, waitMs);
-          });
-      
-  };
-    return Asyncify.handleAsync(innerFunc);
-  }
-  ;
-  _js_pal_os_busy_wait_us.isAsync = true;
-
   var _js_pal_os_sleep_ms = function(ms) {
     let innerFunc =  () => {
   
@@ -1651,25 +1625,6 @@ async function createWasm() {
           }
           return 0;
       }
-
-  function _js_pal_pwm_set_duty(channel, duty) {
-          if (typeof Module !== 'undefined' && typeof Module.js_pal_pwm_set_duty === 'function') {
-              return Module.js_pal_pwm_set_duty(channel, duty);
-          }
-      }
-
-  function _js_sim_measure_echo_pulse_us(trigPin) {
-          if (typeof Module !== 'undefined' && typeof Module.js_sim_measure_echo_pulse_us === 'function') {
-              return Module.js_sim_measure_echo_pulse_us(trigPin);
-          }
-          return 1000;
-      }
-
-  function _pal_rmt_pulse_capture_init(...args
-  ) {
-  abort('missing function: pal_rmt_pulse_capture_init');
-  }
-  _pal_rmt_pulse_capture_init.stub = true;
 
 
 
@@ -1843,6 +1798,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
 }
 
 // Begin runtime exports
+  Module['callMain'] = callMain;
   Module['ccall'] = ccall;
   Module['cwrap'] = cwrap;
   Module['Asyncify'] = Asyncify;
@@ -2024,7 +1980,6 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'run',
   'out',
   'err',
-  'callMain',
   'abort',
   'wasmExports',
   'writeStackCookie',
@@ -2317,9 +2272,9 @@ var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc'
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var ___set_stack_limits = Module['___set_stack_limits'] = makeInvalidEarlyAccess('___set_stack_limits');
 var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
-var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
 var dynCall_ii = makeInvalidEarlyAccess('dynCall_ii');
 var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
+var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
 var dynCall_jiji = makeInvalidEarlyAccess('dynCall_jiji');
 var dynCall_iidiiiii = makeInvalidEarlyAccess('dynCall_iidiiiii');
 var dynCall_vii = makeInvalidEarlyAccess('dynCall_vii');
@@ -2380,9 +2335,9 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['__set_stack_limits'] != 'undefined', 'missing Wasm export: __set_stack_limits');
   assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
-  assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
   assert(typeof wasmExports['dynCall_ii'] != 'undefined', 'missing Wasm export: dynCall_ii');
   assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
+  assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
   assert(typeof wasmExports['dynCall_jiji'] != 'undefined', 'missing Wasm export: dynCall_jiji');
   assert(typeof wasmExports['dynCall_iidiiiii'] != 'undefined', 'missing Wasm export: dynCall_iidiiiii');
   assert(typeof wasmExports['dynCall_vii'] != 'undefined', 'missing Wasm export: dynCall_vii');
@@ -2440,9 +2395,9 @@ function assignWasmExports(wasmExports) {
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   ___set_stack_limits = Module['___set_stack_limits'] = createExportWrapper('__set_stack_limits', 2);
   dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', 2);
-  dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
   dynCall_ii = dynCalls['ii'] = createExportWrapper('dynCall_ii', 2);
   dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', 1);
+  dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
   dynCall_jiji = dynCalls['jiji'] = createExportWrapper('dynCall_jiji', 4);
   dynCall_iidiiiii = dynCalls['iidiiiii'] = createExportWrapper('dynCall_iidiiiii', 8);
   dynCall_vii = dynCalls['vii'] = createExportWrapper('dynCall_vii', 3);
@@ -2484,17 +2439,9 @@ var wasmImports = {
   /** @export */
   js_pal_i2c_transfer: _js_pal_i2c_transfer,
   /** @export */
-  js_pal_os_busy_wait_us: _js_pal_os_busy_wait_us,
-  /** @export */
   js_pal_os_sleep_ms: _js_pal_os_sleep_ms,
   /** @export */
-  js_pal_poll_interrupt: _js_pal_poll_interrupt,
-  /** @export */
-  js_pal_pwm_set_duty: _js_pal_pwm_set_duty,
-  /** @export */
-  js_sim_measure_echo_pulse_us: _js_sim_measure_echo_pulse_us,
-  /** @export */
-  pal_rmt_pulse_capture_init: _pal_rmt_pulse_capture_init
+  js_pal_poll_interrupt: _js_pal_poll_interrupt
 };
 
 

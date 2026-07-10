@@ -1,4 +1,7 @@
 import type { ActuatorMapping, SensorMapping } from '@/types/mapping-registry';
+import '@/peripherals';
+import { registry } from '@/peripherals';
+import type { PeripheralDefinition } from '@/peripherals/types';
 
 export type PinSignalType = 'pwm' | 'gpio' | 'digital_in' | 'digital_out' | 'i2c' | 'power';
 
@@ -47,29 +50,14 @@ const BOARDS: BoardCatalogEntry[] = [
   },
 ];
 
-const DEVICES: DeviceCatalogEntry[] = [
+/** Static board + stub entries (registry peripherals are merged at query time). */
+const STATIC_DEVICES: DeviceCatalogEntry[] = [
   {
     id: 'esp32-devkit-v1',
     displayName: 'ESP32 DevKit V1',
     category: 'board',
     pins: [],
     simulation: { worldCoupling: 'none' },
-  },
-  {
-    id: 'hc-sr04',
-    displayName: 'HC-SR04 Ultrasonic',
-    category: 'peripheral',
-    canvasType: 'ultrasonic',
-    pins: [
-      { name: 'TRIG', type: 'gpio', description: 'Trigger input' },
-      { name: 'ECHO', type: 'digital_in', description: 'Echo output' },
-      { name: 'VCC', type: 'power' },
-      { name: 'GND', type: 'power' },
-    ],
-    simulation: {
-      worldCoupling: 'required',
-      allowedSensorMappings: ['raycast_range_cm'],
-    },
   },
   {
     id: 'motor_driver_stub',
@@ -97,44 +85,6 @@ const DEVICES: DeviceCatalogEntry[] = [
     },
   },
   {
-    id: 'led',
-    displayName: 'Virtual LED',
-    category: 'peripheral',
-    canvasType: 'led',
-    pins: [
-      { name: 'A', type: 'gpio' },
-      { name: 'C', type: 'power' },
-    ],
-    simulation: {
-      worldCoupling: 'optional',
-      allowedActuatorMappings: ['gpio_to_emissive'],
-    },
-  },
-  {
-    id: 'button_stub',
-    displayName: 'Push Button',
-    category: 'peripheral',
-    canvasType: 'button',
-    pins: [
-      { name: '1.l', type: 'gpio' },
-      { name: '2.l', type: 'power' },
-    ],
-    simulation: { worldCoupling: 'none' },
-  },
-  {
-    id: 'oled_stub',
-    displayName: 'SSD1306 OLED',
-    category: 'peripheral',
-    canvasType: 'oled',
-    pins: [
-      { name: 'DATA', type: 'i2c' },
-      { name: 'CLK', type: 'i2c' },
-    ],
-    simulation: {
-      worldCoupling: 'optional',
-    },
-  },
-  {
     id: 'buzzer_stub',
     displayName: 'Buzzer (stub)',
     category: 'stub',
@@ -157,21 +107,55 @@ const ENVIRONMENT_MODELS = [
   { id: 'env_heat_source', displayName: 'Heat Source' },
 ];
 
-/** Maps canvas peripheral type → catalog modelId */
+export function definitionToCatalogEntry(def: PeripheralDefinition): DeviceCatalogEntry {
+  const catalog = def.catalog!;
+  const worldCoupling = (catalog.worldCoupling ?? def.simulation?.worldCoupling ?? 'none') as WorldCoupling;
+  const entry: DeviceCatalogEntry = {
+    id: catalog.id,
+    displayName: def.displayName,
+    category: 'peripheral',
+    canvasType: def.type,
+    pins: catalog.pins.map((p) => ({
+      name: p.name,
+      type: p.type as PinSignalType,
+      ...(p.description !== undefined ? { description: p.description } : {}),
+    })),
+    simulation: { worldCoupling },
+  };
+  if (catalog.allowedActuatorMappings) {
+    entry.simulation!.allowedActuatorMappings =
+      catalog.allowedActuatorMappings as ActuatorMapping['type'][];
+  }
+  if (catalog.allowedSensorMappings) {
+    entry.simulation!.allowedSensorMappings =
+      catalog.allowedSensorMappings as SensorMapping['type'][];
+  }
+  return entry;
+}
+
+function mergeDevices(): DeviceCatalogEntry[] {
+  const fromRegistry = registry
+    .list()
+    .filter((d) => d.catalog)
+    .map(definitionToCatalogEntry);
+  return [...STATIC_DEVICES, ...fromRegistry];
+}
+
+/** Maps canvas peripheral type → catalog modelId (rebuilt from static + registry). */
 export const CANVAS_TYPE_TO_MODEL: Record<string, string> = {};
-for (const d of DEVICES) {
+for (const d of mergeDevices()) {
   if (d.canvasType) CANVAS_TYPE_TO_MODEL[d.canvasType] = d.id;
 }
 
 export const deviceCatalog: DeviceCatalog = {
   getDevice(modelId: string) {
-    return DEVICES.find(d => d.id === modelId);
+    return mergeDevices().find((d) => d.id === modelId);
   },
   getBoard(boardId: string) {
-    return BOARDS.find(b => b.id === boardId);
+    return BOARDS.find((b) => b.id === boardId);
   },
   listDevices() {
-    return [...DEVICES];
+    return mergeDevices();
   },
   listBoards() {
     return [...BOARDS];
@@ -185,7 +169,8 @@ export const deviceCatalog: DeviceCatalog = {
 };
 
 export function modelIdForCanvasType(canvasType: string): string {
-  return CANVAS_TYPE_TO_MODEL[canvasType] ?? canvasType;
+  const entry = mergeDevices().find((d) => d.canvasType === canvasType);
+  return entry?.id ?? canvasType;
 }
 
 export function canvasTypeForModelId(modelId: string): string | undefined {

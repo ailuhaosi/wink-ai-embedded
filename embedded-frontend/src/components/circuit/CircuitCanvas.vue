@@ -23,6 +23,7 @@ const pinStatesRef = toRef(props, 'pinStates');
 
 const {
   canvasContainerRef,
+  circuitSvgRef,
   canvasOledRef,
   viewWidth,
   viewHeight,
@@ -107,7 +108,7 @@ defineExpose({
 
 <template>
   <div ref="canvasContainerRef" class="canvas-container">
-    <svg class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none" @click="handleCanvasClick">
+    <svg ref="circuitSvgRef" class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none" @click="handleCanvasClick">
       <!-- Grid background -->
       <defs>
         <pattern id="grid" :width="20" :height="20" patternUnits="userSpaceOnUse">

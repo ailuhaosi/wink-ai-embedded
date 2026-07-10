@@ -1,4 +1,59 @@
+// @ts-ignore — loaded at runtime via importScripts to avoid Vite bundling Node fs paths
 import { SimWorker } from '@unisim/worker/SimWorker';
+import {
+  adaptEmscriptenRawModule,
+  callEmscriptenExport,
+  createEmscriptenExportsAdapter,
+  hasEmscriptenExport,
+} from '@unisim/bridge/adaptEmscriptenExports';
+
+type WasmSandboxFactory = (moduleArg?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
+let wasmSandboxLoader: Promise<WasmSandboxFactory> | null = null;
+
+/**
+ * Load Emscripten glue from /public/wasm without Vite bundling.
+ * Bundling wink_simulator.js into the worker makes Emscripten detect Node (process polyfill)
+ * and call require('node:fs'), which never completes in the browser.
+ * Module workers cannot use importScripts(), so fetch + Function is used instead.
+ */
+/**
+ * Inject C getenv keys into Emscripten glue's internal ENV object.
+ * Modularize builds do not always merge Module.ENV from the factory config.
+ */
+function patchEmscriptenGlueEnv(code: string): string {
+  const marker = 'var ENV = {';
+  if (!code.includes(marker)) return code;
+  return code.replace(marker, 'var ENV = {"WINK_SIM_BYPASS_WCET":"1",');
+}
+
+function loadWasmSandboxFactory(): Promise<WasmSandboxFactory> {
+  if (!wasmSandboxLoader) {
+    wasmSandboxLoader = (async () => {
+      const glueUrl = new URL('/wasm/wink_simulator.js', self.location.origin).href;
+      const response = await fetch(glueUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to load WASM glue (${response.status})`);
+      }
+      const code = patchEmscriptenGlueEnv(await response.text());
+      const shimModule = { exports: {} as WasmSandboxFactory & { default?: WasmSandboxFactory } };
+      const loader = new Function(
+        'module',
+        'exports',
+        `${code}\nreturn module.exports.default ?? module.exports;`,
+      ) as (
+        module: { exports: WasmSandboxFactory & { default?: WasmSandboxFactory } },
+        exports: WasmSandboxFactory & { default?: WasmSandboxFactory },
+      ) => WasmSandboxFactory;
+      const factory = loader(shimModule, shimModule.exports);
+      if (typeof factory !== 'function') {
+        throw new Error('WasmSandbox factory not found in /wasm/wink_simulator.js');
+      }
+      return factory;
+    })();
+  }
+  return wasmSandboxLoader;
+}
 
 // Redirect standard console logging to postMessage so the UI can capture it
 const originalLog = console.log;
@@ -35,12 +90,12 @@ console.debug = (...args) => {
   originalDebug.apply(console, args);
 };
 
-// @ts-ignore
-import WasmSandbox from '../../../build-wasm/wink_simulator.js';
+// @ts-ignore — runtime importScripts, see loadWasmSandboxFactory()
 
 let simWorker: SimWorker | null = null;
 let running = false;
-let simTimer: any = null;
+let simTimer: ReturnType<typeof setTimeout> | null = null;
+let wasmMainStarted = false;
 let speedMultiplier = 1; // 1x speed: step 1000us per 1ms real-time
 const STEP_US = 1000n; // 1ms virtual step
 
@@ -49,43 +104,41 @@ let hasOled = false;
 const ultrasonicDistances = new Map<number, number>();
 
 // Proxies for deferred initialization of exports and module
-let realExports: any = null;
-let realModule: any = null;
+let realModule: Record<string, unknown> | null = null;
+let rawModuleAdapter: ReturnType<typeof adaptEmscriptenRawModule> | null = null;
 
-const exportsProxy = new Proxy({} as any, {
+const exportsProxy = createEmscriptenExportsAdapter(() => realModule);
+
+const moduleProxy = new Proxy({} as Record<string, unknown>, {
   get(_target, prop) {
-    if (!realExports) {
-      throw new Error(`Wasm exports accessed before instantiation completed!`);
+    if (prop === 'HEAPU8') {
+      if (rawModuleAdapter) return rawModuleAdapter.HEAPU8;
+      const heap = realModule?.HEAPU8;
+      if (heap instanceof Uint8Array) return heap;
+      throw new Error('Wasm module HEAPU8 accessed before instantiation completed!');
     }
-    return realExports[prop];
-  }
-});
-
-const moduleProxy = new Proxy({} as any, {
-  get(_target, prop) {
-    if (!realModule) {
+    if (!rawModuleAdapter) {
       throw new Error(`Wasm module accessed before instantiation completed!`);
     }
-    if (prop === 'HEAPU8') return realModule.HEAPU8;
-    return realModule[prop];
-  }
+    if (prop === '_malloc') return rawModuleAdapter._malloc;
+    if (prop === '_free') return rawModuleAdapter._free;
+    return realModule?.[String(prop)];
+  },
 });
 
 // Load the WASM sandbox and initialize the SimWorker
 async function initSimulator() {
   try {
     console.log('[SimWorker] Loading Emscripten glue...');
-    if (!WasmSandbox) {
-      throw new Error('WasmSandbox factory function not found in import.');
-    }
+    const WasmSandbox = await loadWasmSandboxFactory();
     
     console.log('[SimWorker] Instantiating SimWorker...');
     simWorker = new SimWorker({
       exports: exportsProxy,
-      rawModule: moduleProxy,
+      rawModule: moduleProxy as unknown as import('@unisim/worker/WasmPhysicalBridge').RawModule,
       injectGpioIdeal: (pin, level) => {
-        if (realExports && realExports.pal_wasm_set_gpio_input) {
-          realExports.pal_wasm_set_gpio_input(pin, level);
+        if (realModule && hasEmscriptenExport(realModule, 'pal_wasm_set_gpio_input')) {
+          callEmscriptenExport(realModule, 'pal_wasm_set_gpio_input', pin, level);
         }
       },
       ultrasonicEchoUs: (pin) => {
@@ -99,27 +152,40 @@ async function initSimulator() {
     
     const moduleConfig = {
       ...imports,
+      // Defer main() until SimWorker INIT resets clocks — auto callMain before
+      // INIT races with Asyncify sleeps and triggers spurious host fault 8003.
+      noInitialRun: true,
       locateFile: (path: string) => {
         if (path.endsWith('.wasm')) {
           return '/wasm/wink_simulator.wasm';
         }
         return path;
       },
-      preRun: [(mod: any) => {
+      preRun: [(mod: Record<string, unknown>) => {
         realModule = mod;
-      }]
+        try {
+          rawModuleAdapter = adaptEmscriptenRawModule(realModule);
+        } catch {
+          rawModuleAdapter = null;
+        }
+      }],
     };
     
     console.log('[SimWorker] Instantiating WASM sandbox...');
     const Module = await WasmSandbox(moduleConfig);
-    
-    realExports = Module;
-    if (!realModule) {
-      realModule = Module;
+
+    realModule = Module as Record<string, unknown>;
+    if (!rawModuleAdapter) {
+      try {
+        rawModuleAdapter = adaptEmscriptenRawModule(realModule);
+      } catch {
+        rawModuleAdapter = null;
+      }
     }
     
-    // Initialize the simulator (sends INIT command internally)
+    // Reset worker clocks/physical state (wasm app starts on first START).
     simWorker.handleMessage({ type: 'INIT', id: 0 });
+
     console.log('[SimWorker] WASM simulation sandbox initialized successfully!');
     
     self.postMessage({ type: 'INIT_DONE' });
@@ -127,6 +193,15 @@ async function initSimulator() {
     console.error(`[SimWorker] Initialization failed: ${err.message}`);
     self.postMessage({ type: 'ERROR', message: err.message });
   }
+}
+
+function ensureWasmMainStarted(): void {
+  if (wasmMainStarted || !realModule) return;
+  if (!hasEmscriptenExport(realModule, 'main')) {
+    throw new Error('Wasm module missing _main export');
+  }
+  callEmscriptenExport(realModule, 'main', 0, 0);
+  wasmMainStarted = true;
 }
 
 // Drive the simulation loop
@@ -150,39 +225,42 @@ function simLoop() {
     
     // Read OLED Framebuffer if enabled
     let oledFb: Uint8Array | null = null;
-    if (hasOled && realExports && realExports.pal_wasm_get_ssd1306_fb) {
-      const wPtr = realModule._malloc(4);
-      const hPtr = realModule._malloc(4);
+    if (hasOled && realModule && rawModuleAdapter && hasEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb')) {
+      const wPtr = rawModuleAdapter!._malloc(4);
+      const hPtr = rawModuleAdapter!._malloc(4);
       try {
-        const fbPtr = realExports.pal_wasm_get_ssd1306_fb(wPtr, hPtr);
+        const fbPtr = callEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb', wPtr, hPtr) as number;
         if (fbPtr) {
-          const width = new Uint32Array(realModule.HEAPU8.buffer, wPtr, 1)[0];
-          const height = new Uint32Array(realModule.HEAPU8.buffer, hPtr, 1)[0];
+          const heap = rawModuleAdapter!.HEAPU8;
+          const width = new Uint32Array(heap.buffer, wPtr, 1)[0];
+          const height = new Uint32Array(heap.buffer, hPtr, 1)[0];
           const fbSize = (width * height) / 8;
-          oledFb = new Uint8Array(realModule.HEAPU8.buffer, fbPtr, fbSize).slice();
+          oledFb = new Uint8Array(heap.buffer, fbPtr, fbSize).slice();
         }
       } finally {
-        realModule._free(wPtr);
-        realModule._free(hPtr);
+        rawModuleAdapter!._free(wPtr);
+        rawModuleAdapter!._free(hPtr);
       }
     }
-    
-    // Get trace/fault log list
+
     const traces: any[] = [];
-    if (realExports && realExports.pal_wasm_get_fault_log_count) {
-      const count = realExports.pal_wasm_get_fault_log_count();
+    if (realModule && hasEmscriptenExport(realModule, 'pal_wasm_get_fault_log_count')) {
+      const count = callEmscriptenExport(realModule, 'pal_wasm_get_fault_log_count') as number;
       for (let i = 0; i < count; i++) {
         traces.push({
-          timestamp: realExports.pal_wasm_fault_event_get_timestamp(i).toString(),
-          type: realExports.pal_wasm_fault_event_get_type(i),
-          pinOrBus: realExports.pal_wasm_fault_event_get_pin_or_bus(i),
-          sequence: realExports.pal_wasm_fault_event_get_sequence(i)
+          timestamp: String(callEmscriptenExport(realModule, 'pal_wasm_fault_event_get_timestamp', i)),
+          type: callEmscriptenExport(realModule, 'pal_wasm_fault_event_get_type', i),
+          pinOrBus: callEmscriptenExport(realModule, 'pal_wasm_fault_event_get_pin_or_bus', i),
+          sequence: callEmscriptenExport(realModule, 'pal_wasm_fault_event_get_sequence', i),
         });
       }
     }
-    
+
+    const isFaulted = realModule && hasEmscriptenExport(realModule, 'pal_wasm_is_faulted')
+      ? Boolean(callEmscriptenExport(realModule, 'pal_wasm_is_faulted'))
+      : false;
+
     const currentUs = simWorker.getBridge().getClockUs().toString();
-    const isFaulted = realExports ? realExports.pal_wasm_is_faulted() : false;
     
     self.postMessage({
       type: 'STATE_UPDATE',
@@ -220,6 +298,7 @@ self.onmessage = async (e: MessageEvent<any>) => {
       
     case 'START':
       if (!running) {
+        ensureWasmMainStarted();
         running = true;
         simLoop();
         console.log('[SimWorker] Simulation started');
@@ -249,8 +328,8 @@ self.onmessage = async (e: MessageEvent<any>) => {
     case 'SET_ULTRASONIC_DISTANCE': {
       const { pin, distanceCm } = payload;
       ultrasonicDistances.set(pin, distanceCm);
-      if (realExports && realExports.pal_wasm_set_ultrasonic_distance) {
-        realExports.pal_wasm_set_ultrasonic_distance(pin, distanceCm);
+      if (realModule && hasEmscriptenExport(realModule, 'pal_wasm_set_ultrasonic_distance')) {
+        callEmscriptenExport(realModule, 'pal_wasm_set_ultrasonic_distance', pin, distanceCm);
       }
       break;
     }

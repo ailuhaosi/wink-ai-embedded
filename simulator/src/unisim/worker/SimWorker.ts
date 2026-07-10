@@ -227,14 +227,23 @@ export class SimWorker {
         if (exports.pal_wasm_is_faulted()) return; // idempotent: safe-off already executed
         const msg = err instanceof Error ? err.message : String(err);
         const M = self.rawModule;
-        const enc = new TextEncoder();
-        const bytes = enc.encode(msg + '\0');
-        const ptr = M._malloc(bytes.length);
+        let ptr = 0;
         try {
+          const enc = new TextEncoder();
+          const bytes = enc.encode(msg + '\0');
+          ptr = M._malloc(bytes.length);
           M.HEAPU8.set(bytes, ptr);
           exports.pal_wasm_host_fault(code, ptr);
+        } catch (allocErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[SimWorker] host fault (malloc unavailable):', msg, allocErr);
+          try {
+            exports.pal_wasm_host_fault(code, 0);
+          } catch {
+            // ignore secondary fault delivery failure
+          }
         } finally {
-          M._free(ptr);
+          if (ptr) M._free(ptr);
         }
       },
     };

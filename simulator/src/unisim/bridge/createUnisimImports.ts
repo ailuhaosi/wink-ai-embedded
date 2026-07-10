@@ -40,7 +40,7 @@
 import type { WasmImports } from '../types/wasm/imports';
 import type { WasmInterruptQueue } from '../types/wasm/interrupt-queue';
 import type { I2CBusApi } from '../types/runtime/i2c';
-import { VirtualClock } from '../core/VirtualClock';
+import { VirtualClock, VirtualClockResetError } from '../core/VirtualClock';
 import { PinArbiter } from '../core/pin-arbiter';
 import { LogicStates, DriveStrength } from '../types/logic-types';
 
@@ -128,10 +128,14 @@ function safeWrapAsync<A extends unknown[], R>(
   return (...args: A) => {
     try {
       return Promise.resolve(fn(...args)).catch((err) => {
-        if (reportHostFault) reportHostFault(code, err);
-        else {
-          // eslint-disable-next-line no-console
-          console.warn(`[unisim] ${name} rejected; returning safe default (no reportHostFault wired):`, err);
+        // SimWorker INIT/RESET intentionally rejects pending sleeps via
+        // VirtualClock.reset() — that is lifecycle noise, not a host fault.
+        if (!(err instanceof VirtualClockResetError)) {
+          if (reportHostFault) reportHostFault(code, err);
+          else {
+            // eslint-disable-next-line no-console
+            console.warn(`[unisim] ${name} rejected; returning safe default (no reportHostFault wired):`, err);
+          }
         }
         return defaultValue;
       });

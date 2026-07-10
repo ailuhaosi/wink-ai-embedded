@@ -1,5 +1,5 @@
 import { createUnisimImports, UnisimBridgeDeps } from '../createUnisimImports';
-import { VirtualClock } from '../../core/VirtualClock';
+import { VirtualClock, VirtualClockResetError } from '../../core/VirtualClock';
 import { PinArbiter } from '../../core/pin-arbiter';
 import { LogicStates, DriveStrength } from '../../types/logic-types';
 import { I2CBus } from '../I2CBus';
@@ -138,6 +138,34 @@ describe('createUnisimImports', () => {
     imports.js_pal_register_interrupt(7, 1, 0);
     imports.js_pal_deregister_interrupt(7);
     expect(irqQueue.push(7)).toBe(false);
+  });
+
+  test('sleep_ms reset rejection does not report host fault', async () => {
+    const faults: unknown[] = [];
+    const { deps, clock } = makeDeps({
+      reportHostFault: (_code, err) => faults.push(err),
+    });
+    const imports = createUnisimImports(deps);
+    const p = imports.js_pal_os_sleep_ms(100);
+    clock.reset();
+    await p;
+    expect(faults).toEqual([]);
+  });
+
+  test('sleep_ms reports non-reset rejections as host fault', async () => {
+    const faults: unknown[] = [];
+    const brokenClock = {
+      sleep: () => Promise.reject(new RangeError('bad ms')),
+      sleepUs: () => Promise.reject(new RangeError('bad us')),
+    } as unknown as VirtualClock;
+    const { deps } = makeDeps({
+      clock: brokenClock,
+      reportHostFault: (_code, err) => faults.push(err),
+    });
+    const imports = createUnisimImports(deps);
+    await imports.js_pal_os_sleep_ms(1);
+    expect(faults[0]).toBeInstanceOf(RangeError);
+    expect(faults.some((e) => e instanceof VirtualClockResetError)).toBe(false);
   });
 
   test('sleep_ms returns a Promise that resolves after advance crosses wake time', async () => {

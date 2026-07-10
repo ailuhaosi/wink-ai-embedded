@@ -12,6 +12,7 @@ const emit = defineEmits<{
   toggleSimulation: [];
   reset: [];
   tidy: [];
+  replayOnboarding: [];
 }>();
 
 const { t } = useI18n();
@@ -53,6 +54,9 @@ function setSubMode(subMode: 'circuit-first' | 'structure-first') {
         <span class="badge font-mono">Safety: {{ projectStore.safetyLevel }}</span>
       </div>
       <div class="status-indicators">
+        <button type="button" class="replay-onboarding-btn" @click="emit('replayOnboarding')">
+          {{ t('workbench.onboarding.replay') }}
+        </button>
         <span v-if="isFaulted" class="status-tag status-danger">{{ t('workbench.status.faulted') }}</span>
         <span v-else-if="isRunning" class="status-tag status-success">{{ t('workbench.status.simulating') }}</span>
         <span v-else class="status-tag status-idle">{{ t('workbench.status.standby') }}</span>
@@ -306,7 +310,22 @@ function setSubMode(subMode: 'circuit-first' | 'structure-first') {
 
 .time-display { color: var(--color-highlight); }
 
-.status-indicators { display: flex; gap: 8px; }
+.status-indicators { display: flex; align-items: center; gap: 8px; }
+
+.replay-onboarding-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.replay-onboarding-btn:hover {
+  color: var(--color-highlight);
+  background: rgba(56, 189, 248, 0.1);
+}
 
 .status-tag {
   font-size: 11px;

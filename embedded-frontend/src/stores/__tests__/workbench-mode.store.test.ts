@@ -106,6 +106,21 @@ describe('workbench-mode store guards', () => {
     expect(modeStore.current).toBe('simulate');
   });
 
+  it('A14: design → simulate is not blocked by missing bindings', async () => {
+    const { useWorkbenchModeStore } = await import('../workbench-mode.store');
+    const modeStore = useWorkbenchModeStore();
+
+    // W1 gate is static-check only — components without any bindings field still pass.
+    const ok = await modeStore.switchTo('simulate', {
+      isSimulationReady: true,
+      components: [{ id: 'led1', type: 'led', name: 'LED', pinConnections: { A: 2, C: 'GND' } }],
+    });
+
+    expect(ok).toBe(true);
+    expect(modeStore.current).toBe('simulate');
+    expect(modeStore.lastStaticCheckIssues).toEqual([]);
+  });
+
   it('requires confirmation for simulate → design', async () => {
     const { useWorkbenchModeStore } = await import('../workbench-mode.store');
     const modeStore = useWorkbenchModeStore();

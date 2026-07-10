@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -117,16 +117,6 @@ function expandCollapsed(side: 'left' | 'right') {
   if (side === 'right') rightCollapsed.value = false;
   fullscreenSide.value = null;
 }
-
-function onKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey && event.key === '\\') {
-    event.preventDefault();
-    emit('ratioChange', props.ratio);
-  }
-}
-
-onMounted(() => window.addEventListener('keydown', onKeydown));
-onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </script>
 
 <template>

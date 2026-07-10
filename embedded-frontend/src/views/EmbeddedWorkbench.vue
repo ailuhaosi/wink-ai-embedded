@@ -6,6 +6,7 @@
       @toggle-simulation="toggleSimulation"
       @reset="handleReset"
       @tidy="tidyRouting"
+      @replay-onboarding="replayOnboarding"
     />
 
     <!-- Legacy Top Control Bar -->
@@ -651,7 +652,11 @@
       @confirm="confirmStopSimulation"
       @cancel="cancelStopSimulation"
     />
-    <OnboardingWizard v-if="!legacyMode" @complete="onOnboardingComplete" />
+    <OnboardingWizard
+      v-if="!legacyMode"
+      ref="onboardingRef"
+      @complete="onOnboardingComplete"
+    />
   </div>
 </template>
 
@@ -675,6 +680,7 @@ import BottomConsole from '@/components/console/BottomConsole.vue';
 import ContextInspector from '@/components/inspector/ContextInspector.vue';
 import ProductWorldPlaceholder from '@/components/world/ProductWorldPlaceholder.vue';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard.vue';
+import { resetOnboarding } from '@/composables/useOnboarding';
 import { useWorkbenchModeStore } from '@/stores/workbench-mode.store';
 import { useLayoutStore } from '@/stores/layout.store';
 import { useCanvasStore } from '@/stores/canvas.store';
@@ -723,6 +729,7 @@ interface CatalogItem {
 }
 
 const circuitCanvasRef = ref<InstanceType<typeof CircuitCanvas> | null>(null);
+const onboardingRef = ref<InstanceType<typeof OnboardingWizard> | null>(null);
 
 function setRoutingMode(mode: 'auto' | 'manual') {
   canvasStore.setRoutingMode(mode);
@@ -1070,6 +1077,11 @@ function cancelStopSimulation() {
 async function onOnboardingComplete() {
   const ok = await handleModeChange('simulate');
   if (ok) toggleSimulation();
+}
+
+function replayOnboarding() {
+  resetOnboarding();
+  onboardingRef.value?.restart();
 }
 
 function onGlobalKeydown(event: KeyboardEvent) {

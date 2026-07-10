@@ -34,6 +34,14 @@ function finish() {
   visible.value = false;
   emit('complete');
 }
+
+/** Re-open the 3-step wizard (settings: 「重新显示引导」). */
+function restart() {
+  step.value = 1;
+  visible.value = true;
+}
+
+defineExpose({ restart });
 </script>
 
 <template>

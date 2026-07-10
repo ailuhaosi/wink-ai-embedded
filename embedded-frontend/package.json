@@ -10,7 +10,8 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "node scripts/run-e2e-cli.mjs"
   },
   "dependencies": {
     "@wokwi/elements": "^1.9.2",

@@ -10,6 +10,12 @@ export type {
   PeripheralPropsSchema,
   PinConnectionValue,
 } from './types';
+export {
+  peripheralConfigsAdapter,
+  getDefaultProps,
+  getDefaultPinConnections,
+  getComponentSize,
+} from './legacy-adapter';
 
 import './led';
 import './button';

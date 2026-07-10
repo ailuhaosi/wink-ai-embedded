@@ -31,6 +31,9 @@ export interface PeripheralPinDef {
   description?: string;
   required?: boolean;
   defaultConnection?: PinConnectionValue;
+  /** Pin position relative to component top-left (canvas layout) */
+  relX?: number;
+  relY?: number;
 }
 
 export interface PeripheralDefinition {
@@ -49,6 +52,8 @@ export interface PeripheralDefinition {
     description: string;
     pins: Array<{ name: string; type: string; description?: string; required?: boolean }>;
     worldCoupling?: 'none' | 'optional' | 'required';
+    allowedActuatorMappings?: string[];
+    allowedSensorMappings?: string[];
   };
 
   /** 画布尺寸（未旋转时） */

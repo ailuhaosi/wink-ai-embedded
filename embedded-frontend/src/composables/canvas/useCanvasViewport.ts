@@ -35,7 +35,6 @@ export function useCanvasViewport(ctx: CanvasContext) {
   return {
     canvasContainerRef: ctx.canvasContainerRef,
     circuitSvgRef: ctx.circuitSvgRef,
-    canvasOledRef: ctx.canvasOledRef,
     viewWidth: ctx.viewWidth,
     viewHeight: ctx.viewHeight,
     peripheralScaleX: ctx.peripheralScaleX,

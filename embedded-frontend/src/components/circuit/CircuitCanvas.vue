@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, toRef } from 'vue';
+import { computed, onMounted, onUnmounted, toRef } from 'vue';
 import { RotateCcw, RotateCw } from 'lucide-vue-next';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import { useCircuitCanvas } from '@/composables/useCircuitCanvas';
+import CanvasPeripheralsHost from '@/components/peripherals/CanvasPeripheralsHost.vue';
 
 const props = defineProps<{
   pinStates: Record<number, boolean>;
@@ -24,7 +25,6 @@ const pinStatesRef = toRef(props, 'pinStates');
 const {
   canvasContainerRef,
   circuitSvgRef,
-  canvasOledRef,
   viewWidth,
   viewHeight,
   peripheralScaleX,
@@ -95,7 +95,6 @@ onUnmounted(() => {
 defineExpose({
   tidyRouting,
   updateCanvasScale,
-  canvasOledRef,
   setRotation,
   rotateComponent,
   selectComponent,
@@ -425,30 +424,11 @@ defineExpose({
             <RotateCw class="rot-icon" />
           </button>
         </div>
-        <!-- Raw visual components on the Canvas -->
-        <wokwi-led
-          v-if="comp.type === 'led'"
-          :pin="typeof comp.pinConnections.A === 'number' ? comp.pinConnections.A : 1"
-          :color="comp.props.color"
-          :value="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
-          :brightness="comp.props.brightness"
-          :label="comp.props.label"
-          :flip="comp.props.flip"
-        />
-        <wokwi-pushbutton
-          v-else-if="comp.type === 'button'"
-          :color="comp.props.color"
-          :label="comp.props.label"
-          :xray="comp.props.xray"
+        <CanvasPeripheralsHost
+          :comp="comp"
+          :pin-states="pinStates"
           @button-press="emit('buttonPress', comp)"
           @button-release="emit('buttonRelease', comp)"
-        />
-        <wokwi-ssd1306
-          v-else-if="comp.type === 'oled'"
-          ref="canvasOledRef"
-        />
-        <wokwi-hc-sr04
-          v-else-if="comp.type === 'ultrasonic'"
         />
       </div>
     </div>

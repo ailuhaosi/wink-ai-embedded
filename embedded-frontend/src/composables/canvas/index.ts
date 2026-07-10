@@ -31,7 +31,6 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
   return {
     canvasContainerRef: viewport.canvasContainerRef,
     circuitSvgRef: viewport.circuitSvgRef,
-    canvasOledRef: viewport.canvasOledRef,
     viewWidth: viewport.viewWidth,
     viewHeight: viewport.viewHeight,
     peripheralScaleX: viewport.peripheralScaleX,

@@ -25,7 +25,6 @@ import ProductWorldPlaceholder from '@/components/world/ProductWorldPlaceholder.
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard.vue';
 import WorkbenchPropertyInspector from '@/components/workbench/WorkbenchPropertyInspector.vue';
 import WorkbenchFaultInjector from '@/components/workbench/WorkbenchFaultInjector.vue';
-import OledFrameBufferRenderer from '@/components/workbench/OledFrameBufferRenderer.vue';
 import SimulationErrorBanner from '@/components/workbench/SimulationErrorBanner.vue';
 import ErrorBoundary from '@/components/ErrorBoundary.vue';
 import { resetOnboarding } from '@/composables/useOnboarding';
@@ -74,7 +73,6 @@ const routingMode = computed({
 
 const circuitCanvasRef = ref<InstanceType<typeof CircuitCanvas> | null>(null);
 const onboardingRef = ref<InstanceType<typeof OnboardingWizard> | null>(null);
-const canvasOledRef = computed(() => circuitCanvasRef.value?.canvasOledRef);
 
 function tidyRouting() {
   circuitCanvasRef.value?.tidyRouting();
@@ -521,10 +519,6 @@ onUnmounted(() => {
     <OnboardingWizard
       ref="onboardingRef"
       @complete="onOnboardingComplete"
-    />
-    <OledFrameBufferRenderer
-      :framebuffer="oledFb"
-      :canvas-oled-ref="canvasOledRef"
     />
   </div>
 </template>

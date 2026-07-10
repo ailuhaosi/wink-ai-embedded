@@ -17,7 +17,6 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
 
   const canvasContainerRef = ref<HTMLElement | null>(null);
   const circuitSvgRef = ref<SVGSVGElement | null>(null);
-  const canvasOledRef = ref<any>(null);
 
   const viewWidth = ref(CANVAS_WIDTH);
   const viewHeight = ref(CANVAS_HEIGHT);
@@ -62,7 +61,6 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
     nextPositionOffset,
     canvasContainerRef,
     circuitSvgRef,
-    canvasOledRef,
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     viewWidth,

@@ -32,7 +32,6 @@ function createMockContext(overrides: Partial<CanvasContext> = {}): CanvasContex
     nextPositionOffset: ref({}),
     canvasContainerRef: ref(null),
     circuitSvgRef,
-    canvasOledRef: ref(null),
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     viewWidth,

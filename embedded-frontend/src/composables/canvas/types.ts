@@ -62,7 +62,6 @@ export interface CanvasContext {
   nextPositionOffset: Ref<Record<string, number>>;
   canvasContainerRef: Ref<HTMLElement | null>;
   circuitSvgRef: Ref<SVGSVGElement | null>;
-  canvasOledRef: Ref<any>;
   CANVAS_WIDTH: number;
   CANVAS_HEIGHT: number;
   viewWidth: Ref<number>;

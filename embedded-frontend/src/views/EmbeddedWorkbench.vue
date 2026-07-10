@@ -44,10 +44,7 @@ import { downloadManifest, readManifestFromFile } from '@/services/manifest.serv
 import { manifestToCanvas } from '@/services/manifest-to-canvas.service';
 import type { EmbeddedProjectManifest } from '@/types/manifest-v2';
 
-import VirtualLED from '../components/VirtualLED.vue';
-import VirtualButton from '../components/VirtualButton.vue';
-import VirtualOLED from '../components/VirtualOLED.vue';
-import VirtualUltrasonic from '../components/VirtualUltrasonic.vue';
+import WorldPeripheralsPane from '@/components/peripherals/WorldPeripheralsPane.vue';
 import CircuitCanvas from '@/components/circuit/CircuitCanvas.vue';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import {
@@ -468,42 +465,12 @@ onUnmounted(() => {
             <ErrorBoundary>
               <div class="world-pane scrollable">
                 <ProductWorldPlaceholder @load-template="onLoadTemplate" />
-                <div v-if="modeStore.current !== WorkbenchModeId.Design" class="virtual-peripherals-grid">
-                  <div v-for="comp in activeComponents" :key="`sim-${comp.id}`" class="grid-card">
-                    <div class="card-header">
-                      <span class="card-title">{{ comp.name }}</span>
-                    </div>
-                    <div class="card-body">
-                      <VirtualLED
-                        v-if="comp.type === 'led'"
-                        :pin-connections="comp.pinConnections"
-                        :color="comp.props.color"
-                        :level="typeof comp.pinConnections.A === 'number' ? pinStates[comp.pinConnections.A] || false : false"
-                        :brightness="comp.props.brightness"
-                        :label="comp.props.label"
-                        :flip="comp.props.flip"
-                      />
-                      <VirtualButton
-                        v-else-if="comp.type === 'button'"
-                        :pin-connections="comp.pinConnections"
-                        :color="comp.props.color"
-                        :label="comp.props.label"
-                        :xray="comp.props.xray"
-                        :active-low="comp.props.activeLow"
-                      />
-                      <VirtualOLED
-                        v-else-if="comp.type === 'oled'"
-                        :pin-connections="comp.pinConnections"
-                        :framebuffer="oledFb"
-                      />
-                      <VirtualUltrasonic
-                        v-else-if="comp.type === 'ultrasonic'"
-                        :pin-connections="comp.pinConnections"
-                        :distance="comp.props.distance"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <WorldPeripheralsPane
+                  v-if="modeStore.current !== WorkbenchModeId.Design"
+                  :components="activeComponents"
+                  :pin-states="pinStates"
+                  :oled-fb="oledFb"
+                />
               </div>
             </ErrorBoundary>
           </template>
@@ -646,34 +613,6 @@ onUnmounted(() => {
 }
 .main-layout.left-collapsed .left-panel {
   display: none;
-}
-.virtual-peripherals-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-}
-.grid-card {
-  background: #0f172a;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
-}
-.card-header {
-  background: #1e293b;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-.card-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.card-body {
-  padding: 16px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .right-panel {

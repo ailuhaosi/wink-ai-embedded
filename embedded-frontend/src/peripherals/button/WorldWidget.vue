@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import '@wokwi/elements';
 import { computed } from 'vue';
-import { setPinIdeal } from '@/services/simulation-client';
+import { setPinIdeal } from '@/services/simulation-pin-api';
 
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 import { getNetDefinitions } from '@/types/peripheral-pins';

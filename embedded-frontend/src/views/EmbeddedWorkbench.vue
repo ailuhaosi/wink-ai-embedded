@@ -155,29 +155,11 @@ function syncCanvasToManifest() {
 watch(activeComponents, (comps) => {
   const positions = circuitCanvasRef.value?.getLayoutPositions() ?? {};
   projectStore.commitCanvasSnapshot(comps, positions);
-  const pins: number[] = [];
-
-  comps.forEach((c) => {
-    Object.values(c.pinConnections).forEach((val) => {
-      if (typeof val === 'number') {
-        pins.push(val);
-      }
-    });
-  });
-
-  observePins(pins, comps);
+  observePins(comps);
 }, { deep: true, immediate: true });
 
 function syncSimulationFromCanvas() {
-  const pins: number[] = [];
-  activeComponents.value.forEach((c) => {
-    Object.values(c.pinConnections).forEach((val) => {
-      if (typeof val === 'number') {
-        pins.push(val);
-      }
-    });
-  });
-  observePins(pins, activeComponents.value);
+  observePins(activeComponents.value);
   injectFaults();
 }
 
@@ -198,15 +180,7 @@ function toggleSimulation() {
 function handleReset() {
   resetSimulation();
   setTimeout(() => {
-    const pins: number[] = [];
-    activeComponents.value.forEach((c) => {
-      Object.values(c.pinConnections).forEach((val) => {
-        if (typeof val === 'number') {
-          pins.push(val);
-        }
-      });
-    });
-    observePins(pins, activeComponents.value);
+    observePins(activeComponents.value);
     injectFaults();
   }, 100);
 }

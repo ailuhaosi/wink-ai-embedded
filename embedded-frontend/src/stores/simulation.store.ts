@@ -12,7 +12,8 @@ import {
   clearLogs,
   setUltrasonicDistance,
 } from '../services/simulation-client';
-import type { SimFaultsConfig, PeripheralConfig } from '../services/simulation-client';
+import type { SimFaultsConfig } from '../services/simulation-client';
+import type { PinConnectionValue } from '../types/peripheral-pins';
 
 interface SimulationControlState {
   simSpeed: number;
@@ -140,8 +141,10 @@ export const useSimulationStore = defineStore('simulation', {
       setPinIdeal(pin, level);
     },
 
-    observePins(pins: number[], peripherals: PeripheralConfig[]) {
-      observePins(pins, peripherals);
+    observePins(
+      components: Array<{ type: string; pinConnections: Record<string, PinConnectionValue> }>,
+    ) {
+      observePins(components);
     },
 
     setUltrasonicDistance(trigPin: number, echoPin: number, distanceCm: number) {

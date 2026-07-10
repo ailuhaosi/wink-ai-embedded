@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import '@wokwi/elements';
 import { ref, computed, onMounted, watch } from 'vue';
-import { setUltrasonicDistance } from '@/services/simulation-client';
+import { setUltrasonicDistance } from '@/services/simulation-pin-api';
 
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 

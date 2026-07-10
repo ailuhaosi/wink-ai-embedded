@@ -1,5 +1,9 @@
+import '@/peripherals';
+import { registry } from '@/peripherals/registry';
+import { ObserveBuilderImpl } from '@/peripherals/observe-builder';
 import WasmWorker from '../workers/wasm-simulation.worker?worker';
 import type { PinConnectionValue } from '../types/peripheral-pins';
+import type { CircuitComponentInstance } from '../types/circuit-component';
 import type {
   SimFaultsConfig,
   SimWorkerInbound,
@@ -12,9 +16,16 @@ import {
   clearLogs as clearRuntimeLogs,
   resetDataPlane,
 } from './simulation-runtime';
+import {
+  getSimWorker,
+  setSimWorker,
+  setPinIdeal,
+  setUltrasonicDistance,
+} from './simulation-pin-api';
 
 export type { SimFaultsConfig } from '../types/sim-worker-protocol';
 export type { SimTrace } from './simulation-runtime';
+export { setPinIdeal, setUltrasonicDistance };
 
 export interface PeripheralConfig {
   type: string;
@@ -34,7 +45,6 @@ export interface SimulationControlApi {
 }
 
 let control: SimulationControlApi | null = null;
-let worker: Worker | null = null;
 
 export function bindSimulationControl(api: SimulationControlApi) {
   control = api;
@@ -62,16 +72,18 @@ export function cloneFaultsConfig(faults: SimFaultsConfig): SimFaultsConfig {
 
 export function initSimulation() {
   const ctrl = requireControl();
+  const prev = getSimWorker();
 
-  if (worker) {
-    worker.terminate();
+  if (prev) {
+    prev.terminate();
   }
 
   ctrl.resetForInit();
   resetDataPlane();
 
   console.log('[SimulationClient] Spawning simulation worker...');
-  worker = new WasmWorker();
+  const worker = new WasmWorker();
+  setSimWorker(worker);
 
   worker.onmessage = (e: MessageEvent<SimWorkerOutbound>) => {
     const { type, payload, message } = e.data as SimWorkerOutbound & {
@@ -118,6 +130,7 @@ export function initSimulation() {
 
 export function startSimulation() {
   const ctrl = requireControl();
+  const worker = getSimWorker();
   if (worker && ctrl.isInitialized()) {
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.START };
     worker.postMessage(msg);
@@ -127,6 +140,7 @@ export function startSimulation() {
 
 export function pauseSimulation() {
   const ctrl = requireControl();
+  const worker = getSimWorker();
   if (worker && ctrl.isRunning()) {
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.PAUSE };
     worker.postMessage(msg);
@@ -135,6 +149,7 @@ export function pauseSimulation() {
 }
 
 export function resetSimulation() {
+  const worker = getSimWorker();
   if (worker) {
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.RESET };
     worker.postMessage(msg);
@@ -142,59 +157,39 @@ export function resetSimulation() {
   }
 }
 
-export function setPinIdeal(pin: number, level: boolean) {
-  if (worker) {
-    const msg: SimWorkerInbound = {
-      type: SimWorkerInboundType.SET_PIN_IDEAL,
-      payload: { pin, level },
-    };
-    worker.postMessage(msg);
+/** Preferred: components-only. Collects GPIO pins + plugin observe. */
+export function observePins(
+  components: Array<{ type: string; pinConnections: Record<string, PinConnectionValue> }>,
+): void {
+  const worker = getSimWorker();
+  if (!worker) return;
+
+  const builder = new ObserveBuilderImpl();
+
+  const pins: number[] = [];
+  for (const comp of components) {
+    for (const val of Object.values(comp.pinConnections)) {
+      if (typeof val === 'number') {
+        pins.push(val);
+      }
+    }
   }
-}
+  builder.watchGpio(pins);
 
-export function setUltrasonicDistance(trigPin: number, echoPin: number, distanceCm: number) {
-  if (worker) {
-    const msg: SimWorkerInbound = {
-      type: SimWorkerInboundType.SET_ULTRASONIC_DISTANCE,
-      payload: { trigPin, echoPin, distanceCm },
-    };
-    worker.postMessage(msg);
+  for (const comp of components) {
+    const def = registry.get(comp.type);
+    def?.simulation?.observe?.(comp as CircuitComponentInstance, builder);
   }
-}
 
-export function observePins(pins: number[], peripherals: PeripheralConfig[]) {
-  if (worker) {
-    const oledPeripheral = peripherals.find(p => p.type === 'oled');
-    const ultrasonicPeripheral = peripherals.find(p => p.type === 'ultrasonic');
-
-    const oledConfig = oledPeripheral
-      ? {
-          sda: oledPeripheral.pinConnections.DATA ?? null,
-          scl: oledPeripheral.pinConnections.CLK ?? null,
-        }
-      : null;
-
-    const ultrasonicConfig = ultrasonicPeripheral
-      ? {
-          trig: ultrasonicPeripheral.pinConnections.TRIG ?? null,
-          echo: ultrasonicPeripheral.pinConnections.ECHO ?? null,
-        }
-      : null;
-
-    const msg: SimWorkerInbound = {
-      type: SimWorkerInboundType.OBSERVE_PINS,
-      payload: {
-        pins: [...pins],
-        oled: !!oledPeripheral,
-        oledConfig,
-        ultrasonicConfig,
-      },
-    };
-    worker.postMessage(msg);
-  }
+  const msg: SimWorkerInbound = {
+    type: SimWorkerInboundType.OBSERVE_PINS,
+    payload: builder.build(),
+  };
+  worker.postMessage(msg);
 }
 
 export function setFaults(faults: SimFaultsConfig) {
+  const worker = getSimWorker();
   if (worker) {
     const msg: SimWorkerInbound = {
       type: SimWorkerInboundType.SET_FAULTS,
@@ -205,6 +200,7 @@ export function setFaults(faults: SimFaultsConfig) {
 }
 
 export function setSpeed(speed: number) {
+  const worker = getSimWorker();
   if (worker) {
     const msg: SimWorkerInbound = {
       type: SimWorkerInboundType.SET_SPEED,

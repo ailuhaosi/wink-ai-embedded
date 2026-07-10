@@ -68,6 +68,7 @@ export interface UseCircuitCanvasOptions {
   pinStates: Ref<Record<number, boolean>>;
   routingMode: Ref<'auto' | 'manual'>;
   readonly: Ref<boolean>;
+  onLayoutChange?: () => void;
 }
 
 const defaultPositions: Record<string, { x: number; y: number }> = {
@@ -85,14 +86,9 @@ const DEFAULT_WIRE_VISUAL: WireVisualState = {
 };
 
 export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
-  const { components, selectedComponentId, routingMode, readonly } = options;
+  const { components, selectedComponentId, routingMode, readonly, onLayoutChange } = options;
 
-  const layoutState = ref<Record<string, LayoutPosition>>({
-    led1: { x: 100, y: 100 },
-    btn1: { x: 80, y: 240 },
-    oled1: { x: 530, y: 120 },
-    sonar1: { x: 90, y: 360 },
-  });
+  const layoutState = ref<Record<string, LayoutPosition>>({});
 
   const nextPositionOffset = ref<Record<string, number>>({});
 
@@ -204,6 +200,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
   }
 
   function assignLayoutForNewComponent(id: string, type: string) {
+    if (layoutState.value[id]) return;
     const offset = nextPositionOffset.value[type] || 0;
     const basePos = defaultPositions[type];
     layoutState.value[id] = {
@@ -211,6 +208,15 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
       y: basePos.y + (offset % 3) * 20,
     };
     nextPositionOffset.value[type] = offset + 1;
+  }
+
+  function getLayoutPositions(): Record<string, LayoutPosition> {
+    return { ...layoutState.value };
+  }
+
+  function setLayoutPositions(positions: Record<string, LayoutPosition>) {
+    layoutState.value = { ...positions };
+    inactiveWireCache.value = {};
   }
 
   function removeLayoutForComponent(id: string) {
@@ -629,12 +635,16 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
   }
 
   function handleComponentMouseUp() {
+    const didDrag = isComponentDragging.value;
     draggedCompId.value = null;
     isComponentDragging.value = false;
     frozenTrackAssignments.value = null;
     inactiveWireCache.value = {};
     window.removeEventListener('mousemove', handleComponentMouseMove);
     window.removeEventListener('mouseup', handleComponentMouseUp);
+    if (didDrag) {
+      onLayoutChange?.();
+    }
   }
 
   function getCanvasX(comp: CircuitComponentInstance): number {
@@ -1368,6 +1378,8 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     updateCanvasScale,
     assignLayoutForNewComponent,
     removeLayoutForComponent,
+    getLayoutPositions,
+    setLayoutPositions,
     selectComponent,
     setRotation,
     rotateComponent,

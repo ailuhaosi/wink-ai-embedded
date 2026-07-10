@@ -83,6 +83,15 @@ export function createAvoidanceCarWorkbenchManifest(): EmbeddedProjectManifest {
     ...AVOIDANCE_CAR_W2_MINIMAL,
     id: `avoidance-car-${Date.now()}`,
     name: 'Avoidance Car',
+    devices: [
+      { componentId: 'esp32', modelId: 'esp32-devkit-v1', displayName: 'ESP32' },
+      {
+        componentId: 'front_radar',
+        modelId: 'hc-sr04',
+        displayName: 'Front Radar',
+        position: { x: 90, y: 360 },
+      },
+    ],
     mechanical: createUltrasonicMount(),
     bindings: createUltrasonicBinding('mount_ultrasonic', 'front_radar')!,
   };

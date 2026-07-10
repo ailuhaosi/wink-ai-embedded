@@ -22,9 +22,24 @@ export const OLED_DASHBOARD_DEMO_MANIFEST: EmbeddedProjectManifest = {
   target: { boardId: 'esp32-devkit-v1' },
   devices: [
     { componentId: 'esp32', modelId: 'esp32-devkit-v1', displayName: 'ESP32' },
-    { componentId: 'btn1', modelId: 'push-button', displayName: 'User Button' },
-    { componentId: 'led1', modelId: 'led', displayName: 'Status LED' },
-    { componentId: 'oled1', modelId: 'ssd1306', displayName: 'Status OLED' },
+    {
+      componentId: 'btn1',
+      modelId: 'button_stub',
+      displayName: 'User Button',
+      position: { x: 80, y: 240 },
+    },
+    {
+      componentId: 'led1',
+      modelId: 'led',
+      displayName: 'Status LED',
+      position: { x: 100, y: 100 },
+    },
+    {
+      componentId: 'oled1',
+      modelId: 'oled_stub',
+      displayName: 'Status OLED',
+      position: { x: 530, y: 120 },
+    },
   ],
   connections: [
     {
@@ -49,6 +64,30 @@ export const OLED_DASHBOARD_DEMO_MANIFEST: EmbeddedProjectManifest = {
       id: 'conn_oled_scl',
       from: { componentId: 'oled1', pin: 'CLK' },
       to: { componentId: '__board__esp32-devkit-v1', pin: 'GPIO22' },
+      routing: DEFAULT_ROUTING,
+    },
+    {
+      id: 'conn_led_gnd',
+      from: { componentId: 'led1', pin: 'C' },
+      to: { componentId: '__board__esp32-devkit-v1', pin: 'GND' },
+      routing: DEFAULT_ROUTING,
+    },
+    {
+      id: 'conn_btn_vcc',
+      from: { componentId: 'btn1', pin: '2.l' },
+      to: { componentId: '__board__esp32-devkit-v1', pin: 'VCC' },
+      routing: DEFAULT_ROUTING,
+    },
+    {
+      id: 'conn_oled_pwr',
+      from: { componentId: 'oled1', pin: '3V3' },
+      to: { componentId: '__board__esp32-devkit-v1', pin: '3V3' },
+      routing: DEFAULT_ROUTING,
+    },
+    {
+      id: 'conn_oled_gnd',
+      from: { componentId: 'oled1', pin: 'GND' },
+      to: { componentId: '__board__esp32-devkit-v1', pin: 'GND' },
       routing: DEFAULT_ROUTING,
     },
   ],

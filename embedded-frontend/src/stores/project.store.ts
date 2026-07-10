@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type {
   ConnectionEntry,
+  DeviceEntry,
   EmbeddedProjectManifest,
   SensorBinding,
   ActuatorBinding,
@@ -21,9 +22,46 @@ import {
   type ValidationResult,
 } from '@/services/binding-validation.service';
 import { bindingPinResolver } from '@/services/binding-pin-resolver';
-import { DEFAULT_ROUTING } from '@/services/connection-normalize';
 import { suggestBindings, type SuggestedBinding } from '@/services/binding-suggest.service';
 import { provisionImplicitCanvasBindings } from '@/services/canvas-binding-provision';
+
+function resolveBoardDeviceEntry(
+  manifest: EmbeddedProjectManifest,
+): DeviceEntry {
+  const boardId = manifest.target.boardId;
+  const existing = manifest.devices.find(
+    (d) => deviceCatalog.getDevice(d.modelId)?.category === 'board',
+  );
+  return (
+    existing ?? {
+      componentId: 'esp32',
+      modelId: boardId,
+      displayName: 'ESP32',
+    }
+  );
+}
+
+function buildCanvasDeviceEntries(
+  components: CircuitComponentInstance[],
+  layoutPositions?: Record<string, { x: number; y: number }>,
+): DeviceEntry[] {
+  return components.map((c) => {
+    const entry: DeviceEntry = {
+      componentId: c.id,
+      modelId: modelIdForCanvasType(c.type),
+      displayName: c.name,
+      rotation: c.rotation,
+    };
+    const pos = layoutPositions?.[c.id];
+    if (pos) {
+      entry.position = { x: pos.x, y: pos.y };
+    }
+    if (Object.keys(c.props).length > 0) {
+      entry.properties = { ...c.props };
+    }
+    return entry;
+  });
+}
 
 function isManifestSchemaV2Enabled(): boolean {
   return import.meta.env.VITE_MANIFEST_SCHEMA_V2 === 'true';
@@ -72,14 +110,16 @@ export const useProjectStore = defineStore('project', {
       this.refreshValidation('design');
     },
 
-    syncFromCanvas(components: CircuitComponentInstance[]) {
-      const boardId = this.manifest.target.boardId;
-      const devices = components.map((c) => ({
-        componentId: c.id,
-        modelId: modelIdForCanvasType(c.type),
-        displayName: c.name,
-        rotation: c.rotation,
-      }));
+    syncFromCanvas(
+      components: CircuitComponentInstance[],
+      layoutPositions?: Record<string, { x: number; y: number }>,
+    ) {
+      const boardEntry = resolveBoardDeviceEntry(this.manifest);
+      const canvasDevices = buildCanvasDeviceEntries(components, layoutPositions);
+      const devices = [
+        boardEntry,
+        ...canvasDevices.filter((d) => d.componentId !== boardEntry.componentId),
+      ];
 
       const connections: ConnectionEntry[] = [];
       for (const comp of components) {
@@ -94,11 +134,6 @@ export const useProjectStore = defineStore('project', {
             );
           }
         }
-      }
-
-      const boardEntry = deviceCatalog.getBoard(boardId);
-      if (boardEntry && !devices.some((d) => d.componentId === 'esp32')) {
-        // Keep board device if canvas doesn't model it explicitly
       }
 
       this.manifest = provisionImplicitCanvasBindings(

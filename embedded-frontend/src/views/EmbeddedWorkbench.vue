@@ -191,6 +191,7 @@
               :routing-mode="routingMode"
               @button-press="handleButtonPress"
               @button-release="handleButtonRelease"
+              @layout-change="syncCanvasToManifest"
             />
           </template>
           <template #secondary>
@@ -223,6 +224,7 @@
               :routing-mode="routingMode"
               @button-press="handleButtonPress"
               @button-release="handleButtonRelease"
+              @layout-change="syncCanvasToManifest"
             />
           </div>
 
@@ -708,12 +710,10 @@ import { useCanvasStore } from '@/stores/canvas.store';
 import { useSimulationStore } from '@/stores/simulation.store';
 import { useInspectorStore } from '@/stores/inspector.store';
 import { useProjectStore } from '@/stores/project.store';
-import { createAvoidanceCarWorkbenchManifest } from '@/services/templates/avoidance-car-w2-minimal';
 import {
-  createOledDashboardWorkbenchManifest,
-  createOledDashboardCanvasComponents,
-  OLED_DASHBOARD_TEMPLATE_ID,
-} from '@/services/templates/oled-dashboard-demo';
+  createWorkbenchTemplateManifest,
+  isOledDashboardTemplate,
+} from '@/services/manifest-patch.service';
 import { downloadManifest, readManifestFromFile } from '@/services/manifest.service';
 import { manifestToCanvas } from '@/services/manifest-to-canvas.service';
 import type { EmbeddedProjectManifest } from '@/types/manifest-v2';
@@ -927,9 +927,15 @@ function getPinLabel(comp: CircuitComponentInstance) {
   return digitalPins.join(', ');
 }
 
+function syncCanvasToManifest() {
+  const positions = circuitCanvasRef.value?.getLayoutPositions() ?? {};
+  projectStore.syncFromCanvas(activeComponents.value, positions);
+}
+
 // Watch active components to register them in worker + sync manifest
 watch(activeComponents, (comps) => {
-  projectStore.syncFromCanvas(comps);
+  const positions = circuitCanvasRef.value?.getLayoutPositions() ?? {};
+  projectStore.syncFromCanvas(comps, positions);
   const pins: number[] = [];
   
   comps.forEach(c => {
@@ -1091,7 +1097,7 @@ function onSplitRatioChange(ratio: number) {
 
 function applyManifestToWorkbench(manifest: EmbeddedProjectManifest) {
   projectStore.setManifest(manifest);
-  const { components } = manifestToCanvas(manifest);
+  const { components, layoutPositions } = manifestToCanvas(manifest);
   activeComponents.value = components;
   selectedCompId.value = components[0]?.id ?? '';
 
@@ -1101,14 +1107,19 @@ function applyManifestToWorkbench(manifest: EmbeddedProjectManifest) {
   }
 
   void nextTick(() => {
-    for (const comp of components) {
-      circuitCanvasRef.value?.assignLayoutForNewComponent(comp.id, comp.type);
+    if (Object.keys(layoutPositions).length > 0) {
+      circuitCanvasRef.value?.setLayoutPositions(layoutPositions);
+    } else {
+      for (const comp of components) {
+        circuitCanvasRef.value?.assignLayoutForNewComponent(comp.id, comp.type);
+      }
     }
     circuitCanvasRef.value?.updateCanvasScale();
   });
 }
 
 function onSaveProject() {
+  syncCanvasToManifest();
   downloadManifest(projectStore.manifest);
   showModeSwitchBanner(t('workbench.project.saved'));
 }
@@ -1125,18 +1136,19 @@ async function onOpenProject(file: File) {
 }
 
 function onLoadTemplate(templateId: string) {
-  if (templateId === OLED_DASHBOARD_TEMPLATE_ID || templateId === 'tpl_oled_dashboard') {
-    projectStore.setManifest(createOledDashboardWorkbenchManifest());
-    activeComponents.value = createOledDashboardCanvasComponents();
+  const manifest = createWorkbenchTemplateManifest(templateId);
+  if (!manifest) return;
+
+  applyManifestToWorkbench(manifest);
+
+  if (isOledDashboardTemplate(templateId)) {
     selectedCompId.value = 'btn1';
     faults.value = { ...faults.value, bounce_us: 0, i2c_drop_permil: 0 };
-  } else if (templateId === 'tpl_avoidance_car') {
-    applyManifestToWorkbench(createAvoidanceCarWorkbenchManifest());
+  } else {
     ultrasonicDistance.value = 25;
   }
+
   modeStore.setDesignSubMode('structure-first');
-  // Template only changes canvas/manifest — do not restart the worker (that disables Play
-  // until INIT_DONE). Rebuild wasm via npm run wasm:build:* then refresh the page.
   if (isInitialized.value) {
     syncSimulationFromCanvas();
   }

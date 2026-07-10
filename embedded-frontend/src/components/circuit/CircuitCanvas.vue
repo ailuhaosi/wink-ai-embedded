@@ -365,6 +365,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   buttonPress: [comp: CircuitComponentInstance];
   buttonRelease: [comp: CircuitComponentInstance];
+  layoutChange: [];
 }>();
 
 const readonlyRef = computed(() => props.readonly);
@@ -395,6 +396,8 @@ const {
   updateCanvasScale,
   assignLayoutForNewComponent,
   removeLayoutForComponent,
+  getLayoutPositions,
+  setLayoutPositions,
   selectComponent,
   setRotation,
   rotateComponent,
@@ -415,6 +418,7 @@ const {
   pinStates: pinStatesRef,
   routingMode: routingModeRef,
   readonly: readonlyRef,
+  onLayoutChange: () => emit('layoutChange'),
 });
 
 let canvasResizeObserver: ResizeObserver | null = null;
@@ -447,6 +451,8 @@ defineExpose({
   selectComponent,
   assignLayoutForNewComponent,
   removeLayoutForComponent,
+  getLayoutPositions,
+  setLayoutPositions,
 });
 </script>
 

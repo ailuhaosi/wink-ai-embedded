@@ -2,8 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { manifestToCanvas } from '@/services/manifest-to-canvas.service';
 import { createAvoidanceCarWorkbenchManifest } from '@/services/templates/avoidance-car-w2-minimal';
 import { migrateManifest } from '@/services/manifest-migration';
+import { createOledDashboardWorkbenchManifest } from '@/services/templates/oled-dashboard-demo';
 
 describe('manifest-to-canvas', () => {
+  it('hydrates OLED dashboard template from manifest', () => {
+    const { components, layoutPositions } = manifestToCanvas(
+      createOledDashboardWorkbenchManifest(),
+    );
+    expect(components).toHaveLength(3);
+    expect(components.find((c) => c.id === 'oled1')?.pinConnections.DATA).toBe(21);
+    expect(layoutPositions.oled1).toEqual({ x: 530, y: 120 });
+  });
+
   it('hydrates ultrasonic pins from avoidance car manifest', () => {
     const manifest = createAvoidanceCarWorkbenchManifest();
     const { components } = manifestToCanvas(manifest);

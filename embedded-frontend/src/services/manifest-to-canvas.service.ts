@@ -20,6 +20,20 @@ export interface ManifestToCanvasResult {
   layoutPositions: Record<string, { x: number; y: number }>;
 }
 
+/** Legacy / schema aliases → catalog modelId */
+const MODEL_ID_ALIASES: Record<string, string> = {
+  'push-button': 'button_stub',
+  ssd1306: 'oled_stub',
+};
+
+function resolveCatalogModelId(modelId: string): string {
+  return MODEL_ID_ALIASES[modelId] ?? modelId;
+}
+
+function resolveCanvasType(modelId: string): string | undefined {
+  return canvasTypeForModelId(resolveCatalogModelId(modelId));
+}
+
 const BOARD_COMPONENT_PREFIX = '__board__';
 
 function boardComponentId(manifest: EmbeddedProjectManifest): string {
@@ -115,10 +129,11 @@ export function manifestToCanvas(
   const layoutPositions: Record<string, { x: number; y: number }> = {};
 
   for (const device of manifest.devices) {
-    const entry = deviceCatalog.getDevice(device.modelId);
+    const catalogModelId = resolveCatalogModelId(device.modelId);
+    const entry = deviceCatalog.getDevice(catalogModelId);
     if (!entry || entry.category === 'board') continue;
 
-    const canvasType = canvasTypeForModelId(device.modelId);
+    const canvasType = resolveCanvasType(device.modelId);
     if (!canvasType) continue;
 
     const pinConnections = { ...getDefaultPinConnections(canvasType) };

@@ -1597,6 +1597,20 @@ async function createWasm() {
           return 1;
       }
 
+  function _js_pal_log(level, msgPtr) {
+          if (typeof Module !== 'undefined' && typeof Module.js_pal_log === 'function') {
+              return Module.js_pal_log(level, msgPtr);
+          }
+          var msg = UTF8ToString(msgPtr);
+          switch (level) {
+              case 1: (console.error || console.log).call(console, '[wink E] ' + msg); break;
+              case 2: (console.warn  || console.log).call(console, '[wink W] ' + msg); break;
+              case 3: (console.info  || console.log).call(console, '[wink I] ' + msg); break;
+              case 4: /* debug: 默认桩不输出以保持 smoke 输出干净；宿主打开 verbose 时覆盖即可 */ break;
+              default: console.log('[wink ?] ' + msg); break;
+          }
+      }
+
   var _js_pal_os_sleep_ms = function(ms) {
     let innerFunc =  () => {
   
@@ -2438,6 +2452,8 @@ var wasmImports = {
   js_pal_gpio_write: _js_pal_gpio_write,
   /** @export */
   js_pal_i2c_transfer: _js_pal_i2c_transfer,
+  /** @export */
+  js_pal_log: _js_pal_log,
   /** @export */
   js_pal_os_sleep_ms: _js_pal_os_sleep_ms,
   /** @export */

@@ -14,7 +14,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
 const buildDir = path.join(repoRoot, 'build-wasm');
-const microOsDir = path.join(repoRoot, 'wink-micro-os');
+const microOsDir = process.env.WINK_SDK_PATH
+  ? path.resolve(process.env.WINK_SDK_PATH)
+  : path.join(repoRoot, 'wink-micro-os');
 
 let app = process.argv[2] ?? 'oled_dashboard';
 let appDir = '';
@@ -31,12 +33,17 @@ if (!fs.existsSync(appDir)) {
   process.exit(1);
 }
 
+const codegenDir = process.env.WINK_CODEGEN_ROOT
+  ? path.resolve(process.env.WINK_CODEGEN_ROOT)
+  : path.join(repoRoot, 'tools/codegen');
+
 // Step 1: emcmake cmake configure
 const cmakeArgs = [
   '-S', microOsDir,
   '-B', buildDir,
   '-DTARGET_PLATFORM=wasm',
   `-DWINK_APP_DIR=${appDir}`,
+  `-DWINK_CODEGEN_ROOT=${codegenDir}`,
 ];
 
 console.log('[build-wasm]', 'emcmake cmake', cmakeArgs.join(' '));

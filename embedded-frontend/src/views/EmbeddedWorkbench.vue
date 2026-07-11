@@ -11,6 +11,7 @@ import {
   observePins,
   setFaults,
   setUltrasonicDistance,
+  syncIdleGpioFromComponents,
 } from '../services/simulation-client';
 import { pinStates, oledFb } from '../services/simulation-runtime';
 
@@ -149,6 +150,7 @@ watch(activeComponents, (comps) => {
 
 function syncSimulationFromCanvas() {
   observePins(activeComponents.value);
+  syncIdleGpioFromComponents(activeComponents.value);
   injectFaults();
 }
 
@@ -170,6 +172,7 @@ function handleReset() {
   resetSimulation();
   setTimeout(() => {
     observePins(activeComponents.value);
+    syncIdleGpioFromComponents(activeComponents.value);
     injectFaults();
   }, 100);
 }

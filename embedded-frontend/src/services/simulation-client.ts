@@ -157,6 +157,22 @@ export function resetSimulation() {
   }
 }
 
+export function syncIdleGpioFromComponents(
+  components: Array<{
+    type: string;
+    pinConnections: Record<string, PinConnectionValue>;
+    props: Record<string, unknown>;
+  }>,
+): void {
+  for (const comp of components) {
+    if (comp.type !== 'button') continue;
+    const signalPin = comp.pinConnections['1.l'];
+    if (typeof signalPin !== 'number') continue;
+    const activeLow = comp.props.activeLow !== false;
+    setPinIdeal(signalPin, activeLow);
+  }
+}
+
 /** Preferred: components-only. Collects GPIO pins + plugin observe. */
 export function observePins(
   components: Array<{ type: string; pinConnections: Record<string, PinConnectionValue> }>,

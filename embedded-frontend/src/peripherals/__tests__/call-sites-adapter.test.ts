@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const srcRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
-/** Production call sites that must use legacy-adapter / @/peripherals (P2.3). */
+/** Production call sites that must use registry / @/peripherals helpers. */
 const CALL_SITES = [
   'components/workbench/WorkbenchPropertyInspector.vue',
   'composables/canvas/useWireRendering.ts',
@@ -19,7 +19,7 @@ function readSrc(rel: string): string {
   return readFileSync(join(srcRoot, rel), 'utf8');
 }
 
-describe('P2.3 call sites use legacy adapter / @/peripherals', () => {
+describe('call sites use registry / @/peripherals (no legacy-adapter)', () => {
   it.each(CALL_SITES)('%s does not import peripheralConfigs from peripheral-pins', (rel) => {
     const src = readSrc(rel);
     expect(src).not.toMatch(
@@ -30,20 +30,28 @@ describe('P2.3 call sites use legacy adapter / @/peripherals', () => {
     );
   });
 
-  it('WorkbenchPropertyInspector imports peripheralConfigsAdapter from @/peripherals', () => {
+  it('no production source imports legacy-adapter or peripheralConfigsAdapter', () => {
+    for (const rel of CALL_SITES) {
+      const src = readSrc(rel);
+      expect(src).not.toMatch(/legacy-adapter/);
+      expect(src).not.toMatch(/peripheralConfigsAdapter/);
+    }
+  });
+
+  it('WorkbenchPropertyInspector imports registry from @/peripherals', () => {
     const src = readSrc('components/workbench/WorkbenchPropertyInspector.vue');
-    expect(src).toMatch(/peripheralConfigsAdapter/);
+    expect(src).toMatch(/registry/);
     expect(src).toMatch(/from\s+['"]@\/peripherals['"]/);
   });
 
-  it('useWireRendering and useCanvasLayout use peripheralConfigsAdapter', () => {
-    expect(readSrc('composables/canvas/useWireRendering.ts')).toMatch(/peripheralConfigsAdapter/);
-    expect(readSrc('composables/canvas/useCanvasLayout.ts')).toMatch(/peripheralConfigsAdapter/);
+  it('useWireRendering and useCanvasLayout use registry', () => {
+    expect(readSrc('composables/canvas/useWireRendering.ts')).toMatch(/registry/);
+    expect(readSrc('composables/canvas/useCanvasLayout.ts')).toMatch(/registry/);
   });
 
-  it('static-check.service uses peripheralConfigsAdapter from @/peripherals', () => {
+  it('static-check.service uses registry from @/peripherals', () => {
     const src = readSrc('services/static-check.service.ts');
-    expect(src).toMatch(/peripheralConfigsAdapter/);
+    expect(src).toMatch(/registry/);
     expect(src).toMatch(/from\s+['"]@\/peripherals['"]/);
   });
 
@@ -56,9 +64,6 @@ describe('P2.3 call sites use legacy adapter / @/peripherals', () => {
       expect(src).toMatch(/getDefaultPinConnections/);
       expect(src).toMatch(/getDefaultProps/);
       expect(src).toMatch(/from\s+['"]@\/peripherals['"]/);
-      expect(src).not.toMatch(
-        /getDefault(?:PinConnections|Props)[^;]*from\s*['"][^'"]*peripheral-pins['"]/,
-      );
     }
   });
 });

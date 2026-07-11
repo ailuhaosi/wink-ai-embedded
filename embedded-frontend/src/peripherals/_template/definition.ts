@@ -6,6 +6,9 @@ import InspectorExtra from './InspectorExtra.vue';
 /**
  * Copy this file when creating a new peripheral package.
  * Replace 'example' with your peripheral type and fill in real metadata.
+ *
+ * SSOT: pins[] is the only pin source — catalog pins are derived via derive-catalog-entry.
+ * worldCoupling lives only in catalog (not simulation).
  */
 
 const exampleProps: PeripheralPropsSchema = {
@@ -47,11 +50,6 @@ export const templateDefinition: PeripheralDefinition = {
   catalog: {
     id: 'example_stub',
     description: 'Example peripheral scaffold — copy and customize',
-    pins: [
-      { name: 'SIG', type: 'gpio', description: 'Signal pin', required: true },
-      { name: 'VCC', type: 'power', description: 'Power supply', required: true },
-      { name: 'GND', type: 'power', description: 'Ground', required: true },
-    ],
     worldCoupling: 'optional',
     allowedActuatorMappings: ['gpio_to_emissive'],
     allowedSensorMappings: ['raycast_range_cm'],
@@ -61,6 +59,7 @@ export const templateDefinition: PeripheralDefinition = {
   pins: [
     {
       name: 'SIG',
+      catalogType: 'gpio',
       description: 'Signal pin',
       required: true,
       signalType: 'digital',
@@ -70,6 +69,7 @@ export const templateDefinition: PeripheralDefinition = {
     },
     {
       name: 'VCC',
+      catalogType: 'power',
       description: 'Power 3.3V',
       required: true,
       signalType: 'power',
@@ -79,6 +79,7 @@ export const templateDefinition: PeripheralDefinition = {
     },
     {
       name: 'GND',
+      catalogType: 'power',
       description: 'Ground',
       required: true,
       signalType: 'power',
@@ -92,16 +93,11 @@ export const templateDefinition: PeripheralDefinition = {
   world: { component: WorldWidget },
   inspectorExtra: InspectorExtra,
   simulation: {
-    worldCoupling: 'optional',
     observe(comp, builder) {
       const sig = comp.pinConnections.SIG;
       if (typeof sig === 'number') {
         builder.watchGpio([sig]);
       }
-      // Alternative patterns (uncomment as needed):
-      // builder.watchI2C(sda, scl);
-      // builder.watchUltrasonic(trig, echo);
-      // builder.setParam('customKey', comp.props.someValue);
     },
   },
 };

@@ -56,7 +56,7 @@ describe('device-catalog from registry', () => {
     }
   });
 
-  it('definitionToCatalogEntry maps definition catalog fields', () => {
+  it('definitionToCatalogEntry maps definition catalog fields from unified pins', () => {
     const def = makeDef({
       type: 'test-map-p22',
       displayName: 'Mapped Peripheral',
@@ -64,14 +64,19 @@ describe('device-catalog from registry', () => {
       catalog: {
         id: 'mapped_stub',
         description: 'Mapped',
-        pins: [
-          { name: 'SIG', type: 'gpio', description: 'Signal' },
-          { name: 'GND', type: 'power' },
-        ],
         worldCoupling: 'required',
         allowedSensorMappings: ['raycast_range_cm'],
         allowedActuatorMappings: ['gpio_to_emissive'],
       },
+      pins: [
+        {
+          name: 'SIG',
+          catalogType: 'gpio',
+          description: 'Signal',
+          signalType: 'digital',
+        },
+        { name: 'GND', catalogType: 'power', signalType: 'power' },
+      ],
     });
 
     expect(definitionToCatalogEntry(def)).toEqual({
@@ -100,9 +105,9 @@ describe('device-catalog from registry', () => {
         catalog: {
           id: `${type}_id`,
           description: 'Dynamic',
-          pins: [{ name: 'A', type: 'gpio' }],
           worldCoupling: 'optional',
         },
+        pins: [{ name: 'A', catalogType: 'gpio', signalType: 'digital' }],
       }),
     );
 
@@ -136,5 +141,28 @@ describe('device-catalog from registry', () => {
     expect(modelIdForCanvasType('button')).toBe('button_stub');
     expect(modelIdForCanvasType('oled')).toBe('oled_stub');
     expect(modelIdForCanvasType('ultrasonic')).toBe('hc-sr04');
+    expect(modelIdForCanvasType('motor_driver_stub')).toBe('motor_driver_stub');
+    expect(modelIdForCanvasType('dht22_stub')).toBe('dht22_stub');
+    expect(modelIdForCanvasType('buzzer_stub')).toBe('buzzer_stub');
+  });
+
+  it('board devices come from boardRegistry', () => {
+    const board = deviceCatalog.getDevice('esp32-devkit-v1');
+    expect(board).toMatchObject({
+      id: 'esp32-devkit-v1',
+      category: 'board',
+      simulation: { worldCoupling: 'none' },
+    });
+    expect(deviceCatalog.getBoard('esp32-devkit-v1')?.gpioPins.length).toBeGreaterThan(0);
+  });
+
+  it('stub peripherals come from registry (not catalog hardcoding)', () => {
+    for (const id of ['motor_driver_stub', 'dht22_stub', 'buzzer_stub'] as const) {
+      const entry = deviceCatalog.getDevice(id);
+      expect(entry, id).toBeDefined();
+      expect(entry?.canvasType).toBe(id);
+      expect(entry?.category).toBe('peripheral');
+      expect(registry.get(id)?.canvas?.component).toBeTruthy();
+    }
   });
 });

@@ -26,16 +26,31 @@ export interface PeripheralPropDef {
 /** 属性集合类型 */
 export type PeripheralPropsSchema = Record<string, PeripheralPropDef>;
 
-export interface PeripheralPinDef {
+export type CatalogPinType =
+  | 'pwm'
+  | 'gpio'
+  | 'digital_in'
+  | 'digital_out'
+  | 'i2c'
+  | 'power';
+
+/** 统一引脚 SSOT — 画布 + catalog + pin-resolver 共用 */
+export interface UnifiedPinDef {
   name: string;
-  signalType: 'digital' | 'i2c' | 'power' | 'custom';
+  /** catalog / B-06 / pin-resolver 用语义类型 */
+  catalogType: CatalogPinType;
   description?: string;
   required?: boolean;
+  /** 画布走线语义 */
+  signalType: 'digital' | 'i2c' | 'power' | 'custom';
   defaultConnection?: PinConnectionValue;
   /** Pin position relative to component top-left (canvas layout) */
   relX?: number;
   relY?: number;
 }
+
+/** @deprecated Use UnifiedPinDef — alias kept for incremental migration */
+export type PeripheralPinDef = UnifiedPinDef;
 
 export interface PeripheralDefinition {
   /** 画布 / 实例 type，如 'led' */
@@ -47,12 +62,11 @@ export interface PeripheralDefinition {
   /** 分类（用于资产库分组） */
   category: 'display' | 'input' | 'sensor' | 'actuator' | 'other';
 
-  /** 资产库 / catalog 所需字段（P2 与 device-catalog 收敛） */
+  /** 资产库 / catalog 元数据（引脚由 definition.pins 派生，不在此重复） */
   catalog?: {
     id: string;
-    description: string;
-    pins: Array<{ name: string; type: string; description?: string; required?: boolean }>;
-    worldCoupling?: 'none' | 'optional' | 'required';
+    description?: string;
+    worldCoupling: 'none' | 'optional' | 'required';
     allowedActuatorMappings?: string[];
     allowedSensorMappings?: string[];
   };
@@ -60,8 +74,8 @@ export interface PeripheralDefinition {
   /** 画布尺寸（未旋转时） */
   size: { width: number; height: number };
 
-  /** 引脚定义 */
-  pins: PeripheralPinDef[];
+  /** 引脚定义（唯一 SSOT） */
+  pins: UnifiedPinDef[];
 
   /** 属性 schema（用于自动生成属性面板 + 派生默认值） */
   props: PeripheralPropsSchema;
@@ -79,9 +93,8 @@ export interface PeripheralDefinition {
     component: Component;
   };
 
-  /** P3：仿真观察插件接口 */
+  /** 仿真观察插件（binding 桥为主路径；observe 为 OLED/超声等过渡） */
   simulation?: {
-    worldCoupling?: 'none' | 'optional' | 'required';
     observe?: ObserveFn;
   };
 

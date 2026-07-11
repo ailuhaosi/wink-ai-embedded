@@ -93,10 +93,10 @@ describe('peripheral registry', () => {
       makeDef({
         type: 'test-with-pins',
         pins: [
-          { name: 'A', signalType: 'digital', defaultConnection: 13 },
-          { name: 'C', signalType: 'power', defaultConnection: 'GND' },
-          { name: 'X', signalType: 'digital', defaultConnection: null },
-          { name: 'Y', signalType: 'digital' },
+          { name: 'A', catalogType: 'gpio', signalType: 'digital', defaultConnection: 13 },
+          { name: 'C', catalogType: 'power', signalType: 'power', defaultConnection: 'GND' },
+          { name: 'X', catalogType: 'gpio', signalType: 'digital', defaultConnection: null },
+          { name: 'Y', catalogType: 'gpio', signalType: 'digital' },
         ],
       }),
     );
@@ -128,5 +128,16 @@ describe('built-in peripheral packages', () => {
     expect(registry.get('button')?.canvas?.component).toBeTruthy();
     expect(registry.get('oled')?.canvas?.component).toBeTruthy();
     expect(registry.get('ultrasonic')?.canvas?.component).toBeTruthy();
+  });
+
+  it('registers stub packages with canvas glyphs', () => {
+    for (const type of ['motor_driver_stub', 'dht22_stub', 'buzzer_stub'] as const) {
+      expect(registry.get(type)?.canvas?.component).toBeTruthy();
+      expect(registry.get(type)?.catalog?.id).toBe(type);
+    }
+    expect(registry.get('motor_driver_stub')?.catalog?.worldCoupling).toBe('required');
+    expect(registry.get('dht22_stub')?.catalog?.allowedSensorMappings).toContain(
+      'temperature_field_sample',
+    );
   });
 });

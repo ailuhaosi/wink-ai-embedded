@@ -33,7 +33,7 @@ describe('manifest-to-canvas', () => {
     });
   });
 
-  it('skips board devices and non-canvas stubs', () => {
+  it('skips board devices and hydrates canvas peripherals including stubs', () => {
     const manifest = migrateManifest({
       schemaVersion: 2,
       id: 'p1',
@@ -66,10 +66,23 @@ describe('manifest-to-canvas', () => {
     });
 
     const { components, layoutPositions } = manifestToCanvas(manifest);
-    expect(components).toHaveLength(1);
-    expect(components[0].pinConnections.A).toBe(13);
-    expect(components[0].pinConnections.C).toBe('GND');
+    expect(components).toHaveLength(2);
+
+    const led = components.find(c => c.id === 'led1');
+    expect(led?.pinConnections.A).toBe(13);
+    expect(led?.pinConnections.C).toBe('GND');
     expect(layoutPositions.led1).toEqual({ x: 120, y: 80 });
+
+    const motors = components.find(c => c.id === 'motors');
+    expect(motors).toMatchObject({
+      type: 'motor_driver_stub',
+      pinConnections: {
+        PWM_LEFT: 14,
+        PWM_RIGHT: 15,
+        VCC: 'VCC',
+        GND: 'GND',
+      },
+    });
   });
 
   it('accepts string pin refs in connections', () => {

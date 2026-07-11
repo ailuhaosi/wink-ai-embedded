@@ -2,7 +2,17 @@
  * Peripheral plugin entry — explicit side-effect registration (no import.meta.glob).
  * Import this module (or individual packages) to ensure builtins are registered.
  */
-export { registry } from './registry';
+import { registry } from './registry';
+
+import './led';
+import './button';
+import './oled';
+import './ultrasonic';
+import './motor_driver_stub';
+import './dht22_stub';
+import './buzzer_stub';
+
+export { registry };
 export { ObserveBuilderImpl } from './observe-builder';
 export type {
   ObserveBuilder,
@@ -15,15 +25,17 @@ export type {
   PeripheralPropDef,
   PeripheralPropsSchema,
   PinConnectionValue,
+  UnifiedPinDef,
 } from './types';
-export {
-  peripheralConfigsAdapter,
-  getDefaultProps,
-  getDefaultPinConnections,
-  getComponentSize,
-} from './legacy-adapter';
 
-import './led';
-import './button';
-import './oled';
-import './ultrasonic';
+export function getDefaultProps(type: string): Record<string, unknown> {
+  return registry.getDefaultProps(type);
+}
+
+export function getDefaultPinConnections(type: string) {
+  return registry.getDefaultPinConnections(type);
+}
+
+export function getComponentSize(type: string): { width: number; height: number } {
+  return registry.getSize(type);
+}

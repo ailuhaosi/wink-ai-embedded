@@ -16,11 +16,18 @@ const repoRoot = path.resolve(__dirname, '../..');
 const buildDir = path.join(repoRoot, 'build-wasm');
 const microOsDir = path.join(repoRoot, 'wink-micro-os');
 
-const app = process.argv[2] ?? 'oled_dashboard';
-const appDir = path.join(microOsDir, 'samples', app);
+let app = process.argv[2] ?? 'oled_dashboard';
+let appDir = '';
+
+if (fs.existsSync(app) && fs.statSync(app).isDirectory()) {
+  appDir = path.resolve(app);
+  app = path.basename(appDir);
+} else {
+  appDir = path.join(microOsDir, 'samples', app);
+}
 
 if (!fs.existsSync(appDir)) {
-  console.error(`[build-wasm] Unknown app sample: ${app} (${appDir})`);
+  console.error(`[build-wasm] Unknown app sample directory: ${appDir}`);
   process.exit(1);
 }
 

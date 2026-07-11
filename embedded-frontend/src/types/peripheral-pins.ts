@@ -1,5 +1,7 @@
 import { POWER_RAIL_VALUES } from '@/constants/power-rail';
 import type { PowerRailValue } from '@/constants/power-rail';
+import { getDefaultBoardCanvasDescriptor } from '@/boards';
+import type { BoardCanvasDescriptor } from '@/boards';
 
 export type PinConnectionValue = number | PowerRailValue | null;
 
@@ -49,35 +51,15 @@ export interface BoardPin {
   y: number;
 }
 
-export interface BoardDescriptor {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  pins: Record<number, BoardPin>;
-  powerPins: Record<string, BoardPin>;
+export interface BoardDescriptor extends BoardCanvasDescriptor {}
+
+const defaultBoardCanvas = getDefaultBoardCanvasDescriptor();
+if (!defaultBoardCanvas) {
+  throw new Error('Default board canvas descriptor is not registered');
 }
 
-export const boardDescriptor: BoardDescriptor = {
-  x: 310,
-  y: 130,
-  width: 180,
-  height: 200,
-  pins: {
-    2: { x: 317, y: 132 },
-    10: { x: 317, y: 282 },
-    12: { x: 317, y: 162 },
-    13: { x: 317, y: 192 },
-    14: { x: 317, y: 222 },
-    21: { x: 487, y: 162 },
-    22: { x: 487, y: 192 },
-  },
-  powerPins: {
-    'VCC': { x: 487, y: 222 },
-    '3V3': { x: 487, y: 222 },
-    'GND': { x: 317, y: 252 },
-  },
-};
+/** @deprecated Prefer `boardRegistry.getCanvasDescriptor(boardId)` from `@/boards`. */
+export const boardDescriptor: BoardDescriptor = defaultBoardCanvas;
 
 export interface BoardOrigin {
   x: number;
@@ -246,6 +228,7 @@ export interface WirePathResult {
   segments: Array<{ d: string; layer: number }>;
   vias: Array<{ x: number; y: number }>;
   teardrops: Array<string>;
+  pathPoints?: Array<{ x: number; y: number }>;
 }
 
 export {

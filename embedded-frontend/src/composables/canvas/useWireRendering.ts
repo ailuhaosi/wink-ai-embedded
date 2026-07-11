@@ -8,7 +8,6 @@ import type {
   NetDefinition,
   PinConnectionValue,
 } from '@/types/peripheral-pins';
-import { peripheralConfigsAdapter } from '@/peripherals';
 import {
   getNetDefinitions,
   boardDescriptor,
@@ -60,10 +59,9 @@ export function useWireRendering(
   function getPeripheralPinPosition(comp: CircuitComponentInstance, pinName: string): { x: number; y: number } {
     const baseX = layout.getCanvasX(comp);
     const baseY = layout.getCanvasY(comp);
-    const config = peripheralConfigsAdapter[comp.type];
-    const pinDef = config?.pins.find(p => p.name === pinName);
-    const offsetX = pinDef ? pinDef.relX : 0;
-    const offsetY = pinDef ? pinDef.relY : 0;
+    const pinDef = registry.get(comp.type)?.pins.find(p => p.name === pinName);
+    const offsetX = pinDef?.relX ?? 0;
+    const offsetY = pinDef?.relY ?? 0;
 
     const rotation = comp.rotation || 0;
     if (rotation === 0) {

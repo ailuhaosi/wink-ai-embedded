@@ -3,7 +3,7 @@
 /* eslint-disable vue/no-mutating-props */
 import { computed } from 'vue';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
-import { peripheralConfigsAdapter, registry } from '@/peripherals';
+import { registry } from '@/peripherals';
 import {
   availableGPIOs,
   powerOptions,
@@ -26,6 +26,13 @@ const inspectorExtra = computed(() => {
   const type = props.selectedComp?.type;
   return type ? registry.get(type)?.inspectorExtra : undefined;
 });
+
+const selectedDefinition = computed(() =>
+  props.selectedComp ? registry.get(props.selectedComp.type) : undefined,
+);
+
+const pinDefs = computed(() => selectedDefinition.value?.pins ?? []);
+const propSchema = computed(() => selectedDefinition.value?.props ?? {});
 </script>
 
 <template>
@@ -53,7 +60,7 @@ const inspectorExtra = computed(() => {
         Pin Connections
       </div>
       <div
-        v-for="pinDef in peripheralConfigsAdapter[selectedComp.type]?.pins"
+        v-for="pinDef in pinDefs"
         :key="pinDef.name"
         class="form-group"
       >
@@ -83,7 +90,7 @@ const inspectorExtra = computed(() => {
         Properties
       </div>
       <div
-        v-for="(propDef, propKey) in peripheralConfigsAdapter[selectedComp.type]?.props"
+        v-for="(propDef, propKey) in propSchema"
         :key="propKey"
         class="form-group"
       >

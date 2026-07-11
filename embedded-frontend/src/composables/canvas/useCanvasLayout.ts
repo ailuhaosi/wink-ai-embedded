@@ -1,6 +1,6 @@
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { Obstacle } from '@/types/peripheral-pins';
-import { peripheralConfigsAdapter } from '@/peripherals';
+import { registry } from '@/peripherals';
 import { defaultPositions } from './constants';
 import type { CanvasContext, LayoutPosition } from './types';
 
@@ -56,7 +56,7 @@ export function useCanvasLayout(ctx: CanvasContext) {
   }
 
   function getComponentSize(type: string): { width: number; height: number } {
-    return peripheralConfigsAdapter[type]?.size ?? { width: 80, height: 60 };
+    return registry.getSize(type);
   }
 
   function getComponentWidth(comp: CircuitComponentInstance): number {
@@ -77,13 +77,15 @@ export function useCanvasLayout(ctx: CanvasContext) {
     let minY = 0;
     let maxX = s.width;
     let maxY = s.height;
-    const config = peripheralConfigsAdapter[comp.type];
+    const config = registry.get(comp.type);
     if (config) {
       for (const pin of config.pins) {
-        minX = Math.min(minX, pin.relX - 12);
-        minY = Math.min(minY, pin.relY - 12);
-        maxX = Math.max(maxX, pin.relX + 12);
-        maxY = Math.max(maxY, pin.relY + 12);
+        const relX = pin.relX ?? 0;
+        const relY = pin.relY ?? 0;
+        minX = Math.min(minX, relX - 12);
+        minY = Math.min(minY, relY - 12);
+        maxX = Math.max(maxX, relX + 12);
+        maxY = Math.max(maxY, relY + 12);
       }
     }
     const w = maxX - minX;

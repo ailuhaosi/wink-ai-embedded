@@ -1,0 +1,60 @@
+import type { PeripheralDefinition } from '../types';
+import CanvasGlyph from './CanvasGlyph.vue';
+
+export const motorDriverStubDefinition: PeripheralDefinition = {
+  type: 'motor_driver_stub',
+  displayName: 'Motor Driver (stub)',
+  category: 'actuator',
+  catalog: {
+    id: 'motor_driver_stub',
+    description: 'Dual PWM motor driver placeholder',
+    worldCoupling: 'required',
+    allowedActuatorMappings: ['pwm_to_angular_velocity'],
+  },
+  size: { width: 120, height: 70 },
+  wireColor: '#f97316',
+  pins: [
+    {
+      name: 'PWM_LEFT',
+      catalogType: 'pwm',
+      description: 'Left motor PWM',
+      required: true,
+      signalType: 'digital',
+      defaultConnection: 14,
+      relX: 20,
+      relY: 62,
+    },
+    {
+      name: 'PWM_RIGHT',
+      catalogType: 'pwm',
+      description: 'Right motor PWM',
+      required: true,
+      signalType: 'digital',
+      defaultConnection: 15,
+      relX: 50,
+      relY: 62,
+    },
+    {
+      name: 'VCC',
+      catalogType: 'power',
+      description: 'Power supply',
+      required: true,
+      signalType: 'power',
+      defaultConnection: 'VCC',
+      relX: 80,
+      relY: 62,
+    },
+    {
+      name: 'GND',
+      catalogType: 'power',
+      description: 'Ground',
+      required: true,
+      signalType: 'power',
+      defaultConnection: 'GND',
+      relX: 100,
+      relY: 62,
+    },
+  ],
+  props: {},
+  canvas: { component: CanvasGlyph },
+};

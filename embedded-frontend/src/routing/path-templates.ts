@@ -5,6 +5,7 @@ import {
   manhattanDistance,
   pinCoord,
   routePathAroundObstacle,
+  routePathClearOfObstacles,
   segmentIntersectsObstacle,
   snapTrackCoord,
   verticalTrackCrossesObstacle,
@@ -118,23 +119,13 @@ function findObstacleNear(obstacles: Obstacle[], point: Point): Obstacle | null 
 function finalizeTemplatePath(
   points: Point[],
   obstacles: Obstacle[],
-  start: Point,
-  end: Point,
+  _start: Point,
+  _end: Point,
 ): Point[] {
-  let result = points;
-  const endObstacle = findObstacleNear(obstacles, end);
-  const startObstacle = findObstacleNear(obstacles, start);
-
-  if (endObstacle) {
-    result = routePathAroundObstacle(result, endObstacle, { skipLastSegment: true });
-  }
-  if (startObstacle) {
-    result = routePathAroundObstacle(result, startObstacle, {
-      skipFirstSegment: true,
-      skipLastSegment: false,
-    });
-  }
-  return result;
+  return routePathClearOfObstacles(points, obstacles, {
+    skipFirstSegment: true,
+    skipLastSegment: true,
+  });
 }
 
 export function buildStubPoints(
@@ -186,7 +177,7 @@ export function templateLocal(input: TemplateInput): Point[] | null {
     return pathLength(a) - pathLength(b);
   });
 
-  return valid[0];
+  return finalizeTemplatePath(valid[0], obstacles, start, end);
 }
 
 function needsBottomPinSideApproach(

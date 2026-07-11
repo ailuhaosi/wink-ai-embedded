@@ -8,3 +8,5 @@ export const I2C_BUNDLE_GAP = 8;
 export const GPIO_FANOUT_SPACING = 6;
 export const ROUND_RADIUS = 6;
 export const OBSTACLE_PADDING = 8;
+/** Vertical stub length below a power node before the wire turns upward into the terminal */
+export const POWER_NODE_APPROACH_OFFSET = 24;

@@ -1,5 +1,15 @@
-import { OBSTACLE_PADDING, ROUND_RADIUS } from './constants';
-import { snapTrackCoord, resolveBypassEdgeX, verticalTrackCrossesObstacle } from './geometry';
+import { OBSTACLE_PADDING, POWER_NODE_APPROACH_OFFSET, ROUND_RADIUS } from './constants';
+import {
+  boardEdgeChannelCoord,
+  normalizeBoardPinLanding,
+  resolveBoardBounds,
+  resolveBoardPinApproachPoint,
+  resolveBoardPinEdge,
+  routePathClearOfObstacles,
+  snapTrackCoord,
+  resolveBypassEdgeX,
+  verticalTrackCrossesObstacle,
+} from './geometry';
 import type { BoardOrigin, CardinalDirection, Obstacle, Point, WirePathResult } from './types';
 
 export function simplifyPath(pts: Point[]): Point[] {
@@ -152,16 +162,78 @@ export function buildWirePathResultFrom2D(
     segments: [{ d, layer: 0 }],
     vias: [],
     teardrops,
+    pathPoints: simplified,
   };
 }
 
-/** Star-bus tap: peripheral → horizontal power rail (top) → power node */
+/** Power tap: route to a point directly below the node, then vertical up into the terminal */
+function boardTopLaneY(board: Obstacle): number {
+  return snapTrackCoord(board.y - 12);
+}
+
+function needsBoardTopBypass(
+  p1: Point,
+  nodePos: Point,
+  joinY: number,
+  board: Obstacle,
+): boolean {
+  if (nodePos.y >= board.y) return false;
+  if (joinY < board.y) return false;
+  const loX = Math.min(p1.x, nodePos.x);
+  const hiX = Math.max(p1.x, nodePos.x);
+  if (hiX > board.x && loX < board.x + board.width) return true;
+  return nodePos.x > board.x && nodePos.x < board.x + board.width;
+}
+
+function buildBoardTopPowerTapPath(
+  start: Point,
+  p1: Point,
+  nodePos: Point,
+  board: Obstacle,
+  sourceObstacle?: Obstacle,
+): Point[] {
+  const bypassY = boardTopLaneY(board);
+  const approachY = snapTrackCoord(nodePos.y + POWER_NODE_APPROACH_OFFSET);
+
+  if (
+    sourceObstacle
+    && verticalTrackCrossesObstacle(p1.x, Math.min(p1.y, bypassY), Math.max(p1.y, bypassY), sourceObstacle)
+  ) {
+    const edgeX = resolveBypassEdgeX(sourceObstacle, nodePos.x);
+    const path: Point[] = [
+      start,
+      p1,
+      { x: edgeX, y: snapTrackCoord(p1.y) },
+      { x: edgeX, y: bypassY },
+      { x: nodePos.x, y: bypassY },
+    ];
+    if (approachY > nodePos.y && approachY !== bypassY) {
+      path.push({ x: nodePos.x, y: approachY });
+    }
+    path.push(nodePos);
+    return path;
+  }
+
+  const path: Point[] = [start, p1];
+  if (p1.y !== bypassY) {
+    path.push({ x: p1.x, y: bypassY });
+  }
+  if (p1.x !== nodePos.x) {
+    path.push({ x: nodePos.x, y: bypassY });
+  }
+  if (approachY > nodePos.y && approachY !== bypassY) {
+    path.push({ x: nodePos.x, y: approachY });
+  }
+  path.push(nodePos);
+  return path;
+}
+
 export function buildPowerBusTapPath2D(
   start: Point,
   nodePos: Point,
-  railY: number,
   startDir: CardinalDirection,
   sourceObstacle?: Obstacle,
+  boardObstacle?: Obstacle,
 ): Point[] {
   const ext = 14;
   const p1 = { x: start.x, y: start.y };
@@ -185,56 +257,129 @@ export function buildPowerBusTapPath2D(
     }
   }
 
-  if (
+  const approachY = snapTrackCoord(nodePos.y + POWER_NODE_APPROACH_OFFSET);
+  const joinY = snapTrackCoord(Math.max(p1.y, approachY));
+  const nodeApproach = { x: nodePos.x, y: joinY };
+
+  let path: Point[];
+
+  if (boardObstacle && needsBoardTopBypass(p1, nodePos, joinY, boardObstacle)) {
+    path = buildBoardTopPowerTapPath(start, p1, nodePos, boardObstacle, sourceObstacle);
+  }
+  else if (
     sourceObstacle
     && verticalTrackCrossesObstacle(
-      p1.x,
-      Math.min(p1.y, railY),
-      Math.max(p1.y, railY),
+      nodePos.x,
+      Math.min(p1.y, joinY),
+      Math.max(p1.y, joinY),
       sourceObstacle,
     )
   ) {
     const edgeX = resolveBypassEdgeX(sourceObstacle, nodePos.x);
-    return [
+    path = [
       start,
       p1,
       { x: edgeX, y: snapTrackCoord(p1.y) },
-      { x: edgeX, y: snapTrackCoord(railY) },
-      { x: snapTrackCoord(nodePos.x), y: snapTrackCoord(railY) },
+      { x: edgeX, y: joinY },
+      nodeApproach,
       nodePos,
     ];
   }
+  else {
+    path = [start, p1];
+    if (p1.x !== nodePos.x) {
+      path.push({ x: nodePos.x, y: p1.y });
+    }
+    if (p1.y !== joinY) {
+      path.push(nodeApproach);
+    }
+    path.push(nodePos);
+  }
 
-  const railTap = { x: p1.x, y: railY };
-  const nodeApproach = { x: nodePos.x, y: railY };
-  return [start, p1, railTap, nodeApproach, nodePos];
+  const avoidObstacles: Obstacle[] = [];
+  if (boardObstacle) avoidObstacles.push(boardObstacle);
+  if (sourceObstacle) avoidObstacles.push(sourceObstacle);
+  if (avoidObstacles.length === 0) return path;
+
+  return routePathClearOfObstacles(path, avoidObstacles, {
+    skipFirstSegment: true,
+    skipLastSegment: true,
+  });
 }
 
 export function generatePowerBusTapPath(
   start: Point,
   nodePos: Point,
-  railY: number,
   startDir: CardinalDirection,
   sourceObstacle?: Obstacle,
+  boardObstacle?: Obstacle,
 ): WirePathResult {
-  const path2D = buildPowerBusTapPath2D(start, nodePos, railY, startDir, sourceObstacle);
+  const path2D = buildPowerBusTapPath2D(start, nodePos, startDir, sourceObstacle, boardObstacle);
   const p1 = path2D[1];
-  const p2 = { x: nodePos.x, y: railY };
+  const p2 = path2D[path2D.length - 2];
   return buildWirePathResultFrom2D(start, nodePos, p1, p2, path2D, 'power');
 }
 
-/** Trunk: power node on top rail → route along board edge → board power pin */
+/** Trunk: vertical down from node → board edge channel → board power pin */
 export function generatePowerBusTrunkPath(
   nodePos: Point,
   boardPin: Point,
-  railY: number,
   boardOrigin?: BoardOrigin,
   boardWidth = 180,
+  boardObstacle?: Obstacle,
 ): WirePathResult {
   const bx = boardOrigin?.x ?? 310;
-  const edgeX = boardPin.x < bx + boardWidth / 2 ? bx - 12 : bx + boardWidth + 12;
-  const p1 = { x: nodePos.x, y: railY };
-  const p2 = { x: edgeX, y: boardPin.y };
-  const path2D = [nodePos, p1, { x: edgeX, y: railY }, p2, boardPin];
+  const by = boardOrigin?.y ?? 130;
+  const boardHeight = boardObstacle?.height ?? 200;
+  const bounds = resolveBoardBounds({ x: bx, y: by }, boardWidth, boardHeight);
+  const edge = resolveBoardPinEdge(boardPin, bounds);
+  const approach = resolveBoardPinApproachPoint(boardPin, bounds, 18);
+  const channel = boardEdgeChannelCoord(bounds, edge, 12);
+  const dropY = snapTrackCoord(nodePos.y + POWER_NODE_APPROACH_OFFSET);
+  const p1 = { x: nodePos.x, y: dropY };
+
+  let path2D: Point[];
+
+  if (edge === 'left' || edge === 'right') {
+    path2D = [
+      nodePos,
+      p1,
+      { x: channel, y: dropY },
+      { x: channel, y: boardPin.y },
+      approach,
+      boardPin,
+    ];
+  }
+  else if (edge === 'top') {
+    path2D = [
+      nodePos,
+      p1,
+      { x: boardPin.x, y: dropY },
+      { x: boardPin.x, y: channel },
+      approach,
+      boardPin,
+    ];
+  }
+  else {
+    path2D = [
+      nodePos,
+      p1,
+      { x: boardPin.x, y: dropY },
+      { x: boardPin.x, y: channel },
+      approach,
+      boardPin,
+    ];
+  }
+
+  if (boardObstacle) {
+    path2D = routePathClearOfObstacles(path2D, [boardObstacle], {
+      skipFirstSegment: true,
+      skipLastSegment: true,
+    });
+  }
+
+  path2D = normalizeBoardPinLanding(path2D, boardPin, bounds);
+  const p2 = path2D.length >= 2 ? path2D[path2D.length - 2] : approach;
+
   return buildWirePathResultFrom2D(nodePos, boardPin, p1, p2, path2D, 'power');
 }

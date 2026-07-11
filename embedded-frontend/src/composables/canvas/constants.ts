@@ -19,6 +19,8 @@ export const DEFAULT_WIRE_VISUAL: WireVisualState = {
 };
 
 export const boardPinOffsets: Record<number, { x: number; y: number }> = {
+  2: { x: boardDescriptor.pins[2].x - boardDescriptor.x, y: boardDescriptor.pins[2].y - boardDescriptor.y },
+  10: { x: boardDescriptor.pins[10].x - boardDescriptor.x, y: boardDescriptor.pins[10].y - boardDescriptor.y },
   12: { x: boardDescriptor.pins[12].x - boardDescriptor.x, y: boardDescriptor.pins[12].y - boardDescriptor.y },
   13: { x: boardDescriptor.pins[13].x - boardDescriptor.x, y: boardDescriptor.pins[13].y - boardDescriptor.y },
   14: { x: boardDescriptor.pins[14].x - boardDescriptor.x, y: boardDescriptor.pins[14].y - boardDescriptor.y },

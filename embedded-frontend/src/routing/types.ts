@@ -63,6 +63,7 @@ export interface WirePathResult {
   segments: Array<{ d: string; layer: number }>;
   vias: Array<{ x: number; y: number }>;
   teardrops: Array<string>;
+  pathPoints?: Point[];
 }
 
 export interface RoutingContext {

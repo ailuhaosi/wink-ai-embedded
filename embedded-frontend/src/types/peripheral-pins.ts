@@ -31,7 +31,7 @@ export interface PeripheralConfig {
   props: PeripheralProps;
 }
 
-export const availableGPIOs = [12, 13, 14, 21, 22];
+export const availableGPIOs = [2, 10, 12, 13, 14, 21, 22];
 
 export const powerOptions: PowerRailValue[] = [...POWER_RAIL_VALUES];
 
@@ -64,6 +64,8 @@ export const boardDescriptor: BoardDescriptor = {
   width: 180,
   height: 200,
   pins: {
+    2: { x: 317, y: 132 },
+    10: { x: 317, y: 282 },
     12: { x: 317, y: 162 },
     13: { x: 317, y: 192 },
     14: { x: 317, y: 222 },
@@ -92,7 +94,6 @@ export interface RoutingChannels {
 }
 
 export interface PowerNodeSlots {
-  railY: number;
   positions: Record<'VCC' | '3V3' | 'GND', Point>;
 }
 
@@ -108,14 +109,13 @@ export function getRoutingChannels(boardX: number, boardY: number): RoutingChann
   };
 }
 
-/** VCC — 3V3 — GND left-to-right above board center (schematic-style power header) */
+/** VCC — 3V3 — GND in a horizontal row above board; isolated stubs, no shared bus */
 export function getPowerNodeSlots(boardX: number, boardY: number): PowerNodeSlots {
   const bounds = resolveBoardBounds(boardX, boardY);
-  const railY = bounds.top - 50;
   const cx = bounds.centerX;
+  const railY = bounds.top - 50;
   const gap = 72;
   return {
-    railY,
     positions: {
       'VCC': { x: cx - gap, y: railY },
       '3V3': { x: cx, y: railY },

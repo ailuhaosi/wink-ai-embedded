@@ -5,9 +5,9 @@
 import {
   boardDescriptor,
   getRoutingChannels,
-
 } from '../types/peripheral-pins';
 import type { BoardOrigin, Obstacle, WirePathResult } from '../types/peripheral-pins';
+import { routePathClearOfObstacles } from './geometry';
 
 interface Point {
   x: number;
@@ -561,7 +561,7 @@ function generateChannelPath(
 
     let bypassY: number;
     if (absDiffY < 60) {
-      bypassY = boardCenterY + (isStartTop ? -60 : 60) + laneOffset;
+      bypassY = isStartTop ? channels.topBus - laneOffset : channels.bottomBus + laneOffset;
     }
     else {
       bypassY = isStartTop ? channels.topBus - laneOffset : channels.bottomBus + laneOffset;
@@ -769,7 +769,13 @@ export function generateSmartPCBPathLegacy(
   }
 
   if (rawPath3D.length === 0) {
-    const channel2D = generateChannelPath(start, end, startDir, endDir, lane, boardOrigin);
+    let channel2D = generateChannelPath(start, end, startDir, endDir, lane, boardOrigin);
+    if (obstacles && obstacles.length > 0) {
+      channel2D = routePathClearOfObstacles(channel2D, obstacles, {
+        skipFirstSegment: true,
+        skipLastSegment: true,
+      });
+    }
     rawPath3D = channel2D.map((p: Point) => ({ x: p.x, y: p.y, layer: 0 }));
   }
   else {

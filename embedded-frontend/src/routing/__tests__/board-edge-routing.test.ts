@@ -7,10 +7,11 @@ import {
   resolvePeripheralPinStartDir,
   routePathAroundBoard,
   routePathAroundObstacle,
+  routePathClearOfObstacles,
   segmentIntersectsObstacle,
   verticalTrackCrossesObstacle,
 } from '../geometry';
-import { buildPowerBusTapPath2D } from '../post-process';
+import { buildPowerBusTapPath2D, generatePowerBusTrunkPath } from '../post-process';
 import { buildStubPoints, templateSameSide } from '../path-templates';
 import { buildTrackAssignments } from '../track-allocator';
 import { generateWirePath } from '../wire-routing';
@@ -131,19 +132,18 @@ describe('board edge routing', () => {
     expect(result.path.length).toBeGreaterThan(0);
   });
 
-  it('routePathAroundBoard reroutes a penetrating horizontal segment along the edge', () => {
-    const repaired = routePathAroundBoard(
+  it('routePathClearOfObstacles keeps wire out of board interior', () => {
+    const repaired = routePathClearOfObstacles(
       [
-        { x: 265, y: 192 },
-        { x: 335, y: 192 },
-        { x: 317, y: 192 },
+        { x: 200, y: 165 },
+        { x: 450, y: 165 },
+        { x: 487, y: 162 },
       ],
-      BOARD_OBSTACLE,
-      { x: 317, y: 192 },
+      [BOARD_OBSTACLE],
+      { skipFirstSegment: true, skipLastSegment: true },
     );
 
     expect(interiorCrossesBoard(repaired)).toBe(false);
-    expect(repaired[0].x).toBeLessThan(BOARD_BOUNDS.left);
   });
 });
 
@@ -155,23 +155,62 @@ describe('peripheral edge routing', () => {
   it('power VCC tap from ultrasonic bottom pin routes via side edge', () => {
     const start = { x: 165, y: 455 };
     const node = { x: 328, y: 80 };
-    const railY = 80;
-    const points = buildPowerBusTapPath2D(start, node, railY, 'down', ULTRASONIC_OBSTACLE);
+    const points = buildPowerBusTapPath2D(start, node, 'down', ULTRASONIC_OBSTACLE);
 
     expect(interiorCrossesObstacle(points, ULTRASONIC_OBSTACLE)).toBe(false);
     expect(points.some(p => p.x >= ULTRASONIC_BOUNDS.right)).toBe(true);
   });
 
-  it('power taps from same module use the same bypass side (by node position)', () => {
+  it('power tap approaches node vertically from directly below', () => {
+    const node = { x: 328, y: 80 };
+    const points = buildPowerBusTapPath2D({ x: 165, y: 455 }, node, 'down', ULTRASONIC_OBSTACLE);
+    const prev = points[points.length - 2];
+    expect(points[points.length - 1]).toEqual(node);
+    expect(prev.x).toBe(node.x);
+    expect(prev.y).toBeGreaterThan(node.y);
+    expect(points.filter(p => p.y === node.y && p.x !== node.x)).toHaveLength(0);
+  });
+
+  it('power tap to GND node routes around board interior', () => {
+    const node = { x: 472, y: 80 };
+    const points = buildPowerBusTapPath2D({ x: 130, y: 150 }, node, 'down', undefined, BOARD_OBSTACLE);
+
+    expect(interiorCrossesBoard(points)).toBe(false);
+    const prev = points[points.length - 2];
+    expect(prev.x).toBe(node.x);
+    expect(prev.y).toBeGreaterThan(node.y);
+  });
+
+  it('power trunk from node to board pin avoids board interior', () => {
+    const node = { x: 472, y: 80 };
+    const boardPin = { x: 317, y: 252 };
+    const result = generatePowerBusTrunkPath(node, boardPin, BOARD_ORIGIN, boardDescriptor.width, BOARD_OBSTACLE);
+    const coords = result.path.match(/[\d.]+/g)?.map(Number) ?? [];
+    const points: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i + 1 < coords.length; i += 2) {
+      points.push({ x: coords[i], y: coords[i + 1] });
+    }
+    expect(points.length).toBeGreaterThan(1);
+    expect(interiorCrossesBoard(points)).toBe(false);
+    const prev = points[points.length - 2];
+    expect(prev.y).toBe(boardPin.y);
+    expect(prev.x).toBeLessThan(boardPin.x);
+  });
+
+  it('power taps from same module each approach their node vertically from below', () => {
     const obstacle = ULTRASONIC_OBSTACLE;
-    const railY = 80;
-    const vcc = buildPowerBusTapPath2D({ x: 165, y: 455 }, { x: 328, y: 80 }, railY, 'down', obstacle);
-    const gnd = buildPowerBusTapPath2D({ x: 195, y: 455 }, { x: 472, y: 80 }, railY, 'down', obstacle);
-    const vccEdge = vcc.find(p => p.y === railY && p.x !== 328)?.x;
-    const gndEdge = gnd.find(p => p.y === railY && p.x !== 472)?.x;
-    expect(vccEdge).toBeDefined();
-    expect(gndEdge).toBe(vccEdge);
-    expect(vccEdge!).toBeGreaterThanOrEqual(ULTRASONIC_BOUNDS.right);
+    const vccNode = { x: 328, y: 80 };
+    const gndNode = { x: 472, y: 80 };
+    const vcc = buildPowerBusTapPath2D({ x: 165, y: 455 }, vccNode, 'down', obstacle);
+    const gnd = buildPowerBusTapPath2D({ x: 195, y: 455 }, gndNode, 'down', obstacle);
+
+    for (const [points, node] of [[vcc, vccNode], [gnd, gndNode]] as const) {
+      const prev = points[points.length - 2];
+      expect(points[points.length - 1]).toEqual(node);
+      expect(prev.x).toBe(node.x);
+      expect(prev.y).toBeGreaterThan(node.y);
+      expect(points.filter(p => p.y === node.y && p.x !== node.x)).toHaveLength(0);
+    }
   });
 
   it('button right-pin power tap keeps first vertical segment outside component edge', () => {
@@ -179,7 +218,6 @@ describe('peripheral edge routing', () => {
     const points = buildPowerBusTapPath2D(
       { x: 155, y: 260 },
       { x: 472, y: 80 },
-      80,
       'right',
       buttonObstacle,
     );

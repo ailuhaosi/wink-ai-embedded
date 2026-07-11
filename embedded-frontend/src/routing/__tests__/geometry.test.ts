@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyTopology,
+  normalizeBoardPinLanding,
   pinCoord,
   resolveBoardBounds,
   resolveBoardPinEndDir,
@@ -51,6 +52,25 @@ describe('geometry', () => {
     const bounds = resolveBoardBounds({ x: 310, y: 130 }, 180, 200);
     expect(resolveBoardPinEndDir({ x: 317, y: 192 }, bounds)).toBe('right');
     expect(resolveBoardPinEndDir({ x: 487, y: 162 }, bounds)).toBe('left');
+    // GPIO2 on left header — horizontal approach, not vertical from above
+    expect(resolveBoardPinEndDir({ x: 317, y: 132 }, bounds)).toBe('right');
+  });
+
+  it('normalizeBoardPinLanding forces horizontal entry for left-edge pins', () => {
+    const bounds = resolveBoardBounds({ x: 310, y: 130 }, 180, 200);
+    const pin = { x: 317, y: 132 };
+    const repaired = normalizeBoardPinLanding(
+      [
+        { x: 400, y: 100 },
+        { x: 400, y: 132 },
+        pin,
+      ],
+      pin,
+      bounds,
+    );
+    const prev = repaired[repaired.length - 2];
+    expect(prev.y).toBe(pin.y);
+    expect(prev.x).toBeLessThan(pin.x);
   });
 
   it('resolvePeripheralPinStartDir picks outward stub for edge pins', () => {

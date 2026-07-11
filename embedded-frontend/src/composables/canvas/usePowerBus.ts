@@ -14,7 +14,7 @@ export function usePowerBus(
       const node = ctx.commonPowerNodes.value[key];
       const pos = slots.positions[key];
       if (!node || !pos) continue;
-      node.y = slots.railY;
+      node.y = pos.y;
       if (resetPositions) {
         node.x = pos.x;
       }
@@ -35,19 +35,23 @@ export function usePowerBus(
     if (!ctx.draggedPowerNodeId.value) return;
 
     const { x } = viewport.clientToCanvas(event.clientX, event.clientY);
-    const node = ctx.commonPowerNodes.value[ctx.draggedPowerNodeId.value];
+    const powerType = ctx.draggedPowerNodeId.value;
+    const node = ctx.commonPowerNodes.value[powerType];
     const slots = getPowerNodeSlots(ctx.boardPosition.value.x, ctx.boardPosition.value.y);
+    const slotY = slots.positions[powerType as keyof typeof slots.positions]?.y;
     if (node) {
       node.x = Math.max(80, Math.min(ctx.viewWidth.value - 80, x));
-      node.y = slots.railY;
+      if (slotY !== undefined) node.y = slotY;
     }
   }
 
   function handlePowerNodeMouseUp() {
     if (ctx.draggedPowerNodeId.value) {
+      const powerType = ctx.draggedPowerNodeId.value;
       const slots = getPowerNodeSlots(ctx.boardPosition.value.x, ctx.boardPosition.value.y);
-      const node = ctx.commonPowerNodes.value[ctx.draggedPowerNodeId.value];
-      if (node) node.y = slots.railY;
+      const node = ctx.commonPowerNodes.value[powerType];
+      const slotY = slots.positions[powerType as keyof typeof slots.positions]?.y;
+      if (node && slotY !== undefined) node.y = slotY;
     }
     ctx.draggedPowerNodeId.value = null;
     window.removeEventListener('mousemove', handlePowerNodeMouseMove);

@@ -35,7 +35,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     wiresToRender: wireRendering.wiresToRender,
     routingChannels: wireRendering.routingChannels,
     routingDebugOverlay: wireRendering.routingDebugOverlay,
-    powerBusVisual: wireRendering.powerBusVisual,
+    powerRailStubs: wireRendering.powerRailStubs,
     syncPowerBusLayout: powerBus.syncPowerBusLayout,
     updateCanvasScale: viewport.updateCanvasScale,
     assignLayoutForNewComponent: layout.assignLayoutForNewComponent,

@@ -1,6 +1,12 @@
 import { LOCAL_THRESHOLD } from './constants';
 import { resolveConflicts } from './conflict-resolver';
-import { classifyTopology } from './geometry';
+import {
+  classifyTopology,
+  normalizeBoardPinLanding,
+  pinTouchesBoardEdge,
+  resolveBoardBounds,
+  routePathClearOfObstacles,
+} from './geometry';
 import { buildStubPoints, buildTemplatePath } from './path-templates';
 import { buildWirePathResultFrom2D } from './post-process';
 import { extractSegmentsFromPoints, SegmentOccupancyRegistry } from './segment-occupancy';
@@ -39,6 +45,30 @@ function warnDeprecatedChannelMap(channelOccupancyMap?: Map<string, number>): vo
       '[wire-routing] channelOccupancyMap is deprecated and ignored by HCTR; use SegmentOccupancyRegistry.',
     );
   }
+}
+
+function findBoardObstacle(
+  obstacles: Obstacle[],
+  boardOrigin?: BoardOrigin,
+): Obstacle | undefined {
+  if (boardOrigin) {
+    const match = obstacles.find(o => o.x === boardOrigin.x && o.y === boardOrigin.y);
+    if (match) return match;
+  }
+  return obstacles[0];
+}
+
+function applyBoardPinLanding(
+  path2D: Point[],
+  end: Point,
+  obstacles: Obstacle[],
+  boardOrigin?: BoardOrigin,
+): Point[] {
+  const board = findBoardObstacle(obstacles, boardOrigin);
+  if (!board) return path2D;
+  const bounds = resolveBoardBounds({ x: board.x, y: board.y }, board.width, board.height);
+  if (!pinTouchesBoardEdge(end, bounds)) return path2D;
+  return normalizeBoardPinLanding(path2D, end, bounds);
 }
 
 function buildManualPath(
@@ -87,14 +117,19 @@ export function generateWirePath(options: GenerateWirePathOptions): WirePathResu
 
   const manualPoints = options.forcedPoints ?? options.waypoints;
   if (manualPoints && manualPoints.length > 0) {
-    const path2D = buildManualPath(
-      options.start,
-      options.end,
-      options.startDir,
-      options.endDir,
-      options.assignment,
-      manualPoints,
+    let path2D = routePathClearOfObstacles(
+      buildManualPath(
+        options.start,
+        options.end,
+        options.startDir,
+        options.endDir,
+        options.assignment,
+        manualPoints,
+      ),
+      options.obstacles,
+      { skipFirstSegment: true, skipLastSegment: true },
     );
+    path2D = applyBoardPinLanding(path2D, options.end, options.obstacles, options.boardOrigin);
     const { p1, p2 } = buildStubPoints(
       options.start,
       options.end,
@@ -102,11 +137,12 @@ export function generateWirePath(options: GenerateWirePathOptions): WirePathResu
       options.endDir,
       options.assignment,
     );
+    const landingP2 = path2D.length >= 2 ? path2D[path2D.length - 2] : p2;
     return buildWirePathResultFrom2D(
       options.start,
       options.end,
       p1,
-      p2,
+      landingP2,
       path2D,
       options.signalType,
     );
@@ -160,7 +196,11 @@ export function generateWirePath(options: GenerateWirePathOptions): WirePathResu
     );
   }
 
-  path2D = resolved.points;
+  path2D = routePathClearOfObstacles(resolved.points, options.obstacles, {
+    skipFirstSegment: true,
+    skipLastSegment: true,
+  });
+  path2D = applyBoardPinLanding(path2D, options.end, options.obstacles, options.boardOrigin);
   const segments = extractSegmentsFromPoints(options.wireId, path2D);
   for (const segment of segments) {
     options.occupancy.register(segment);
@@ -173,12 +213,13 @@ export function generateWirePath(options: GenerateWirePathOptions): WirePathResu
     options.endDir,
     options.assignment,
   );
+  const landingP2 = path2D.length >= 2 ? path2D[path2D.length - 2] : p2;
 
   return buildWirePathResultFrom2D(
     options.start,
     options.end,
     p1,
-    p2,
+    landingP2,
     path2D,
     options.signalType,
   );

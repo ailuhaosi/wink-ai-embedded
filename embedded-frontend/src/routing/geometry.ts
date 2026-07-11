@@ -109,12 +109,87 @@ export function resolveBoardBounds(
   };
 }
 
+export type BoardPinEdge = 'left' | 'right' | 'top' | 'bottom';
+
+const BOARD_PIN_EDGE_MARGIN = 24;
+
+/** True when the point sits on a board header edge (within margin). */
+export function pinTouchesBoardEdge(pin: Point, bounds: BoardBounds): boolean {
+  if (pin.x < bounds.left - 1 || pin.x > bounds.right + 1) return false;
+  if (pin.y < bounds.top - 1 || pin.y > bounds.bottom + 1) return false;
+  const distEdge = Math.min(
+    pin.x - bounds.left,
+    bounds.right - pin.x,
+    pin.y - bounds.top,
+    bounds.bottom - pin.y,
+  );
+  return distEdge <= BOARD_PIN_EDGE_MARGIN;
+}
+
+/** Classify a board pin by its header edge (column/row), not euclidean nearest edge. */
+export function resolveBoardPinEdge(pin: Point, bounds: BoardBounds): BoardPinEdge {
+  const fromLeft = pin.x - bounds.left;
+  const fromRight = bounds.right - pin.x;
+  const fromTop = pin.y - bounds.top;
+  const fromBottom = bounds.bottom - pin.y;
+
+  if (fromLeft <= BOARD_PIN_EDGE_MARGIN && fromLeft <= fromRight) return 'left';
+  if (fromRight <= BOARD_PIN_EDGE_MARGIN && fromRight <= fromLeft) return 'right';
+  if (fromTop <= BOARD_PIN_EDGE_MARGIN && fromTop <= fromBottom) return 'top';
+  return 'bottom';
+}
+
+/** Stub anchor outside the pin, on the allowed approach side. */
+export function resolveBoardPinApproachPoint(
+  pin: Point,
+  bounds: BoardBounds,
+  stubLength = 18,
+): Point {
+  switch (resolveBoardPinEdge(pin, bounds)) {
+    case 'left':
+      return { x: pinCoord(pin.x - stubLength), y: pinCoord(pin.y) };
+    case 'right':
+      return { x: pinCoord(pin.x + stubLength), y: pinCoord(pin.y) };
+    case 'top':
+      return { x: pinCoord(pin.x), y: pinCoord(pin.y - stubLength) };
+    case 'bottom':
+      return { x: pinCoord(pin.x), y: pinCoord(pin.y + stubLength) };
+  }
+}
+
+/** Routing channel coordinate just outside the given board edge. */
+export function boardEdgeChannelCoord(
+  bounds: BoardBounds,
+  edge: BoardPinEdge,
+  offset = 12,
+): number {
+  switch (edge) {
+    case 'left':
+      return snapTrackCoord(bounds.left - offset);
+    case 'right':
+      return snapTrackCoord(bounds.right + offset);
+    case 'top':
+      return snapTrackCoord(bounds.top - offset);
+    case 'bottom':
+      return snapTrackCoord(bounds.bottom + offset);
+  }
+}
+
 /**
  * HCTR endDir = direction of the final segment (p2 → pin).
  * Stub anchor p2 is placed at reverseDir(endDir), i.e. outward from the board edge.
  */
 export function resolveBoardPinEndDir(end: Point, bounds: BoardBounds): CardinalDirection {
-  return resolveOutwardDirFromNearestEdge(end, bounds, 'inward');
+  switch (resolveBoardPinEdge(end, bounds)) {
+    case 'left':
+      return 'right';
+    case 'right':
+      return 'left';
+    case 'top':
+      return 'down';
+    case 'bottom':
+      return 'up';
+  }
 }
 
 /**
@@ -218,15 +293,21 @@ export function routePathAroundObstacle(
           && Math.max(prev.y, curr.y) > obstacle.y;
 
       if (horizontalCross) {
+        const overY = snapTrackCoord(expanded.y - 4);
+        const underY = snapTrackCoord(expanded.y + expanded.height + 4);
+        const bypassY = prev.y <= obstacle.y + obstacle.height / 2 ? overY : underY;
+
         if (prev.x !== edgeX) {
           result.push({ x: edgeX, y: snapTrackCoord(prev.y) });
         }
-        if (result[result.length - 1].y !== curr.y) {
-          result.push({ x: edgeX, y: snapTrackCoord(curr.y) });
+        result.push({ x: edgeX, y: bypassY });
+        const targetX = snapTrackCoord(curr.x);
+        result.push({ x: targetX, y: bypassY });
+        if (bypassY !== curr.y) {
+          result.push({ x: targetX, y: snapTrackCoord(curr.y) });
         }
       }
       else if (verticalCross) {
-        // Detour via left/right edge (not top/bottom) when a vertical segment cuts through the body.
         if (prev.x !== edgeX) {
           result.push({ x: edgeX, y: snapTrackCoord(prev.y) });
         }
@@ -243,6 +324,65 @@ export function routePathAroundObstacle(
   }
 
   return dedupeCollinearPoints(result);
+}
+
+/** Force the final approach segment to enter the pin from its header edge only. */
+export function normalizeBoardPinLanding(
+  points: Point[],
+  pin: Point,
+  bounds: BoardBounds,
+  stubLength = 18,
+): Point[] {
+  if (points.length < 2) return points;
+
+  const approach = resolveBoardPinApproachPoint(pin, bounds, stubLength);
+  const edge = resolveBoardPinEdge(pin, bounds);
+  const result = points.slice(0, -1);
+  const prev = result[result.length - 1] ?? points[0];
+
+  if (edge === 'left' || edge === 'right') {
+    if (prev.y !== approach.y) {
+      result.push({ x: prev.x, y: approach.y });
+    }
+    const tail = result[result.length - 1];
+    if (tail.x !== approach.x) {
+      result.push({ x: approach.x, y: approach.y });
+    }
+  }
+  else {
+    if (prev.x !== approach.x) {
+      result.push({ x: approach.x, y: prev.y });
+    }
+    const tail = result[result.length - 1];
+    if (tail.y !== approach.y) {
+      result.push({ x: approach.x, y: approach.y });
+    }
+  }
+
+  result.push({ x: pin.x, y: pin.y });
+  if (result.length <= 3) return result;
+  const landing = result.slice(-2);
+  const body = dedupeCollinearPoints(result.slice(0, -2));
+  return [...body, ...landing];
+}
+
+/** Reroute interior segments clear of all given obstacles (pin stubs exempt at ends). */
+export function routePathClearOfObstacles(
+  points: Point[],
+  obstacles: Obstacle[],
+  options: RouteAroundOptions = { skipFirstSegment: true, skipLastSegment: true },
+): Point[] {
+  let result = points;
+  for (const obstacle of obstacles) {
+    for (let pass = 0; pass < 4; pass++) {
+      const next = routePathAroundObstacle(result, obstacle, options);
+      const unchanged = next.length === result.length
+        && next.every((p, i) => p.x === result[i].x && p.y === result[i].y);
+      result = next;
+      if (unchanged) break;
+    }
+  }
+  return result;
 }
 
 /** @deprecated Use routePathAroundObstacle — kept for call-site clarity at board end. */

@@ -23,6 +23,7 @@ export interface WireRenderItem {
   teardrops: Array<string>;
   signalType: 'digital' | 'i2c' | 'power';
   compId?: string;
+  pathPoints?: Array<{ x: number; y: number }>;
 }
 
 export interface WireVisualState {

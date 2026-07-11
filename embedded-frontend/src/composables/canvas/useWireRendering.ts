@@ -338,12 +338,18 @@ export function useWireRendering(
         && !(waypoints && waypoints.length > 0);
 
     if (isPowerToBus) {
+      const boardObstacle: Obstacle = {
+        x: boardOrigin.x,
+        y: boardOrigin.y,
+        width: boardDescriptor.width,
+        height: boardDescriptor.height,
+      };
       return generatePowerBusTapPath(
         pts.start,
         pts.end,
-        channels.powerRailY,
         startDir,
         layout.getComponentObstacle(comp),
+        boardObstacle,
       );
     }
 
@@ -411,12 +417,13 @@ export function useWireRendering(
       const wireId = `common-${powerType}`;
       const boardPowerPos = getPowerPinPosition(powerType);
 
+      const boardObstacle = obstacles[0];
       const result = generatePowerBusTrunkPath(
         { x: node.x, y: node.y },
         boardPowerPos,
-        channels.powerRailY,
         { x: ctx.boardPosition.value.x, y: ctx.boardPosition.value.y },
         boardDescriptor.width,
+        boardObstacle,
       );
 
       list.push({
@@ -430,6 +437,7 @@ export function useWireRendering(
         vias: result.vias,
         teardrops: result.teardrops,
         signalType: 'power',
+        pathPoints: result.pathPoints,
       });
     }
 
@@ -462,6 +470,7 @@ export function useWireRendering(
         teardrops: pcbResult.teardrops,
         signalType: req.signalType,
         compId: req.compId,
+        pathPoints: pcbResult.pathPoints,
       });
     });
 
@@ -571,19 +580,15 @@ export function useWireRendering(
     return { verticalTracks, horizontalTracks, labels, occupiedRects };
   });
 
-  const powerBusVisual = computed(() => {
-    const nodes = Object.values(ctx.commonPowerNodes.value);
-    const railY = routingChannels.value.powerRailY;
-    if (nodes.length === 0) {
-      return { x1: 280, x2: 520, y: railY };
-    }
-    const xs = nodes.map(n => n.x);
-    return {
-      x1: Math.min(...xs) - 50,
-      x2: Math.max(...xs) + 50,
-      y: railY,
-    };
-  });
+  const powerRailStubs = computed(() =>
+    Object.values(ctx.commonPowerNodes.value).map(node => ({
+      x1: node.x - 28,
+      x2: node.x + 28,
+      y: node.y,
+      color: node.color,
+      label: node.label,
+    })),
+  );
 
   const wireVisualMap = computed(() => {
     const sel = ctx.selectedComponentId.value;
@@ -602,7 +607,7 @@ export function useWireRendering(
     wiresToRender,
     routingChannels,
     routingDebugOverlay,
-    powerBusVisual,
+    powerRailStubs,
     getWireVisual,
     buildTrackAssignmentMap,
   };

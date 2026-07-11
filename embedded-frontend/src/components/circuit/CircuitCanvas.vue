@@ -39,7 +39,7 @@ const {
   wiresToRender,
   routingChannels,
   routingDebugOverlay,
-  powerBusVisual,
+  powerRailStubs,
   syncPowerBusLayout,
   updateCanvasScale,
   assignLayoutForNewComponent,
@@ -115,24 +115,19 @@ defineExpose({
       </defs>
       <rect :width="viewWidth" :height="viewHeight" fill="url(#grid)" />
 
-      <!-- Power rail (horizontal, above board — breadboard / schematic convention) -->
-      <line
-        :x1="powerBusVisual.x1"
-        :y1="powerBusVisual.y"
-        :x2="powerBusVisual.x2"
-        :y2="powerBusVisual.y"
-        stroke="rgba(100, 116, 139, 0.22)"
-        stroke-width="8"
-        stroke-linecap="round"
-      />
-      <text
-        :x="powerBusVisual.x1 - 8"
-        :y="powerBusVisual.y - 14"
-        fill="rgba(148, 163, 184, 0.45)"
-        font-size="8"
-        font-family="monospace"
-        text-anchor="end"
-      >PWR</text>
+      <!-- Per-net power stubs (isolated — not a shared bus) -->
+      <g v-for="stub in powerRailStubs" :key="`pwr-${stub.label}`">
+        <line
+          :x1="stub.x1"
+          :y1="stub.y"
+          :x2="stub.x2"
+          :y2="stub.y"
+          :stroke="stub.color"
+          stroke-opacity="0.35"
+          stroke-width="4"
+          stroke-linecap="round"
+        />
+      </g>
       <line
         :x1="routingChannels.leftBus"
         :y1="routingChannels.topBus"
@@ -172,6 +167,9 @@ defineExpose({
 
         <!-- Pin Headers Left -->
         <g transform="translate(5, 20)">
+          <text x="10" y="-15" fill="#94a3b8" font-size="8" font-family="monospace">IO2</text>
+          <circle cx="2" cy="-18" r="3.5" fill="#475569" />
+
           <text x="10" y="15" fill="#94a3b8" font-size="8" font-family="monospace">IO12</text>
           <circle cx="2" cy="12" r="3.5" fill="#475569" />
 
@@ -183,6 +181,9 @@ defineExpose({
 
           <text x="10" y="105" fill="#94a3b8" font-size="8" font-family="monospace">GND</text>
           <circle cx="2" cy="102" r="3.5" fill="#64748b" />
+
+          <text x="10" y="135" fill="#94a3b8" font-size="8" font-family="monospace">IO10</text>
+          <circle cx="2" cy="132" r="3.5" fill="#475569" />
         </g>
 
         <!-- Pin Headers Right -->
@@ -298,8 +299,15 @@ defineExpose({
       </g>
     </svg>
 
-    <!-- Common Power Nodes -->
-    <svg class="power-nodes-layer" pointer-events="none">
+    <!-- Common Power Nodes (same viewBox as circuit-svg so icons track wires on resize) -->
+    <svg
+      class="power-nodes-layer"
+      width="100%"
+      height="100%"
+      :viewBox="`0 0 ${viewWidth} ${viewHeight}`"
+      preserveAspectRatio="none"
+      pointer-events="none"
+    >
       <g v-for="(node, powerType) in commonPowerNodes" :key="node.id">
         <circle
           :cx="node.x"

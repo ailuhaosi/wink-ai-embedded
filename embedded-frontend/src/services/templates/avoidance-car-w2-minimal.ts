@@ -91,6 +91,38 @@ export function createAvoidanceCarWorkbenchManifest(): EmbeddedProjectManifest {
         displayName: 'Front Radar',
         position: { x: 90, y: 360 },
       },
+      {
+        componentId: 'neck_servo',
+        modelId: 'servo_stub',
+        displayName: 'Neck Servo',
+        position: { x: 280, y: 360 },
+        props: {
+          pwmChannel: 0,
+          minPulseMs: 0.5,
+          maxPulseMs: 2.5,
+        },
+      },
+    ],
+    connections: [
+      ...AVOIDANCE_CAR_W2_MINIMAL.connections,
+      {
+        id: 'conn_servo_sig',
+        from: { componentId: 'neck_servo', pin: 'SIG' },
+        to: { componentId: '__board__esp32-devkit-v1', pin: 'GPIO2' },
+        routing: DEFAULT_ROUTING,
+      },
+      {
+        id: 'conn_servo_vcc',
+        from: { componentId: 'neck_servo', pin: 'VCC' },
+        to: { componentId: '__board__esp32-devkit-v1', pin: 'VCC' },
+        routing: DEFAULT_ROUTING,
+      },
+      {
+        id: 'conn_servo_gnd',
+        from: { componentId: 'neck_servo', pin: 'GND' },
+        to: { componentId: '__board__esp32-devkit-v1', pin: 'GND' },
+        routing: DEFAULT_ROUTING,
+      },
     ],
     mechanical: createUltrasonicMount(),
     bindings: createUltrasonicBinding('mount_ultrasonic', 'front_radar')!,

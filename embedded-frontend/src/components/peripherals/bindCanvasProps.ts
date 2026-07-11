@@ -34,6 +34,12 @@ export function bindCanvasProps(
       return {};
     case 'ultrasonic':
       return {};
+    case 'servo':
+      return {
+        id: comp.id,
+        label: comp.props.label ?? comp.id,
+        pwmChannel: comp.props.pwmChannel,
+      };
     default:
       return null;
   }

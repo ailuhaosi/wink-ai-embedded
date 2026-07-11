@@ -1,6 +1,7 @@
 import { SIM_UI_TICK_MS } from '../constants/simulation';
 import type { SimWorkerInbound, SimWorkerOutbound } from '../types/sim-worker-protocol';
 import { SimWorkerOutboundType } from '../types/sim-worker-protocol';
+import type { ActuatorObserveSource } from '../types/actuator-observation';
 
 // @ts-ignore — loaded at runtime via importScripts to avoid Vite bundling Node fs paths
 import { SimWorker } from '@unisim/worker/SimWorker';
@@ -106,6 +107,7 @@ const STEP_US = 1000n; // 1ms virtual step
 const observedPins = new Set<number>();
 let hasOled = false;
 const ultrasonicDistances = new Map<number, number>();
+let observedActuatorSources: ActuatorObserveSource[] = [];
 
 // Proxies for deferred initialization of exports and module
 let realModule: Record<string, unknown> | null = null;
@@ -268,6 +270,19 @@ function simLoop() {
       ? Boolean(callEmscriptenExport(realModule, 'pal_wasm_is_faulted'))
       : false;
 
+    const pwm: Record<number, number> = {};
+    for (const src of observedActuatorSources) {
+      if (src.transport === 'pwm_channel' && typeof src.transportKey === 'number') {
+        if (realModule && hasEmscriptenExport(realModule, 'pal_wasm_get_pwm_duty_percent')) {
+          pwm[src.transportKey] = callEmscriptenExport(
+            realModule,
+            'pal_wasm_get_pwm_duty_percent',
+            src.transportKey,
+          ) as number;
+        }
+      }
+    }
+
     const currentUs = simWorker.getBridge().getClockUs().toString();
 
     self.postMessage({
@@ -278,6 +293,11 @@ function simLoop() {
         oledFb,
         traces,
         isFaulted,
+        actuatorOutputs: {
+          simTimeUs: currentUs,
+          gpio: pinStates,
+          pwm,
+        },
       },
     } satisfies SimWorkerOutbound);
   }
@@ -351,10 +371,11 @@ self.onmessage = async (e: MessageEvent<SimWorkerInbound>) => {
     }
 
     case 'OBSERVE_PINS': {
-      const { pins, oled } = payload;
+      const { pins, oled, actuatorSources } = payload;
       observedPins.clear();
       pins.forEach((p: number) => observedPins.add(p));
       hasOled = oled;
+      observedActuatorSources = actuatorSources ?? [];
       break;
     }
 

@@ -19,8 +19,8 @@ describe('manifest-to-canvas', () => {
     const manifest = createAvoidanceCarWorkbenchManifest();
     const { components } = manifestToCanvas(manifest);
 
-    expect(components).toHaveLength(1);
-    expect(components[0]).toMatchObject({
+    expect(components).toHaveLength(2);
+    expect(components.find(c => c.id === 'front_radar')).toMatchObject({
       id: 'front_radar',
       type: 'ultrasonic',
       name: 'Front Radar',
@@ -28,6 +28,16 @@ describe('manifest-to-canvas', () => {
         VCC: 'VCC',
         TRIG: 4,
         ECHO: 5,
+        GND: 'GND',
+      },
+    });
+    expect(components.find(c => c.id === 'neck_servo')).toMatchObject({
+      id: 'neck_servo',
+      type: 'servo',
+      name: 'Neck Servo',
+      pinConnections: {
+        VCC: 'VCC',
+        SIG: 2,
         GND: 'GND',
       },
     });

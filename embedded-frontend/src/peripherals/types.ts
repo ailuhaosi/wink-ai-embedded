@@ -1,6 +1,7 @@
 import type { Component } from 'vue';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 import type { ObserveFn } from './observe-builder';
+import type { ActuatorObserveProfile } from '@/types/actuator-observation';
 
 /** 单个属性的定义 schema */
 export interface PeripheralPropDef {
@@ -96,6 +97,11 @@ export interface PeripheralDefinition {
   /** 仿真观察插件（binding 桥为主路径；observe 为 OLED/超声等过渡） */
   simulation?: {
     observe?: ObserveFn;
+  };
+
+  /** 执行器观测映射声明 (Phase 1/2) */
+  actuatorObserve?: {
+    profile: ActuatorObserveProfile;
   };
 
   /** 可选：属性面板额外插槽（用于非常规控件，如距离滑块） */

@@ -27,6 +27,7 @@ import OnboardingWizard from '@/components/onboarding/OnboardingWizard.vue';
 import WorkbenchPropertyInspector from '@/components/workbench/WorkbenchPropertyInspector.vue';
 import WorkbenchFaultInjector from '@/components/workbench/WorkbenchFaultInjector.vue';
 import SimulationErrorBanner from '@/components/workbench/SimulationErrorBanner.vue';
+import SimActuatorPanel from '@/components/workbench/SimActuatorPanel.vue';
 import ErrorBoundary from '@/components/ErrorBoundary.vue';
 import { resetOnboarding } from '@/composables/useOnboarding';
 import { WorkbenchModeId } from '@/constants/workbench-mode';
@@ -447,6 +448,7 @@ onUnmounted(() => {
             v-model:ultrasonic-distance="ultrasonicDistance"
             @set-rotation="setRotation"
           />
+          <SimActuatorPanel />
         </template>
         <template #bindings>
           <BindingsInspector />

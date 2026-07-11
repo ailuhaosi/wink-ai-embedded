@@ -1,4 +1,4 @@
-/** Shared Worker ↔ UI message protocol (single source of truth for message shapes). */
+import type { ActuatorOutputBatch, ActuatorObserveSource } from './actuator-observation';
 
 export interface SimFaultsConfig {
   bounce_us: number;
@@ -21,6 +21,7 @@ export interface SimStatePayload {
     sequence?: number;
   }>;
   isFaulted: boolean;
+  actuatorOutputs?: ActuatorOutputBatch;
 }
 
 export interface SimLogPayload {
@@ -40,6 +41,7 @@ export interface ObservePinsPayload {
     trig: number | string | null;
     echo: number | string | null;
   } | null;
+  actuatorSources?: ActuatorObserveSource[];
 }
 
 export type SimWorkerInbound

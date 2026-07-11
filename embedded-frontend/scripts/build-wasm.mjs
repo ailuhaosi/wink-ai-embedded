@@ -25,7 +25,13 @@ if (fs.existsSync(app) && fs.statSync(app).isDirectory()) {
   appDir = path.resolve(app);
   app = path.basename(appDir);
 } else {
-  appDir = path.join(microOsDir, 'samples', app);
+  const microAppDir = path.join(repoRoot, 'wink-micro-app');
+  const microAppPath = path.join(microAppDir, app);
+  if (fs.existsSync(microAppPath)) {
+    appDir = microAppPath;
+  } else {
+    appDir = path.join(microOsDir, 'samples', app);
+  }
 }
 
 if (!fs.existsSync(appDir)) {

@@ -41,6 +41,7 @@ The Workbench supports running different C-side application firmware compiled to
 2. In the 3D World panel, load **🚗 避障小车模板**.
 3. Switch to **Simulate** mode and click **Play**.
 4. Adjust the **Distance Slider** on the HC-SR04 sensor, and see the simulator process the distance values on the C-side.
+5. In the right-side inspector panel under the **Circuit** tab, the **Actuator Observations** section displays live **Neck Servo** angle readings derived from C-side PWM duty cycles. The servo on the breadboard canvas will dynamically rotate and animate its horn position in real-time.
 
 
 ## E2E (playwright-cli only)

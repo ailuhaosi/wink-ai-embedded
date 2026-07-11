@@ -139,5 +139,8 @@ describe('built-in peripheral packages', () => {
     expect(registry.get('dht22_stub')?.catalog?.allowedSensorMappings).toContain(
       'temperature_field_sample',
     );
+
+    expect(registry.get('servo')?.canvas?.component).toBeTruthy();
+    expect(registry.get('servo')?.catalog?.id).toBe('servo_stub');
   });
 });

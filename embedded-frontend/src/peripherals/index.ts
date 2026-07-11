@@ -11,6 +11,7 @@ import './ultrasonic';
 import './motor_driver_stub';
 import './dht22_stub';
 import './buzzer_stub';
+import './servo';
 
 export { registry };
 export { ObserveBuilderImpl } from './observe-builder';

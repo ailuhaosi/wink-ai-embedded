@@ -1,6 +1,7 @@
 import { shallowRef } from 'vue';
 import { MAX_SIM_LOG_ENTRIES } from '@/constants/simulation';
 import type { SimStatePayload } from '@/types/sim-worker-protocol';
+import type { ActuatorObservation, ActuatorObserveSource } from '@/types/actuator-observation';
 
 export interface SimTrace {
   timestamp: number;
@@ -21,6 +22,9 @@ export const pinStates = shallowRef<Record<number, boolean>>({});
 export const oledFb = shallowRef<Uint8Array | null>(null);
 export const traces = shallowRef<SimTrace[]>([]);
 export const logs = shallowRef<SimLogEntry[]>([]);
+export const actuatorObservations = shallowRef<ActuatorObservation[]>([]);
+export const lastActuatorSources = shallowRef<ActuatorObserveSource[]>([]);
+export const lastComponents = shallowRef<any[]>([]);
 
 export function applyStateUpdate(payload: SimStatePayload) {
   clockUs.value = payload.us;
@@ -46,4 +50,6 @@ export function resetDataPlane() {
   pinStates.value = {};
   oledFb.value = null;
   traces.value = [];
+  actuatorObservations.value = [];
+  lastComponents.value = [];
 }

@@ -15,7 +15,11 @@ import {
   appendLog,
   clearLogs as clearRuntimeLogs,
   resetDataPlane,
+  lastActuatorSources,
+  lastComponents,
+  actuatorObservations,
 } from './simulation-runtime';
+import { mapActuatorOutputs } from './actuator-observation.mapper';
 import {
   getSimWorker,
   setSimWorker,
@@ -101,6 +105,13 @@ export function initSimulation() {
       case 'STATE_UPDATE':
         if (payload) {
           const state = payload as Extract<SimWorkerOutbound, { type: 'STATE_UPDATE' }>['payload'];
+          if (state.actuatorOutputs) {
+            actuatorObservations.value = mapActuatorOutputs(
+              state.actuatorOutputs,
+              lastActuatorSources.value,
+              lastComponents.value,
+            );
+          }
           applyStateUpdate(state);
           c.setFaulted(state.isFaulted || false);
         }
@@ -197,9 +208,13 @@ export function observePins(
     def?.simulation?.observe?.(comp as CircuitComponentInstance, builder);
   }
 
+  const result = builder.build();
+  lastActuatorSources.value = result.actuatorSources;
+  lastComponents.value = components;
+
   const msg: SimWorkerInbound = {
     type: SimWorkerInboundType.OBSERVE_PINS,
-    payload: builder.build(),
+    payload: result,
   };
   worker.postMessage(msg);
 }

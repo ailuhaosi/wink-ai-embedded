@@ -30,6 +30,7 @@ function createOledDashboardContext(): CanvasContext {
   return {
     components: ref(createOledDashboardCanvasComponents()),
     selectedComponentId: ref(''),
+    selectedWireId: ref(null),
     pinStates: ref({}),
     readonly: ref(false),
     layoutState: ref({

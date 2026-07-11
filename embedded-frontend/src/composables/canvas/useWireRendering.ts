@@ -297,14 +297,21 @@ export function useWireRendering(
     return requests;
   }
 
-  function buildWireVisual(wire: WireRenderItem, sel: string | null): WireVisualState {
-    if (!sel) {
+  function buildWireVisual(
+    wire: WireRenderItem,
+    selComp: string | null,
+    selWire: string | null,
+  ): WireVisualState {
+    if (selWire === wire.id) {
+      return { opacity: 1, widthBoost: 1.5, highlighted: true, dimmed: false, breathing: true };
+    }
+    if (!selComp && !selWire) {
       return DEFAULT_WIRE_VISUAL;
     }
-    if (isWireRelatedToSelectedComp(wire, sel)) {
-      return { opacity: 1, widthBoost: 1.2, highlighted: true, dimmed: false };
+    if (selComp && isWireRelatedToSelectedComp(wire, selComp)) {
+      return { opacity: 1, widthBoost: 1.2, highlighted: true, dimmed: false, breathing: false };
     }
-    return { opacity: 0.12, widthBoost: 0, highlighted: false, dimmed: true };
+    return { opacity: 0.12, widthBoost: 0, highlighted: false, dimmed: true, breathing: false };
   }
 
   function getWirePCBPath(
@@ -591,10 +598,11 @@ export function useWireRendering(
   );
 
   const wireVisualMap = computed(() => {
-    const sel = ctx.selectedComponentId.value;
+    const selComp = ctx.selectedComponentId.value;
+    const selWire = ctx.selectedWireId.value;
     const map = new Map<string, WireVisualState>();
     for (const wire of wiresToRender.value) {
-      map.set(wire.id, buildWireVisual(wire, sel));
+      map.set(wire.id, buildWireVisual(wire, selComp, selWire));
     }
     return map;
   });

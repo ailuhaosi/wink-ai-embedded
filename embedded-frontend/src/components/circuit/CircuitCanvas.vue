@@ -56,6 +56,8 @@ const {
   getCanvasY,
   getComponentSize,
   getWireVisual,
+  handleWireClick,
+  handleCanvasBackgroundClick,
 } = useCircuitCanvas({
   components,
   selectedComponentId,
@@ -98,7 +100,7 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="canvasContainerRef" class="canvas-container">
+  <div ref="canvasContainerRef" class="canvas-container" @mousedown="handleCanvasBackgroundClick">
     <svg ref="circuitSvgRef" class="circuit-svg" width="100%" height="100%" :viewBox="`0 0 ${viewWidth} ${viewHeight}`" preserveAspectRatio="none">
       <!-- Grid background -->
       <defs>
@@ -113,7 +115,7 @@ defineExpose({
           </feMerge>
         </filter>
       </defs>
-      <rect :width="viewWidth" :height="viewHeight" fill="url(#grid)" />
+      <rect class="canvas-background" :width="viewWidth" :height="viewHeight" fill="url(#grid)" />
 
       <!-- Per-net power stubs (isolated — not a shared bus) -->
       <g v-for="stub in powerRailStubs" :key="`pwr-${stub.label}`">
@@ -255,6 +257,7 @@ defineExpose({
         :class="{
           'highlighted-wire': getWireVisual(wire).highlighted,
           'dimmed-wire': getWireVisual(wire).dimmed,
+          'breathing-wire': getWireVisual(wire).breathing,
           'power-wire': wire.signalType === 'power',
           'i2c-wire': wire.signalType === 'i2c',
         }"
@@ -296,6 +299,20 @@ defineExpose({
 
         <circle :cx="wire.start.x" :cy="wire.start.y" :r="wire.width + getWireVisual(wire).widthBoost + 1.2" :fill="wire.color" :fill-opacity="getWireVisual(wire).opacity" stroke="#080c14" stroke-width="1.2" />
         <circle :cx="wire.end.x" :cy="wire.end.y" :r="wire.width + getWireVisual(wire).widthBoost + 1.2" :fill="wire.color" :fill-opacity="getWireVisual(wire).opacity" stroke="#080c14" stroke-width="1.2" />
+
+        <!-- Invisible hit area for wire selection -->
+        <path
+          v-for="(seg, idx) in wire.segments"
+          :key="`hit-${idx}`"
+          class="wire-hit-area"
+          :d="seg.d"
+          fill="none"
+          stroke="transparent"
+          stroke-width="16"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          @click.stop="handleWireClick($event, wire)"
+        />
       </g>
     </svg>
 
@@ -474,6 +491,38 @@ defineExpose({
 
 .smart-wire-group {
   transition: filter 0.15s ease;
+  pointer-events: all;
+}
+
+.wire-hit-area {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+@keyframes wire-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.35)) drop-shadow(0 0 6px rgba(56, 189, 248, 0.2));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.9)) drop-shadow(0 0 18px rgba(56, 189, 248, 0.55));
+  }
+}
+
+.smart-wire-group.breathing-wire {
+  animation: wire-breathe 1.8s ease-in-out infinite;
+}
+
+.smart-wire-group.breathing-wire path:not(.wire-hit-area) {
+  animation: wire-stroke-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes wire-stroke-breathe {
+  0%, 100% {
+    stroke-opacity: 0.75;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
 }
 
 .smart-wire-group.inactive-wire {

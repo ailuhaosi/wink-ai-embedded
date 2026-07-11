@@ -12,6 +12,7 @@ function createMockContext(components: CircuitComponentInstance[]): CanvasContex
   return {
     components: ref(components),
     selectedComponentId: ref(''),
+    selectedWireId: ref(null),
     pinStates: ref({}),
     readonly: ref(false),
     layoutState: ref({}),

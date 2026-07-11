@@ -31,6 +31,7 @@ export interface WireVisualState {
   widthBoost: number;
   highlighted: boolean;
   dimmed: boolean;
+  breathing: boolean;
 }
 
 export interface NetRequest {
@@ -52,6 +53,7 @@ export interface UseCircuitCanvasOptions {
 export interface CanvasContext {
   components: Ref<CircuitComponentInstance[]>;
   selectedComponentId: Ref<string>;
+  selectedWireId: Ref<string | null>;
   pinStates: Ref<Record<number, boolean>>;
   readonly: Ref<boolean>;
   onLayoutChange?: () => void;

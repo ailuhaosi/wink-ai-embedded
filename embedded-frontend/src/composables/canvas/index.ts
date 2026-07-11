@@ -5,6 +5,7 @@ import { useBoardDrag } from './useBoardDrag';
 import { usePowerBus } from './usePowerBus';
 import { useComponentDrag } from './useComponentDrag';
 import { useWireRendering } from './useWireRendering';
+import { useWireSelection } from './useWireSelection';
 import type { UseCircuitCanvasOptions } from './types';
 
 export type { UseCircuitCanvasOptions } from './types';
@@ -18,6 +19,7 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
   const powerBus = usePowerBus(ctx, viewport);
   const boardDrag = useBoardDrag(ctx, viewport, powerBus.syncPowerBusLayout);
   const componentDrag = useComponentDrag(ctx, layout, viewport, wireRendering.buildTrackAssignmentMap);
+  const wireSelection = useWireSelection(ctx);
 
   return {
     canvasContainerRef: viewport.canvasContainerRef,
@@ -52,5 +54,9 @@ export function useCircuitCanvas(options: UseCircuitCanvasOptions) {
     getCanvasY: layout.getCanvasY,
     getComponentSize: layout.getComponentSize,
     getWireVisual: wireRendering.getWireVisual,
+    selectedWireId: wireSelection.selectedWireId,
+    selectWire: wireSelection.selectWire,
+    handleWireClick: wireSelection.handleWireClick,
+    handleCanvasBackgroundClick: wireSelection.handleCanvasBackgroundClick,
   };
 }

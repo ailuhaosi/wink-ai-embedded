@@ -16,6 +16,7 @@ export const DEFAULT_WIRE_VISUAL: WireVisualState = {
   widthBoost: 0,
   highlighted: false,
   dimmed: false,
+  breathing: false,
 };
 
 export const boardPinOffsets: Record<number, { x: number; y: number }> = {

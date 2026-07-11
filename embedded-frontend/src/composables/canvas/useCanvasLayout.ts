@@ -30,6 +30,7 @@ export function useCanvasLayout(ctx: CanvasContext) {
 
   function selectComponent(comp: CircuitComponentInstance) {
     ctx.selectedComponentId.value = comp.id;
+    ctx.selectedWireId.value = null;
   }
 
   function setRotation(comp: CircuitComponentInstance, deg: number) {

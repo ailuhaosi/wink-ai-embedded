@@ -36,10 +36,12 @@ export function buildCanvasContext(options: UseCircuitCanvasOptions): CanvasCont
   const isComponentDragging = ref(false);
   const frozenTrackAssignments = ref<Map<string, import('@/routing/types').TrackAssignment> | null>(null);
   const dragThreshold = 8;
+  const selectedWireId = ref<string | null>(null);
 
   return {
     components,
     selectedComponentId,
+    selectedWireId,
     pinStates,
     readonly,
     onLayoutChange,

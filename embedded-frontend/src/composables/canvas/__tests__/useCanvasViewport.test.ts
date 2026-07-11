@@ -25,6 +25,7 @@ function createMockContext(overrides: Partial<CanvasContext> = {}): CanvasContex
   return {
     components: ref([]),
     selectedComponentId: ref(''),
+    selectedWireId: ref(null),
     pinStates: ref({}),
     readonly: ref(false),
     layoutState: ref({}),

@@ -21,7 +21,7 @@ export const servoDefinition: PeripheralDefinition = {
       signalType: 'digital',
       defaultConnection: null,
       relX: -5,
-      relY: 15,
+      relY: 50,
       wireNet: 'primary',
     },
     {
@@ -32,7 +32,7 @@ export const servoDefinition: PeripheralDefinition = {
       signalType: 'power',
       defaultConnection: 'VCC',
       relX: -5,
-      relY: 30,
+      relY: 60,
       wireNet: 'vcc',
     },
     {
@@ -43,7 +43,7 @@ export const servoDefinition: PeripheralDefinition = {
       signalType: 'power',
       defaultConnection: 'GND',
       relX: -5,
-      relY: 45,
+      relY: 70,
       wireNet: 'gnd',
     },
   ],

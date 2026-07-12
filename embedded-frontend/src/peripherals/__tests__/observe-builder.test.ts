@@ -26,12 +26,21 @@ describe('ObserveBuilderImpl', () => {
     expect(builder.build().pins).toEqual([1, 2, 3]);
   });
 
-  it('watchI2C sets oled true and oledConfig from first config', () => {
+  it('watchI2C alone keeps display collection disabled', () => {
     const builder = new ObserveBuilderImpl();
     builder.watchI2C(21, 22);
     const result = builder.build();
-    expect(result.oled).toBe(true);
+    expect(result.oled).toBe(false);
+    expect(result.displayKinds ?? []).toEqual([]);
     expect(result.oledConfig).toEqual({ sda: 21, scl: 22 });
+  });
+
+  it('watchDisplay enables the requested display kind', () => {
+    const builder = new ObserveBuilderImpl();
+    builder.watchDisplay('ssd1306_fb');
+    const result = builder.build();
+    expect(result.displayKinds).toContain('ssd1306_fb');
+    expect(result.oled).toBe(true);
   });
 
   it('watchUltrasonic sets ultrasonicConfig from first config', () => {
@@ -56,7 +65,8 @@ describe('ObserveBuilderImpl', () => {
     builder.watchUltrasonic(12, 13);
     builder.watchUltrasonic(14, 15);
     const result = builder.build();
-    expect(result.oled).toBe(true);
+    expect(result.oled).toBe(false);
+    expect(result.displayKinds ?? []).toEqual([]);
     expect(result.oledConfig).toEqual({ sda: 21, scl: 22 });
     expect(result.ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
   });

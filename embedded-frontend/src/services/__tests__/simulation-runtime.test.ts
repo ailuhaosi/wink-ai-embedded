@@ -37,6 +37,41 @@ describe('simulation-runtime', () => {
     expect(traces.value).toHaveLength(1);
   });
 
+  it('applyStateUpdate preserves previous framebuffer when update omits oledFb', () => {
+    const fb = new Uint8Array([7, 8, 9]);
+    applyStateUpdate({
+      us: '1',
+      pinStates: {},
+      oledFb: fb,
+      traces: [],
+      isFaulted: false,
+    });
+
+    applyStateUpdate({
+      us: '2',
+      pinStates: { 5: true },
+      traces: [],
+      isFaulted: false,
+    });
+
+    expect(oledFb.value).toBe(fb);
+    expect(clockUs.value).toBe('2');
+  });
+
+  it('applyStateUpdate clears framebuffer when worker sends explicit null', () => {
+    oledFb.value = new Uint8Array([1]);
+
+    applyStateUpdate({
+      us: '1',
+      pinStates: {},
+      oledFb: null,
+      traces: [],
+      isFaulted: false,
+    });
+
+    expect(oledFb.value).toBeNull();
+  });
+
   it('applyStateUpdate coerces Worker 0/1 pin levels to boolean', () => {
     applyStateUpdate({
       us: '1',

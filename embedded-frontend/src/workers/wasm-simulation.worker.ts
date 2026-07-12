@@ -2,6 +2,11 @@ import { SIM_UI_TICK_MS } from '../constants/simulation';
 import type { SimWorkerInbound, SimWorkerOutbound } from '../types/sim-worker-protocol';
 import { SimWorkerOutboundType } from '../types/sim-worker-protocol';
 import type { ActuatorObserveSource } from '../types/actuator-observation';
+import {
+  DisplayFramebufferGate,
+  resolveDisplayKinds,
+  shouldCollectDisplayFramebuffer,
+} from './display-framebuffer';
 
 // @ts-ignore — loaded at runtime via importScripts to avoid Vite bundling Node fs paths
 import { SimWorker } from '@unisim/worker/SimWorker';
@@ -105,7 +110,8 @@ let speedMultiplier = 1; // 1x speed: step 1000us per 1ms real-time
 const STEP_US = 1000n; // 1ms virtual step
 
 const observedPins = new Set<number>();
-let hasOled = false;
+let displayKinds: string[] = [];
+const displayFramebufferGate = new DisplayFramebufferGate();
 const ultrasonicDistances = new Map<number, number>();
 let observedActuatorSources: ActuatorObserveSource[] = [];
 
@@ -213,6 +219,28 @@ function ensureWasmMainStarted(): void {
   wasmMainStarted = true;
 }
 
+function readSsd1306Framebuffer(): Uint8Array | null {
+  if (!realModule || !rawModuleAdapter) return null;
+  if (!hasEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb')) return null;
+
+  const wPtr = rawModuleAdapter._malloc(4);
+  const hPtr = rawModuleAdapter._malloc(4);
+  try {
+    const fbPtr = callEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb', wPtr, hPtr) as number;
+    if (!fbPtr) return null;
+
+    const heap = rawModuleAdapter.HEAPU8;
+    const width = new Uint32Array(heap.buffer, wPtr, 1)[0];
+    const height = new Uint32Array(heap.buffer, hPtr, 1)[0];
+    const fbSize = (width * height) / 8;
+    return new Uint8Array(heap.buffer, fbPtr, fbSize);
+  }
+  finally {
+    rawModuleAdapter._free(wPtr);
+    rawModuleAdapter._free(hPtr);
+  }
+}
+
 // Drive the simulation loop
 function simLoop() {
   if (!running || !simWorker) return;
@@ -232,26 +260,12 @@ function simLoop() {
       }
     }
 
-    // Read OLED Framebuffer if enabled
-    let oledFb: Uint8Array | null = null;
-    if (hasOled && realModule && rawModuleAdapter && hasEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb')) {
-      const wPtr = rawModuleAdapter!._malloc(4);
-      const hPtr = rawModuleAdapter!._malloc(4);
-      try {
-        const fbPtr = callEmscriptenExport(realModule, 'pal_wasm_get_ssd1306_fb', wPtr, hPtr) as number;
-        if (fbPtr) {
-          const heap = rawModuleAdapter!.HEAPU8;
-          const width = new Uint32Array(heap.buffer, wPtr, 1)[0];
-          const height = new Uint32Array(heap.buffer, hPtr, 1)[0];
-          const fbSize = (width * height) / 8;
-          oledFb = new Uint8Array(heap.buffer, fbPtr, fbSize).slice();
-        }
-      }
-      finally {
-        rawModuleAdapter!._free(wPtr);
-        rawModuleAdapter!._free(hPtr);
-      }
-    }
+    const displayFrame = shouldCollectDisplayFramebuffer(displayKinds)
+      ? (() => {
+          const fb = readSsd1306Framebuffer();
+          return fb ? displayFramebufferGate.accept(fb, performance.now()) : null;
+        })()
+      : null;
 
     const traces: any[] = [];
     if (realModule && hasEmscriptenExport(realModule, 'pal_wasm_get_fault_log_count')) {
@@ -285,21 +299,23 @@ function simLoop() {
 
     const currentUs = simWorker.getBridge().getClockUs().toString();
 
+    const payload = {
+      us: currentUs,
+      pinStates,
+      traces,
+      isFaulted,
+      actuatorOutputs: {
+        simTimeUs: currentUs,
+        gpio: pinStates,
+        pwm,
+      },
+      ...(displayFrame ? { oledFb: displayFrame.frame } : {}),
+    };
+
     self.postMessage({
       type: SimWorkerOutboundType.STATE_UPDATE,
-      payload: {
-        us: currentUs,
-        pinStates,
-        oledFb,
-        traces,
-        isFaulted,
-        actuatorOutputs: {
-          simTimeUs: currentUs,
-          gpio: pinStates,
-          pwm,
-        },
-      },
-    } satisfies SimWorkerOutbound);
+      payload,
+    } satisfies SimWorkerOutbound, displayFrame?.transferables ?? []);
   }
   catch (err: any) {
     console.error(`[SimLoop Error] ${err.message}`);
@@ -343,6 +359,7 @@ self.onmessage = async (e: MessageEvent<SimWorkerInbound>) => {
     case 'RESET':
       running = false;
       if (simTimer) clearTimeout(simTimer);
+      displayFramebufferGate.reset();
       simWorker!.handleMessage({ type: 'INIT', id: 0 });
       console.log('[SimWorker] Simulation reset');
       self.postMessage({ type: SimWorkerOutboundType.RESET_DONE } satisfies SimWorkerOutbound);
@@ -371,10 +388,11 @@ self.onmessage = async (e: MessageEvent<SimWorkerInbound>) => {
     }
 
     case 'OBSERVE_PINS': {
-      const { pins, oled, actuatorSources } = payload;
+      const { pins, actuatorSources } = payload;
       observedPins.clear();
       pins.forEach((p: number) => observedPins.add(p));
-      hasOled = oled;
+      displayKinds = resolveDisplayKinds(payload);
+      displayFramebufferGate.reset();
       observedActuatorSources = actuatorSources ?? [];
       break;
     }

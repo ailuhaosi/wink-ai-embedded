@@ -69,6 +69,7 @@ describe('observePins aggregation via ObserveBuilder', () => {
     expect(msg.payload.pins).toEqual(expect.arrayContaining([2, 21, 22, 12, 13]));
     expect(msg.payload.pins).toHaveLength(5);
     expect(msg.payload.oled).toBe(true);
+    expect(msg.payload.displayKinds).toEqual(['ssd1306_fb']);
     expect(msg.payload.oledConfig).toEqual({ sda: 21, scl: 22 });
     expect(msg.payload.ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
   });

@@ -7,6 +7,7 @@ import { actuatorConverterRegistry } from '../actuator-converter-registry';
 import { registry } from '@/peripherals';
 import '@/peripherals/servo';
 import '@/peripherals/motor_driver_stub';
+import '@/peripherals/led';
 import type { ActuatorOutputBatch, ActuatorObserveSource } from '@/types/actuator-observation';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { PeripheralDefinition } from '@/peripherals/types';
@@ -33,6 +34,16 @@ function motorComp(
     type: 'motor_driver_stub',
     props,
     pinConnections: {},
+    position: { x: 0, y: 0 },
+  };
+}
+
+function ledComp(id: string, anodePin = 13): CircuitComponentInstance {
+  return {
+    id,
+    type: 'led',
+    props: {},
+    pinConnections: { A: anodePin, C: 'GND' },
     position: { x: 0, y: 0 },
   };
 }
@@ -312,6 +323,47 @@ describe('actuator-observation mapper', () => {
         unit: 'bool',
         role: 'command',
         simTimeUs: '42',
+      },
+    ]);
+  });
+
+  it('maps LED gpio_pin raw 0/1 to off/on state observations', () => {
+    const sources: ActuatorObserveSource[] = [
+      { deviceComponentId: 'status_led', transport: 'gpio_pin', transportKey: 13 },
+    ];
+    const components = [ledComp('status_led')];
+
+    expect(
+      mapActuatorOutputs(
+        { simTimeUs: '100', pwm: {}, gpio: { 13: false } },
+        sources,
+        components,
+      ),
+    ).toEqual([
+      {
+        deviceComponentId: 'status_led',
+        quantity: 'state',
+        value: 'off',
+        unit: 'bool',
+        role: 'command',
+        simTimeUs: '100',
+      },
+    ]);
+
+    expect(
+      mapActuatorOutputs(
+        { simTimeUs: '200', pwm: {}, gpio: { 13: true } },
+        sources,
+        components,
+      ),
+    ).toEqual([
+      {
+        deviceComponentId: 'status_led',
+        quantity: 'state',
+        value: 'on',
+        unit: 'bool',
+        role: 'command',
+        simTimeUs: '200',
       },
     ]);
   });

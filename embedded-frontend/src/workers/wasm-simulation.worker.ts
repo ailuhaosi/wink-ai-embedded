@@ -228,7 +228,7 @@ function simLoop() {
     for (const pin of observedPins) {
       const res = simWorker.handleMessage({ type: 'READ_GPIO_DEGRADED', id: 0, pin });
       if (res.type === 'OK') {
-        pinStates[pin] = (res.payload as any).level;
+        pinStates[pin] = Boolean((res.payload as { level?: unknown }).level);
       }
     }
 

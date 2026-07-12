@@ -14,6 +14,8 @@ export type ActuatorQuantity =
 export interface ActuatorObservation {
   /** = CircuitComponentInstance.id (= manifest devices[].componentId) */
   deviceComponentId: string;
+  /** Optional channel/side discriminator for multi-actuator components. */
+  subAddress?: number;
   quantity: ActuatorQuantity;
   value: number | string | any[];
   /** UI 显示单位 */

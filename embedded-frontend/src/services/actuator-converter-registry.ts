@@ -1,12 +1,17 @@
 import type { ActuatorObservation, ActuatorObserveProfile } from '@/types/actuator-observation';
 
+export interface ActuatorConverterContext {
+  simTimeUs: string;
+  profile: ActuatorObserveProfile;
+  props?: Record<string, unknown>;
+  stateStore?: Record<string, unknown>;
+  subAddress?: number;
+  lastObservation?: ActuatorObservation;
+}
+
 export type ActuatorConverter = (
   rawValue: number,
-  context: {
-    simTimeUs: string;
-    profile: ActuatorObserveProfile;
-    props?: Record<string, unknown>;  // minPulseMs / maxPulseMs
-  },
+  context: ActuatorConverterContext,
 ) => Omit<ActuatorObservation, 'deviceComponentId' | 'simTimeUs'>;
 
 const converters = new Map<string, ActuatorConverter>();

@@ -3,6 +3,7 @@ import { mapActuatorOutputs } from '../actuator-observation.mapper';
 import { actuatorConverterRegistry } from '../actuator-converter-registry';
 import { registry } from '@/peripherals';
 import '@/peripherals/servo';
+import '@/peripherals/motor_driver_stub';
 import type { ActuatorOutputBatch, ActuatorObserveSource } from '@/types/actuator-observation';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { PeripheralDefinition } from '@/peripherals/types';
@@ -14,6 +15,19 @@ function servoComp(
   return {
     id,
     type: 'servo',
+    props,
+    pinConnections: {},
+    position: { x: 0, y: 0 },
+  };
+}
+
+function motorComp(
+  id: string,
+  props: Record<string, unknown> = { pwmChannelLeft: 0, pwmChannelRight: 1, maxRpm: 120 },
+): CircuitComponentInstance {
+  return {
+    id,
+    type: 'motor_driver_stub',
     props,
     pinConnections: {},
     position: { x: 0, y: 0 },
@@ -106,6 +120,46 @@ describe('actuator-observation mapper', () => {
     const obs = mapActuatorOutputs(batch, sources, [servoComp('a')]);
     expect(obs).toHaveLength(1);
     expect(obs[0].value).toBe(0);
+  });
+
+  it('maps dual pwm sources to angular_velocity for motor stub', () => {
+    const sources: ActuatorObserveSource[] = [
+      { deviceComponentId: 'drive_motor', transport: 'pwm_channel', transportKey: 0, subAddress: 0 },
+      { deviceComponentId: 'drive_motor', transport: 'pwm_channel', transportKey: 1, subAddress: 1 },
+    ];
+    const components = [motorComp('drive_motor')];
+
+    let obs = mapActuatorOutputs(
+      { simTimeUs: '0', pwm: { 0: 50, 1: 100 }, gpio: {} },
+      sources,
+      components,
+    );
+
+    for (let step = 1; step <= 60; step += 1) {
+      obs = mapActuatorOutputs(
+        { simTimeUs: String(step * 100_000), pwm: { 0: 50, 1: 100 }, gpio: {} },
+        sources,
+        components,
+      );
+    }
+
+    expect(obs).toHaveLength(2);
+    expect(obs[0]).toMatchObject({
+      deviceComponentId: 'drive_motor',
+      quantity: 'angular_velocity',
+      unit: 'rpm',
+      role: 'command',
+      subAddress: 0,
+    });
+    expect(obs[1]).toMatchObject({
+      deviceComponentId: 'drive_motor',
+      quantity: 'angular_velocity',
+      unit: 'rpm',
+      role: 'command',
+      subAddress: 1,
+    });
+    expect(obs[0].value).toBeCloseTo(60, 1);
+    expect(obs[1].value).toBeCloseTo(120, 1);
   });
 
   it('returns empty array for empty actuatorSources', () => {

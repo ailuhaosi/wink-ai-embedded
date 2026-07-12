@@ -82,6 +82,24 @@ export const buttonDefinition: PeripheralDefinition = {
   props: buttonProps,
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  simulation: {
+    inject: {
+      kind: 'gpio_ideal',
+      apply(comp, ctx) {
+        const signalPin = comp.pinConnections['1.l'];
+        if (typeof signalPin !== 'number') return;
+        const activeLow = comp.props.activeLow !== false;
+        if (ctx.event === 'press') ctx.apis.setPinIdeal(signalPin, !activeLow);
+        if (ctx.event === 'release') ctx.apis.setPinIdeal(signalPin, activeLow);
+      },
+      idle(comp, ctx) {
+        const signalPin = comp.pinConnections['1.l'];
+        if (typeof signalPin !== 'number') return;
+        const activeLow = comp.props.activeLow !== false;
+        ctx.apis.setPinIdeal(signalPin, activeLow);
+      },
+    },
+  },
   ui: {
     canvasProps: (comp) => ({
       color: comp.props.color,

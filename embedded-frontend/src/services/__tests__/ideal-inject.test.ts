@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/peripherals';
+import { registry } from '@/peripherals';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
+import type { PeripheralDefinition } from '@/peripherals/types';
 import * as pinApi from '../simulation-pin-api';
 import { runInject, runInjectIdle, syncIdealInputs } from '../ideal-inject';
 
@@ -65,20 +67,119 @@ describe('ideal-inject', () => {
     expect(pinApi.setUltrasonicDistance).toHaveBeenCalledWith(12, 13, 25, undefined);
   });
 
-  it.skip('runInject press sets active pin level for button', () => {
-    // Task 3.2 enables when definition.inject lands
+  it('runInject press sets active pin level for button', () => {
     const comp = makeButton();
     runInject(comp, { event: 'press' });
     expect(pinApi.setPinIdeal).toHaveBeenCalledTimes(1);
-    expect(pinApi.setPinIdeal).toHaveBeenCalledWith(4, false, undefined);
+    const [pin, level, options] = vi.mocked(pinApi.setPinIdeal).mock.calls[0]!;
+    expect(pin).toBe(4);
+    expect(level).toBe(false);
+    expect(options).toEqual(expect.any(Object));
   });
 
-  it.skip('runInjectIdle restores idle level for button', () => {
-    // Task 3.2 enables when definition.inject lands
+  it('runInjectIdle restores idle level for button', () => {
     const comp = makeButton();
     runInjectIdle([comp]);
     expect(pinApi.setPinIdeal).toHaveBeenCalledTimes(1);
-    expect(pinApi.setPinIdeal).toHaveBeenCalledWith(4, true, undefined);
+    expect(pinApi.setPinIdeal).toHaveBeenCalledWith(4, true, expect.objectContaining({ drive: 'strong' }));
+  });
+
+  it('arbiter: strong overrides weak on same pin', () => {
+    const buttonDef = registry.get('button') as PeripheralDefinition;
+    const origGet = registry.get.bind(registry);
+    const weakType = '_arb_test_weak';
+    const strongType = '_arb_test_strong';
+    const weakDef: PeripheralDefinition = {
+      ...buttonDef,
+      type: weakType,
+      simulation: {
+        inject: {
+          kind: 'gpio_ideal',
+          apply: () => {},
+          idle(_comp, ctx) {
+            ctx.apis.setPinIdeal(5, true, { drive: 'weak' });
+          },
+        },
+      },
+    };
+    const strongDef: PeripheralDefinition = {
+      ...buttonDef,
+      type: strongType,
+      simulation: {
+        inject: {
+          kind: 'gpio_ideal',
+          apply: () => {},
+          idle(_comp, ctx) {
+            ctx.apis.setPinIdeal(5, false, { drive: 'strong' });
+          },
+        },
+      },
+    };
+    const getSpy = vi.spyOn(registry, 'get').mockImplementation((type: string) => {
+      if (type === weakType) return weakDef;
+      if (type === strongType) return strongDef;
+      return origGet(type);
+    });
+    try {
+      runInjectIdle([
+        { ...makeButton({ id: 'weak-1', type: weakType }), pinConnections: { '1.l': 5 } },
+        { ...makeButton({ id: 'strong-1', type: strongType }), pinConnections: { '1.l': 5 } },
+      ]);
+      expect(pinApi.setPinIdeal).toHaveBeenCalledTimes(1);
+      expect(pinApi.setPinIdeal).toHaveBeenCalledWith(5, false, expect.objectContaining({ drive: 'strong' }));
+    }
+    finally {
+      getSpy.mockRestore();
+    }
+  });
+
+  it('arbiter: same-drive last write wins', () => {
+    const buttonDef = registry.get('button') as PeripheralDefinition;
+    const origGet = registry.get.bind(registry);
+    const firstType = '_arb_test_first';
+    const secondType = '_arb_test_second';
+    const firstDef: PeripheralDefinition = {
+      ...buttonDef,
+      type: firstType,
+      simulation: {
+        inject: {
+          kind: 'gpio_ideal',
+          apply: () => {},
+          idle(_comp, ctx) {
+            ctx.apis.setPinIdeal(6, true, { drive: 'weak' });
+          },
+        },
+      },
+    };
+    const secondDef: PeripheralDefinition = {
+      ...buttonDef,
+      type: secondType,
+      simulation: {
+        inject: {
+          kind: 'gpio_ideal',
+          apply: () => {},
+          idle(_comp, ctx) {
+            ctx.apis.setPinIdeal(6, false, { drive: 'weak' });
+          },
+        },
+      },
+    };
+    const getSpy = vi.spyOn(registry, 'get').mockImplementation((type: string) => {
+      if (type === firstType) return firstDef;
+      if (type === secondType) return secondDef;
+      return origGet(type);
+    });
+    try {
+      runInjectIdle([
+        { ...makeButton({ id: 'first-1', type: firstType }), pinConnections: { '1.l': 6 } },
+        { ...makeButton({ id: 'second-1', type: secondType }), pinConnections: { '1.l': 6 } },
+      ]);
+      expect(pinApi.setPinIdeal).toHaveBeenCalledTimes(1);
+      expect(pinApi.setPinIdeal).toHaveBeenCalledWith(6, false, expect.objectContaining({ drive: 'weak' }));
+    }
+    finally {
+      getSpy.mockRestore();
+    }
   });
 
   it('ignores peripherals without inject', () => {

@@ -96,7 +96,7 @@ export function createAvoidanceCarWorkbenchManifest(): EmbeddedProjectManifest {
         modelId: 'servo_stub',
         displayName: 'Neck Servo',
         position: { x: 280, y: 360 },
-        props: {
+        properties: {
           pwmChannel: 0,
           minPulseMs: 0.5,
           maxPulseMs: 2.5,

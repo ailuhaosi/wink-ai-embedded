@@ -40,6 +40,11 @@ describe('manifest-to-canvas', () => {
         SIG: 2,
         GND: 'GND',
       },
+      props: {
+        pwmChannel: 0,
+        minPulseMs: 0.5,
+        maxPulseMs: 2.5,
+      },
     });
   });
 

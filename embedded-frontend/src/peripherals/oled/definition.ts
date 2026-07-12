@@ -116,6 +116,7 @@ export const oledDefinition: PeripheralDefinition = {
         typeof sda === 'number' ? sda : null,
         typeof scl === 'number' ? scl : null,
       );
+      builder.watchDisplay('ssd1306_fb');
     },
   },
 };

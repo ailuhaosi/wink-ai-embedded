@@ -81,7 +81,7 @@ describe('ObserveBuilderImpl', () => {
 });
 
 describe('definition.simulation.observe hooks', () => {
-  it('oled observe watches I2C from DATA/CLK', () => {
+  it('oled observe watches I2C metadata and declares SSD1306 display', () => {
     const builder = new ObserveBuilderImpl();
     const comp = makeComp('oled', { DATA: 21, CLK: 22 });
     expect(oledDefinition.simulation?.observe).toBeTypeOf('function');
@@ -89,6 +89,7 @@ describe('definition.simulation.observe hooks', () => {
     const result = builder.build();
     expect(result.oled).toBe(true);
     expect(result.oledConfig).toEqual({ sda: 21, scl: 22 });
+    expect(result.displayKinds).toEqual(['ssd1306_fb']);
   });
 
   it('oled observe coerces non-number pins to null', () => {

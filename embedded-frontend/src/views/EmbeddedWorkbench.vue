@@ -422,6 +422,7 @@ onUnmounted(() => {
           <WorkbenchPropertyInspector
             :selected-comp="selectedComp"
             :can-edit="modeStore.canEditCircuit"
+            :can-edit-ideal-inject="modeStore.current === WorkbenchModeId.Simulate"
             @set-rotation="setRotation"
           />
           <SimActuatorPanel />

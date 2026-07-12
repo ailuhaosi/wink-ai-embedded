@@ -12,11 +12,20 @@ import {
 const props = defineProps<{
   selectedComp: CircuitComponentInstance | undefined;
   canEdit: boolean;
+  /**
+   * Ideal Inject controls (e.g. ultrasonic distance slider) must stay interactive
+   * in Simulate — they are channel-④ inputs, not circuit schematic edits.
+   */
+  canEditIdealInject?: boolean;
 }>();
 
 const emit = defineEmits<{
   'set-rotation': [comp: CircuitComponentInstance, deg: number];
 }>();
+
+const idealInjectEditable = computed(
+  () => props.canEditIdealInject === true || props.canEdit,
+);
 
 const rotationDegrees = [0, 90, 180, 270] as const;
 
@@ -108,7 +117,7 @@ const propSchema = computed(() => selectedDefinition.value?.props ?? {});
           v-model.number="selectedComp.props[propKey]"
           type="number"
           class="input font-mono"
-          :disabled="!canEdit"
+          :disabled="propKey === 'distance' ? !idealInjectEditable : !canEdit"
         >
         <input
           v-else-if="propDef.type === 'boolean'"
@@ -128,8 +137,8 @@ const propSchema = computed(() => selectedDefinition.value?.props ?? {});
       <component
         :is="inspectorExtra"
         v-if="inspectorExtra"
-        :model-value="selectedComp.props.distance"
-        :disabled="!canEdit"
+        :model-value="Number(selectedComp.props.distance ?? 25)"
+        :disabled="!idealInjectEditable"
         @update:model-value="selectedComp.props.distance = $event"
       />
 

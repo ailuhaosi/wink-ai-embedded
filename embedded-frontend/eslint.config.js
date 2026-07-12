@@ -58,4 +58,46 @@ export default antfu(
       'no-new-func': 'off',
     },
   },
+  {
+    files: ['src/peripherals/**/*.{vue,ts}'],
+    ignores: [
+      'src/peripherals/__tests__/**',
+      // root helpers may stay free; tighten in M2 if needed
+      'src/peripherals/registry.ts',
+      'src/peripherals/types.ts',
+      'src/peripherals/observe-builder.ts',
+      'src/peripherals/index.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error', // M2 exit: offenders cleared (Task 2.6)
+        {
+          paths: [
+            {
+              name: '@/services/simulation-runtime',
+              message:
+                'Peripheral packages must consume SimViewContext via definition.ui binders (ADR-0027). Do not import simulation-runtime.',
+            },
+            {
+              name: '@/services/simulation-client',
+              message:
+                'Peripheral packages must communicate via declarative apis or context, not via simulation-client (ADR-0027).',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/services/simulation-runtime', '**/simulation-runtime'],
+              message:
+                'Peripheral packages must consume SimViewContext via definition.ui binders (ADR-0027).',
+            },
+            {
+              group: ['**/services/simulation-client', '**/simulation-client'],
+              message:
+                'Peripheral packages must not direct import simulation-client (ADR-0027).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 )

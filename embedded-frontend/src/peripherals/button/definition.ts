@@ -82,4 +82,18 @@ export const buttonDefinition: PeripheralDefinition = {
   props: buttonProps,
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  ui: {
+    canvasProps: (comp) => ({
+      color: comp.props.color,
+      label: comp.props.label,
+      xray: comp.props.xray,
+    }),
+    worldProps: (comp) => ({
+      pinConnections: comp.pinConnections,
+      color: comp.props.color,
+      label: comp.props.label,
+      xray: comp.props.xray,
+      activeLow: comp.props.activeLow,
+    }),
+  },
 };

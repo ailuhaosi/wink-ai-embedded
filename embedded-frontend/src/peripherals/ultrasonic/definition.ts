@@ -70,6 +70,12 @@ export const ultrasonicDefinition: PeripheralDefinition = {
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
   inspectorExtra: InspectorExtra,
+  ui: {
+    worldProps: (comp) => ({
+      pinConnections: comp.pinConnections,
+      distance: comp.props.distance,
+    }),
+  },
   simulation: {
     observe(comp, builder) {
       const trig = comp.pinConnections.TRIG;

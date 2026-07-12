@@ -1,20 +1,12 @@
 <script setup lang="ts">
 import '@wokwi/elements';
-import { computed } from 'vue';
-import { actuatorObservations } from '@/services/simulation-runtime';
 
-const props = defineProps<{
+defineProps<{
   id: string;
   label?: string;
   pwmChannel?: number;
+  angle: number;
 }>();
-
-const angle = computed(() => {
-  const obs = actuatorObservations.value.find(
-    (o) => o.deviceComponentId === props.id && o.quantity === 'angular_position'
-  );
-  return typeof obs?.value === 'number' ? obs.value : 90; // Default / fallback to 90 degrees
-});
 </script>
 
 <template>

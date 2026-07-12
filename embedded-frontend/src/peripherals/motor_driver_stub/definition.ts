@@ -57,4 +57,7 @@ export const motorDriverStubDefinition: PeripheralDefinition = {
   ],
   props: {},
   canvas: { component: CanvasGlyph },
+  ui: {
+    canvasProps: () => ({}),
+  },
 };

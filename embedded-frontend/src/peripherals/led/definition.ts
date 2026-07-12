@@ -1,4 +1,5 @@
 import type { PeripheralDefinition, PeripheralPropsSchema } from '../types';
+import { isPinHigh } from '../types';
 import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
 
@@ -63,4 +64,25 @@ export const ledDefinition: PeripheralDefinition = {
   props: ledProps,
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  ui: {
+    canvasProps: (comp, ctx) => ({
+      pinConnections: comp.pinConnections,
+      color: comp.props.color,
+      brightness: comp.props.brightness,
+      label: comp.props.label,
+      flip: comp.props.flip,
+      pinStates: ctx.pinStates,
+    }),
+    worldProps: (comp, ctx) => ({
+      pinConnections: comp.pinConnections,
+      color: comp.props.color,
+      level:
+        typeof comp.pinConnections.A === 'number'
+          ? isPinHigh(ctx.pinStates[comp.pinConnections.A])
+          : false,
+      brightness: comp.props.brightness,
+      label: comp.props.label,
+      flip: comp.props.flip,
+    }),
+  },
 };

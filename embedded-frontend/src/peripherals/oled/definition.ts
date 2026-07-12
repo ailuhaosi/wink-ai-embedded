@@ -99,6 +99,15 @@ export const oledDefinition: PeripheralDefinition = {
   props: {},
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  ui: {
+    canvasProps: (_comp, ctx) => ({
+      framebuffer: ctx.displayFb ?? ctx.oledFb ?? null,
+    }),
+    worldProps: (comp, ctx) => ({
+      pinConnections: comp.pinConnections,
+      framebuffer: ctx.displayFb ?? ctx.oledFb ?? null,
+    }),
+  },
   simulation: {
     observe(comp, builder) {
       const sda = comp.pinConnections.DATA;

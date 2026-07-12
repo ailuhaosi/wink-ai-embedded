@@ -95,9 +95,10 @@ export interface PeripheralDefinition {
     component: Component;
   };
 
-  /** 仿真观察插件（binding 桥为主路径；observe 为 OLED/超声等过渡） */
+  /** 仿真观察 / 理想输入注入插件 */
   simulation?: {
     observe?: ObserveFn;
+    inject?: PeripheralSimulationInject;
   };
 
   /** 执行器观测映射声明 (Phase 1/2) */
@@ -147,6 +148,36 @@ export function isPinHigh(
     return isPinHigh(state.level);
   }
   return Boolean(state);
+}
+
+export interface InjectContext {
+  event?: 'press' | 'release' | 'props' | 'idle';
+  /** 可选：当由确定性测试回放触发时，指示当前注入的仿真微秒时间戳 */
+  timestampUs?: string;
+  /** 宿主可注入的共享 API，避免外设 import pin-api 造成环依赖 */
+  apis: {
+    /** 注入 GPIO 理想值，支持时间戳，支持弱拉或强覆盖模式（用于解决同引脚冲突） */
+    setPinIdeal: (
+      pin: number,
+      level: boolean,
+      options?: { timestampUs?: string; drive?: 'strong' | 'weak' },
+    ) => void;
+    setUltrasonicDistance: (
+      trig: number,
+      echo: number,
+      cm: number,
+      options?: { timestampUs?: string },
+    ) => void;
+    /** 获取仿真 Worker 的当前虚拟时间，协助外设进行时序同步 */
+    getCurrentSimTimeUs: () => string;
+  };
+}
+
+/** ④ Ideal Inject 插件契约 */
+export interface PeripheralSimulationInject {
+  kind: 'gpio_ideal' | 'ultrasonic_distance' | 'ideal_inputs';
+  apply: (comp: CircuitComponentInstance, ctx: InjectContext) => void;
+  idle?: (comp: CircuitComponentInstance, ctx: InjectContext) => void;
 }
 
 /** 外设仿真视图绑定：将 CircuitComponentInstance + SimViewContext 映射为渲染组件 props */

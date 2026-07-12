@@ -85,5 +85,16 @@ export const ultrasonicDefinition: PeripheralDefinition = {
         typeof echo === 'number' ? echo : null,
       );
     },
+    inject: {
+      kind: 'ultrasonic_distance',
+      apply(comp, ctx) {
+        const trig = comp.pinConnections.TRIG;
+        const echo = comp.pinConnections.ECHO;
+        const dist = comp.props.distance;
+        if (typeof trig !== 'number' || typeof echo !== 'number') return;
+        if (typeof dist !== 'number') return;
+        ctx.apis.setUltrasonicDistance(trig, echo, dist);
+      },
+    },
   },
 };

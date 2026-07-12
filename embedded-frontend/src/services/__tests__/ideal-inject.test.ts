@@ -59,12 +59,15 @@ describe('ideal-inject', () => {
     vi.mocked(pinApi.setUltrasonicDistance).mockClear();
   });
 
-  it.skip('syncIdealInputs applies ultrasonic distance from props', () => {
-    // Task 3.3 enables when definition.inject lands
+  it('syncIdealInputs applies ultrasonic distance from props', () => {
     const comp = makeUltrasonic();
     syncIdealInputs([comp]);
     expect(pinApi.setUltrasonicDistance).toHaveBeenCalledTimes(1);
-    expect(pinApi.setUltrasonicDistance).toHaveBeenCalledWith(12, 13, 25, undefined);
+    const [trig, echo, dist, options] = vi.mocked(pinApi.setUltrasonicDistance).mock.calls[0]!;
+    expect(trig).toBe(12);
+    expect(echo).toBe(13);
+    expect(dist).toBe(25);
+    expect(options).toEqual(expect.any(Object));
   });
 
   it('runInject press sets active pin level for button', () => {

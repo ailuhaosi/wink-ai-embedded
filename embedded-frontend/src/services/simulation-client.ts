@@ -19,13 +19,17 @@ import {
   lastComponents,
   actuatorObservations,
 } from './simulation-runtime';
-import { mapActuatorOutputs } from './actuator-observation.mapper';
+import {
+  clearActuatorConverterSessionStates,
+  mapActuatorOutputs,
+} from './actuator-observation.mapper';
 import {
   getSimWorker,
   setSimWorker,
   setPinIdeal,
   setUltrasonicDistance,
 } from './simulation-pin-api';
+import { runInjectIdle } from './ideal-inject';
 
 export type { SimFaultsConfig } from '../types/sim-worker-protocol';
 export type { SimTrace } from './simulation-runtime';
@@ -84,6 +88,7 @@ export function initSimulation() {
 
   ctrl.resetForInit();
   resetDataPlane();
+  clearActuatorConverterSessionStates();
 
   console.log('[SimulationClient] Spawning simulation worker...');
   const worker = new WasmWorker();
@@ -99,6 +104,7 @@ export function initSimulation() {
     switch (type) {
       case 'INIT_DONE':
         c.onInitDone();
+        clearActuatorConverterSessionStates();
         console.log('[SimulationClient] Simulator initialized successfully!');
         break;
 
@@ -131,6 +137,7 @@ export function initSimulation() {
       case 'RESET_DONE':
         c.onResetDone();
         resetDataPlane();
+        clearActuatorConverterSessionStates();
         break;
     }
   };
@@ -162,6 +169,7 @@ export function pauseSimulation() {
 export function resetSimulation() {
   const worker = getSimWorker();
   if (worker) {
+    clearActuatorConverterSessionStates();
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.RESET };
     worker.postMessage(msg);
     requireControl().setRunning(false);
@@ -169,19 +177,9 @@ export function resetSimulation() {
 }
 
 export function syncIdleGpioFromComponents(
-  components: Array<{
-    type: string;
-    pinConnections: Record<string, PinConnectionValue>;
-    props: Record<string, unknown>;
-  }>,
+  components: CircuitComponentInstance[],
 ): void {
-  for (const comp of components) {
-    if (comp.type !== 'button') continue;
-    const signalPin = comp.pinConnections['1.l'];
-    if (typeof signalPin !== 'number') continue;
-    const activeLow = comp.props.activeLow !== false;
-    setPinIdeal(signalPin, activeLow);
-  }
+  runInjectIdle(components);
 }
 
 /** Preferred: components-only. Collects GPIO pins + plugin observe. */

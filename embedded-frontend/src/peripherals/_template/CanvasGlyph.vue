@@ -1,3 +1,7 @@
+<!--
+  Do NOT import @/services/simulation-runtime.
+  Receive pinStates / framebuffer / angle via props from definition.ui.canvasProps.
+-->
 <script setup lang="ts">
 /**
  * Canvas glyph — rendered on the breadboard canvas.

@@ -99,6 +99,15 @@ export const oledDefinition: PeripheralDefinition = {
   props: {},
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  ui: {
+    canvasProps: (_comp, ctx) => ({
+      framebuffer: ctx.displayFb ?? ctx.oledFb ?? null,
+    }),
+    worldProps: (comp, ctx) => ({
+      pinConnections: comp.pinConnections,
+      framebuffer: ctx.displayFb ?? ctx.oledFb ?? null,
+    }),
+  },
   simulation: {
     observe(comp, builder) {
       const sda = comp.pinConnections.DATA;
@@ -107,6 +116,7 @@ export const oledDefinition: PeripheralDefinition = {
         typeof sda === 'number' ? sda : null,
         typeof scl === 'number' ? scl : null,
       );
+      builder.watchDisplay('ssd1306_fb');
     },
   },
 };

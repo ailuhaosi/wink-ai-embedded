@@ -27,4 +27,7 @@ export const buzzerStubDefinition: PeripheralDefinition = {
   ],
   props: {},
   canvas: { component: CanvasGlyph },
+  ui: {
+    canvasProps: () => ({}),
+  },
 };

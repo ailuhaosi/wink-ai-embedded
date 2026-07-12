@@ -1,4 +1,5 @@
 import type { PeripheralDefinition, PeripheralPropsSchema } from '../types';
+import { isPinHigh } from '../types';
 import CanvasGlyph from './CanvasGlyph.vue';
 import WorldWidget from './WorldWidget.vue';
 
@@ -61,6 +62,46 @@ export const ledDefinition: PeripheralDefinition = {
     },
   ],
   props: ledProps,
+  actuatorObserve: {
+    profile: {
+      defaultQuantity: 'state',
+      unit: 'bool',
+      convert: 'gpio_to_state',
+    },
+  },
+  simulation: {
+    observe: (comp, builder) => {
+      const anode = comp.pinConnections.A;
+      if (typeof anode === 'number') {
+        builder.watchActuatorSource({
+          deviceComponentId: comp.id,
+          transport: 'gpio_pin',
+          transportKey: anode,
+        });
+      }
+    },
+  },
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
+  ui: {
+    canvasProps: (comp, ctx) => ({
+      pinConnections: comp.pinConnections,
+      color: comp.props.color,
+      brightness: comp.props.brightness,
+      label: comp.props.label,
+      flip: comp.props.flip,
+      pinStates: ctx.pinStates,
+    }),
+    worldProps: (comp, ctx) => ({
+      pinConnections: comp.pinConnections,
+      color: comp.props.color,
+      level:
+        typeof comp.pinConnections.A === 'number'
+          ? isPinHigh(ctx.pinStates[comp.pinConnections.A])
+          : false,
+      brightness: comp.props.brightness,
+      label: comp.props.label,
+      flip: comp.props.flip,
+    }),
+  },
 };

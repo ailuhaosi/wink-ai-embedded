@@ -55,6 +55,64 @@ export const motorDriverStubDefinition: PeripheralDefinition = {
       relY: 62,
     },
   ],
-  props: {},
+  props: {
+    pwmChannelLeft: {
+      type: 'number',
+      default: 0,
+      description: 'Left PWM channel',
+      range: { min: 0, max: 15, step: 1 },
+    },
+    pwmChannelRight: {
+      type: 'number',
+      default: 1,
+      description: 'Right PWM channel',
+      range: { min: 0, max: 15, step: 1 },
+    },
+    maxRpm: {
+      type: 'number',
+      default: 120,
+      description: 'RPM at 100% duty',
+    },
+  },
+  actuatorObserve: {
+    profile: {
+      defaultQuantity: 'angular_velocity',
+      unit: 'rpm',
+      convert: 'pwm_duty_to_rpm',
+    },
+  },
+  simulation: {
+    observe: (comp, builder) => {
+      const pwmChannelLeft = (comp.props.pwmChannelLeft as number) ?? 0;
+      const pwmChannelRight = (comp.props.pwmChannelRight as number) ?? 1;
+      builder.watchActuatorSource({
+        deviceComponentId: comp.id,
+        transport: 'pwm_channel',
+        transportKey: pwmChannelLeft,
+        subAddress: 0,
+      });
+      builder.watchActuatorSource({
+        deviceComponentId: comp.id,
+        transport: 'pwm_channel',
+        transportKey: pwmChannelRight,
+        subAddress: 1,
+      });
+    },
+  },
   canvas: { component: CanvasGlyph },
+  ui: {
+    canvasProps: (comp, ctx) => {
+      const observations = ctx.actuatorObservations.filter(
+        (o) => o.deviceComponentId === comp.id && o.quantity === 'angular_velocity',
+      );
+      const left = observations.find((o) => o.subAddress === 0);
+      const right = observations.find((o) => o.subAddress === 1);
+      return {
+        id: comp.id,
+        label: comp.props.label ?? comp.id,
+        rpmLeft: typeof left?.value === 'number' ? left.value : 0,
+        rpmRight: typeof right?.value === 'number' ? right.value : 0,
+      };
+    },
+  },
 };

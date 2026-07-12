@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import '@wokwi/elements';
 import { computed } from 'vue';
-import { setPinIdeal } from '@/services/simulation-pin-api';
+import { runInject } from '@/services/ideal-inject';
 
+import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
-import { getNetDefinitions } from '@/types/peripheral-pins';
-import { resolveNetConnection } from '@/routing/net-pin-resolver';
 
 const props = defineProps<{
   pinConnections: Record<string, PinConnectionValue>;
@@ -15,13 +14,6 @@ const props = defineProps<{
   activeLow: boolean;
 }>();
 
-const signalPin = computed(() => {
-  const primary = getNetDefinitions('button').find(n => n.mode === 'primary');
-  if (!primary) return null;
-  const conn = resolveNetConnection(primary, props.pinConnections);
-  return typeof conn === 'number' ? conn : null;
-});
-
 const pinLabel = computed(() => {
   const left1 = props.pinConnections['1.l'];
   const left2 = props.pinConnections['2.l'];
@@ -30,16 +22,23 @@ const pinLabel = computed(() => {
   return `1.l:${left1}, 2.l:${left2}, 1.r:${right1}, 2.r:${right2}`;
 });
 
+function makeInjectComponent(): CircuitComponentInstance {
+  return {
+    id: 'world-button',
+    type: 'button',
+    name: 'button',
+    pinConnections: props.pinConnections,
+    props: { activeLow: props.activeLow },
+    rotation: 0,
+  };
+}
+
 function handlePress() {
-  if (signalPin.value === null) return;
-  const level = !props.activeLow;
-  setPinIdeal(signalPin.value, level);
+  runInject(makeInjectComponent(), { event: 'press' });
 }
 
 function handleRelease() {
-  if (signalPin.value === null) return;
-  const level = !!props.activeLow;
-  setPinIdeal(signalPin.value, level);
+  runInject(makeInjectComponent(), { event: 'release' });
 }
 </script>
 

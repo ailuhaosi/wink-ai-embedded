@@ -26,10 +26,26 @@ export const actuatorObservations = shallowRef<ActuatorObservation[]>([]);
 export const lastActuatorSources = shallowRef<ActuatorObserveSource[]>([]);
 export const lastComponents = shallowRef<any[]>([]);
 
+function normalizePinStates(
+  raw: Record<number, unknown> | undefined | null,
+): Record<number, boolean> {
+  const out: Record<number, boolean> = {};
+  if (!raw) return out;
+  for (const [key, value] of Object.entries(raw)) {
+    // Worker may post 0/1 from C READ_GPIO; coerce at the data-plane boundary.
+    out[Number(key)] = value === true || value === 1;
+  }
+  return out;
+}
+
 export function applyStateUpdate(payload: SimStatePayload) {
   clockUs.value = payload.us;
-  pinStates.value = payload.pinStates ?? {};
-  oledFb.value = payload.oledFb ?? null;
+  pinStates.value = normalizePinStates(
+    payload.pinStates as Record<number, unknown> | undefined,
+  );
+  if ('oledFb' in payload) {
+    oledFb.value = payload.oledFb ?? null;
+  }
   traces.value = (payload.traces ?? []) as SimTrace[];
 }
 
@@ -51,5 +67,6 @@ export function resetDataPlane() {
   oledFb.value = null;
   traces.value = [];
   actuatorObservations.value = [];
+  lastActuatorSources.value = [];
   lastComponents.value = [];
 }

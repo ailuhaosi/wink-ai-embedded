@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ObserveBuilderImpl } from '@/peripherals/observe-builder';
 import { oledDefinition } from '@/peripherals/oled/definition';
 import { ultrasonicDefinition } from '@/peripherals/ultrasonic/definition';
@@ -26,12 +26,21 @@ describe('ObserveBuilderImpl', () => {
     expect(builder.build().pins).toEqual([1, 2, 3]);
   });
 
-  it('watchI2C sets oled true and oledConfig from first config', () => {
+  it('watchI2C alone keeps display collection disabled', () => {
     const builder = new ObserveBuilderImpl();
     builder.watchI2C(21, 22);
     const result = builder.build();
-    expect(result.oled).toBe(true);
+    expect(result.oled).toBe(false);
+    expect(result.displayKinds ?? []).toEqual([]);
     expect(result.oledConfig).toEqual({ sda: 21, scl: 22 });
+  });
+
+  it('watchDisplay enables the requested display kind', () => {
+    const builder = new ObserveBuilderImpl();
+    builder.watchDisplay('ssd1306_fb');
+    const result = builder.build();
+    expect(result.displayKinds).toContain('ssd1306_fb');
+    expect(result.oled).toBe(true);
   });
 
   it('watchUltrasonic sets ultrasonicConfig from first config', () => {
@@ -56,7 +65,8 @@ describe('ObserveBuilderImpl', () => {
     builder.watchUltrasonic(12, 13);
     builder.watchUltrasonic(14, 15);
     const result = builder.build();
-    expect(result.oled).toBe(true);
+    expect(result.oled).toBe(false);
+    expect(result.displayKinds ?? []).toEqual([]);
     expect(result.oledConfig).toEqual({ sda: 21, scl: 22 });
     expect(result.ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
   });
@@ -71,7 +81,7 @@ describe('ObserveBuilderImpl', () => {
 });
 
 describe('definition.simulation.observe hooks', () => {
-  it('oled observe watches I2C from DATA/CLK', () => {
+  it('oled observe watches I2C metadata and declares SSD1306 display', () => {
     const builder = new ObserveBuilderImpl();
     const comp = makeComp('oled', { DATA: 21, CLK: 22 });
     expect(oledDefinition.simulation?.observe).toBeTypeOf('function');
@@ -79,6 +89,7 @@ describe('definition.simulation.observe hooks', () => {
     const result = builder.build();
     expect(result.oled).toBe(true);
     expect(result.oledConfig).toEqual({ sda: 21, scl: 22 });
+    expect(result.displayKinds).toEqual(['ssd1306_fb']);
   });
 
   it('oled observe coerces non-number pins to null', () => {
@@ -88,18 +99,25 @@ describe('definition.simulation.observe hooks', () => {
     expect(builder.build().oledConfig).toEqual({ sda: null, scl: null });
   });
 
-  it('ultrasonic observe watches TRIG/ECHO', () => {
-    const builder = new ObserveBuilderImpl();
-    const comp = makeComp('ultrasonic', { TRIG: 12, ECHO: 13 });
-    expect(ultrasonicDefinition.simulation?.observe).toBeTypeOf('function');
-    ultrasonicDefinition.simulation!.observe!(comp, builder);
-    expect(builder.build().ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
+  it('ultrasonic does not declare fake observe config', () => {
+    expect(ultrasonicDefinition.simulation?.observe).toBeUndefined();
   });
 
-  it('ultrasonic observe coerces non-number pins to null', () => {
-    const builder = new ObserveBuilderImpl();
-    const comp = makeComp('ultrasonic', { TRIG: 'VCC', ECHO: null });
-    ultrasonicDefinition.simulation!.observe!(comp, builder);
-    expect(builder.build().ultrasonicConfig).toEqual({ trig: null, echo: null });
+  it('ultrasonic inject still writes distance to TRIG/ECHO pins', () => {
+    const setUltrasonicDistance = vi.fn();
+    const comp = {
+      ...makeComp('ultrasonic', { TRIG: 12, ECHO: 13 }),
+      props: { distance: 25 },
+    };
+
+    ultrasonicDefinition.simulation!.inject!.apply(comp, {
+      apis: {
+        setPinIdeal: vi.fn(),
+        setUltrasonicDistance,
+        getCurrentSimTimeUs: () => '0',
+      },
+    });
+
+    expect(setUltrasonicDistance).toHaveBeenCalledWith(12, 13, 25);
   });
 });

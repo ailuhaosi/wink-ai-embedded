@@ -8,6 +8,30 @@ import type {
 import { registry } from '@/peripherals';
 import { actuatorConverterRegistry } from './actuator-converter-registry';
 
+interface ConverterSessionState {
+  stateStore: Record<string, unknown>;
+  lastObservation?: ActuatorObservation;
+}
+
+const converterSessionStates = new Map<string, ConverterSessionState>();
+
+export function clearActuatorConverterSessionStates(): void {
+  converterSessionStates.clear();
+}
+
+function getConverterSessionState(
+  deviceComponentId: string,
+  subAddress: number | undefined,
+): ConverterSessionState {
+  const key = `${deviceComponentId}:${subAddress ?? 'default'}`;
+  let state = converterSessionStates.get(key);
+  if (!state) {
+    state = { stateStore: {} };
+    converterSessionStates.set(key, state);
+  }
+  return state;
+}
+
 export function mapActuatorOutputs(
   batch: ActuatorOutputBatch,
   actuatorSources: ActuatorObserveSource[],
@@ -17,7 +41,7 @@ export function mapActuatorOutputs(
   const simTimeUs = batch.simTimeUs;
 
   for (const src of actuatorSources) {
-    const { deviceComponentId, transport, transportKey } = src;
+    const { deviceComponentId, transport, transportKey, subAddress } = src;
 
     // Find the component instance
     const comp = components.find((c) => c.id === deviceComponentId);
@@ -44,17 +68,24 @@ export function mapActuatorOutputs(
     if (!converter) continue;
 
     try {
+      const sessionState = getConverterSessionState(deviceComponentId, subAddress);
       const converted = converter(rawValue, {
         simTimeUs,
         profile,
         props: comp.props,
+        stateStore: sessionState.stateStore,
+        subAddress,
+        lastObservation: sessionState.lastObservation,
       });
 
-      observations.push({
+      const observation: ActuatorObservation = {
         deviceComponentId,
-        simTimeUs,
         ...converted,
-      });
+        subAddress,
+        simTimeUs,
+      };
+      observations.push(observation);
+      sessionState.lastObservation = observation;
     } catch (e) {
       console.error(`[actuator-observation.mapper] converter error for ${deviceComponentId}:`, e);
     }

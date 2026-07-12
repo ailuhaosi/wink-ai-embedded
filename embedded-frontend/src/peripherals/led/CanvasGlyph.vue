@@ -2,6 +2,7 @@
 import '@wokwi/elements';
 
 import type { PinConnectionValue } from '@/types/peripheral-pins';
+import { isPinHigh } from '../types';
 
 defineProps<{
   pinConnections: Record<string, PinConnectionValue>;
@@ -17,7 +18,7 @@ defineProps<{
   <wokwi-led
     :pin="typeof pinConnections.A === 'number' ? pinConnections.A : 1"
     :color="color"
-    :value="typeof pinConnections.A === 'number' ? pinStates[pinConnections.A] || false : false"
+    :value="typeof pinConnections.A === 'number' ? isPinHigh(pinStates[pinConnections.A]) : false"
     :brightness="brightness"
     :label="label"
     :flip="flip"

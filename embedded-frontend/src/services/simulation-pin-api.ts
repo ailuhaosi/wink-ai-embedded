@@ -16,7 +16,20 @@ export function setSimWorker(next: Worker | null): void {
   worker = next;
 }
 
-export function setPinIdeal(pin: number, level: boolean): void {
+export interface SetPinIdealOptions {
+  timestampUs?: string;
+  drive?: 'strong' | 'weak';
+}
+
+export interface SetUltrasonicDistanceOptions {
+  timestampUs?: string;
+}
+
+export function setPinIdeal(
+  pin: number,
+  level: boolean,
+  _options?: SetPinIdealOptions,
+): void {
   if (!worker) return;
   const msg: SimWorkerInbound = {
     type: SimWorkerInboundType.SET_PIN_IDEAL,
@@ -29,6 +42,7 @@ export function setUltrasonicDistance(
   trigPin: number,
   echoPin: number,
   distanceCm: number,
+  _options?: SetUltrasonicDistanceOptions,
 ): void {
   if (!worker) return;
   const msg: SimWorkerInbound = {

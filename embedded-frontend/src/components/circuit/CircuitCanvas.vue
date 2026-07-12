@@ -3,12 +3,15 @@ import { computed, onMounted, onUnmounted, toRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RotateCcw, RotateCw } from 'lucide-vue-next';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
+import type { ActuatorObservation } from '@/types/actuator-observation';
 import { useCircuitCanvas } from '@/composables/useCircuitCanvas';
 import CanvasPeripheralsHost from '@/components/peripherals/CanvasPeripheralsHost.vue';
 
 const props = defineProps<{
   pinStates: Record<number, boolean>;
   readonly: boolean;
+  oledFb?: Uint8Array | null;
+  actuatorObservations?: readonly ActuatorObservation[];
 }>();
 const emit = defineEmits<{
   buttonPress: [comp: CircuitComponentInstance];
@@ -398,6 +401,8 @@ defineExpose({
         <CanvasPeripheralsHost
           :comp="comp"
           :pin-states="pinStates"
+          :oled-fb="oledFb"
+          :actuator-observations="actuatorObservations"
           @button-press="emit('buttonPress', comp)"
           @button-release="emit('buttonRelease', comp)"
         />

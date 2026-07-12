@@ -13,7 +13,7 @@ export interface SimFaultsConfig {
 export interface SimStatePayload {
   us: string;
   pinStates: Record<number, boolean>;
-  oledFb: Uint8Array | null;
+  oledFb?: Uint8Array | null;
   traces: Array<{
     timestamp: number | string;
     type: number;
@@ -33,6 +33,7 @@ export interface SimLogPayload {
 export interface ObservePinsPayload {
   pins: number[];
   oled: boolean;
+  displayKinds?: string[];
   oledConfig?: {
     sda: number | string | null;
     scl: number | string | null;

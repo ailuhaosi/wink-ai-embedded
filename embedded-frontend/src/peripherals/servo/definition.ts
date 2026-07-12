@@ -80,4 +80,18 @@ export const servoDefinition: PeripheralDefinition = {
     },
   },
   canvas: { component: CanvasGlyph },
+  ui: {
+    canvasProps: (comp, ctx) => {
+      const obs = ctx.actuatorObservations.find(
+        (o) => o.deviceComponentId === comp.id && o.quantity === 'angular_position',
+      );
+      const angle = typeof obs?.value === 'number' ? obs.value : 90;
+      return {
+        id: comp.id,
+        label: comp.props.label ?? comp.id,
+        pwmChannel: comp.props.pwmChannel,
+        angle,
+      };
+    },
+  },
 };

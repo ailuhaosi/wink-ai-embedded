@@ -10,10 +10,9 @@ import {
   setPinIdeal,
   observePins,
   setFaults,
-  setUltrasonicDistance,
-  syncIdleGpioFromComponents,
 } from '../services/simulation-client';
-import { pinStates, oledFb } from '../services/simulation-runtime';
+import { pinStates, oledFb, actuatorObservations } from '../services/simulation-runtime';
+import { runInject, runInjectIdle, syncIdealInputs } from '@/services/ideal-inject';
 
 import TopBar from '@/components/layout/TopBar.vue';
 import SplitPane from '@/components/layout/SplitPane.vue';
@@ -75,7 +74,6 @@ const selectedCompId = ref<string>('');
 const selectedComp = computed(() => activeComponents.value.find(c => c.id === selectedCompId.value));
 
 const wireBroken = ref<boolean>(false);
-const ultrasonicDistance = ref<number>(25);
 
 const faults = ref({
   bounce_us: 0,
@@ -87,16 +85,7 @@ const faults = ref({
   prng_seed: 1,
 });
 
-watch([ultrasonicDistance, activeComponents], ([dist, comps]) => {
-  const sonar = (comps as CircuitComponentInstance[]).find(c => c.type === 'ultrasonic');
-  if (sonar) {
-    const trigPin = sonar.pinConnections.TRIG;
-    const echoPin = sonar.pinConnections.ECHO;
-    if (typeof trigPin === 'number' && typeof echoPin === 'number') {
-      setUltrasonicDistance(trigPin, echoPin, dist as number);
-    }
-  }
-}, { deep: true, immediate: true });
+watch(activeComponents, () => syncIdealInputs(activeComponents.value), { deep: true, immediate: true });
 
 function addFromLibrary(payload: { type: string; name: string }) {
   addComponent(payload);
@@ -125,17 +114,11 @@ function setRotation(comp: CircuitComponentInstance, deg: number) {
 }
 
 function handleButtonPress(comp: CircuitComponentInstance) {
-  const signalPin = comp.pinConnections['1.l'];
-  if (typeof signalPin === 'number') {
-    setPinIdeal(signalPin, !comp.props.activeLow);
-  }
+  runInject(comp, { event: 'press' });
 }
 
 function handleButtonRelease(comp: CircuitComponentInstance) {
-  const signalPin = comp.pinConnections['1.l'];
-  if (typeof signalPin === 'number') {
-    setPinIdeal(signalPin, !!comp.props.activeLow);
-  }
+  runInject(comp, { event: 'release' });
 }
 
 function syncCanvasToManifest() {
@@ -151,7 +134,7 @@ watch(activeComponents, (comps) => {
 
 function syncSimulationFromCanvas() {
   observePins(activeComponents.value);
-  syncIdleGpioFromComponents(activeComponents.value);
+  runInjectIdle(activeComponents.value);
   injectFaults();
 }
 
@@ -173,7 +156,7 @@ function handleReset() {
   resetSimulation();
   setTimeout(() => {
     observePins(activeComponents.value);
-    syncIdleGpioFromComponents(activeComponents.value);
+    runInjectIdle(activeComponents.value);
     injectFaults();
   }, 100);
 }
@@ -259,11 +242,6 @@ function applyManifestToWorkbench(manifest: EmbeddedProjectManifest) {
   activeComponents.value = components;
   selectedCompId.value = components[0]?.id ?? '';
 
-  const sonar = components.find(c => c.type === 'ultrasonic');
-  if (sonar && typeof sonar.props.distance === 'number') {
-    ultrasonicDistance.value = sonar.props.distance;
-  }
-
   void nextTick(() => {
     if (Object.keys(layoutPositions).length > 0) {
       circuitCanvasRef.value?.setLayoutPositions(layoutPositions);
@@ -304,9 +282,6 @@ function onLoadTemplate(templateId: string) {
   if (isOledDashboardTemplate(templateId)) {
     selectedCompId.value = 'btn1';
     faults.value = { ...faults.value, bounce_us: 0, i2c_drop_permil: 0 };
-  }
-  else {
-    ultrasonicDistance.value = 25;
   }
 
   modeStore.setDesignSubMode('structure-first');
@@ -418,6 +393,8 @@ onUnmounted(() => {
                 v-model:selected-component-id="selectedCompId"
                 :pin-states="pinStates"
                 :readonly="!modeStore.canEditCircuit"
+                :oled-fb="oledFb"
+                :actuator-observations="actuatorObservations"
                 @button-press="handleButtonPress"
                 @button-release="handleButtonRelease"
                 @layout-change="syncCanvasToManifest"
@@ -445,7 +422,6 @@ onUnmounted(() => {
           <WorkbenchPropertyInspector
             :selected-comp="selectedComp"
             :can-edit="modeStore.canEditCircuit"
-            v-model:ultrasonic-distance="ultrasonicDistance"
             @set-rotation="setRotation"
           />
           <SimActuatorPanel />

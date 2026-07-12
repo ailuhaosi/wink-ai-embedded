@@ -8,7 +8,10 @@ export interface ObserveBuilder {
   /** 声明 I2C 总线配置 */
   watchI2C(sda: number | null, scl: number | null): void;
 
-  /** 声明超声波传感器配置 */
+  /** 声明显示载荷观察需求 */
+  watchDisplay(kind: string): void;
+
+  /** @deprecated Ultrasonic simulation now uses ideal inject instead of observe. */
   watchUltrasonic(trig: number | null, echo: number | null): void;
 
   /** 声明执行器观察源配置 */
@@ -22,6 +25,7 @@ export type ObserveResult = {
   pins: number[];
   oled: boolean;
   oledConfig: { sda: number | null; scl: number | null } | null;
+  displayKinds: string[];
   ultrasonicConfig: { trig: number | null; echo: number | null } | null;
   actuatorSources: ActuatorObserveSource[];
   [key: string]: unknown;
@@ -33,6 +37,7 @@ export type ObserveFn = (comp: CircuitComponentInstance, builder: ObserveBuilder
 export class ObserveBuilderImpl implements ObserveBuilder {
   private gpioPins: number[] = [];
   private i2cConfigs: Array<{ sda: number | null; scl: number | null }> = [];
+  private displayKinds: string[] = [];
   private ultrasonicConfigs: Array<{ trig: number | null; echo: number | null }> = [];
   private actuatorSources: ActuatorObserveSource[] = [];
   private params: Record<string, unknown> = {};
@@ -43,6 +48,10 @@ export class ObserveBuilderImpl implements ObserveBuilder {
 
   watchI2C(sda: number | null, scl: number | null): void {
     this.i2cConfigs.push({ sda, scl });
+  }
+
+  watchDisplay(kind: string): void {
+    this.displayKinds.push(kind);
   }
 
   watchUltrasonic(trig: number | null, echo: number | null): void {
@@ -60,8 +69,9 @@ export class ObserveBuilderImpl implements ObserveBuilder {
   build(): ObserveResult {
     return {
       pins: this.gpioPins,
-      oled: this.i2cConfigs.length > 0,
+      oled: this.displayKinds.includes('ssd1306_fb'),
       oledConfig: this.i2cConfigs[0] ?? null,
+      displayKinds: [...this.displayKinds],
       ultrasonicConfig: this.ultrasonicConfigs[0] ?? null,
       actuatorSources: this.actuatorSources,
       ...this.params,

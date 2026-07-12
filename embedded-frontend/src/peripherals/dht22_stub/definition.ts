@@ -27,4 +27,7 @@ export const dht22StubDefinition: PeripheralDefinition = {
   ],
   props: {},
   canvas: { component: CanvasGlyph },
+  ui: {
+    canvasProps: () => ({}),
+  },
 };

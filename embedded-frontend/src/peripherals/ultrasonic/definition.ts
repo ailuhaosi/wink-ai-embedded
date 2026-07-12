@@ -70,14 +70,23 @@ export const ultrasonicDefinition: PeripheralDefinition = {
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
   inspectorExtra: InspectorExtra,
+  ui: {
+    worldProps: (comp) => ({
+      pinConnections: comp.pinConnections,
+      distance: comp.props.distance,
+    }),
+  },
   simulation: {
-    observe(comp, builder) {
-      const trig = comp.pinConnections.TRIG;
-      const echo = comp.pinConnections.ECHO;
-      builder.watchUltrasonic(
-        typeof trig === 'number' ? trig : null,
-        typeof echo === 'number' ? echo : null,
-      );
+    inject: {
+      kind: 'ultrasonic_distance',
+      apply(comp, ctx) {
+        const trig = comp.pinConnections.TRIG;
+        const echo = comp.pinConnections.ECHO;
+        const dist = comp.props.distance;
+        if (typeof trig !== 'number' || typeof echo !== 'number') return;
+        if (typeof dist !== 'number') return;
+        ctx.apis.setUltrasonicDistance(trig, echo, dist);
+      },
     },
   },
 };

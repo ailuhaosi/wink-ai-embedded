@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import '@wokwi/elements';
 import { ref, computed, onMounted, watch } from 'vue';
-import { setUltrasonicDistance } from '@/services/simulation-pin-api';
+import { runInject } from '@/services/ideal-inject';
 
+import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 
 const props = defineProps<{
@@ -22,16 +23,24 @@ const echoPin = computed(() => {
   return typeof pin === 'number' ? pin : 'N/A';
 });
 
+function makeInjectComponent(): CircuitComponentInstance {
+  return {
+    id: 'world-ultrasonic',
+    type: 'ultrasonic',
+    name: 'ultrasonic',
+    pinConnections: props.pinConnections,
+    props: { distance: localDistance.value },
+    rotation: 0,
+  };
+}
+
 function updateDistance() {
-  const trig = trigPin.value;
-  const echo = echoPin.value;
-  if (typeof trig === 'number' && typeof echo === 'number') {
-    setUltrasonicDistance(trig, echo, localDistance.value);
-  }
+  runInject(makeInjectComponent(), { event: 'props' });
 }
 
 watch(() => props.distance, (newVal) => {
   localDistance.value = newVal;
+  updateDistance();
 });
 
 onMounted(() => {

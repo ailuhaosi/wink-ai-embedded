@@ -62,6 +62,25 @@ export const ledDefinition: PeripheralDefinition = {
     },
   ],
   props: ledProps,
+  actuatorObserve: {
+    profile: {
+      defaultQuantity: 'state',
+      unit: 'bool',
+      convert: 'gpio_to_state',
+    },
+  },
+  simulation: {
+    observe: (comp, builder) => {
+      const anode = comp.pinConnections.A;
+      if (typeof anode === 'number') {
+        builder.watchActuatorSource({
+          deviceComponentId: comp.id,
+          transport: 'gpio_pin',
+          transportKey: anode,
+        });
+      }
+    },
+  },
   canvas: { component: CanvasGlyph },
   world: { component: WorldWidget },
   ui: {

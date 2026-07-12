@@ -60,7 +60,7 @@ describe('resolveCanvasEntry', () => {
       ctx,
     );
     expect(oled!.component).toBe(registry.get('oled')!.canvas!.component);
-    expect(oled!.boundProps).toEqual({});
+    expect(oled!.boundProps).toEqual({ framebuffer: null });
 
     const us = resolveCanvasEntry(
       makeComp({

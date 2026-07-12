@@ -34,6 +34,7 @@ export const ultrasonicDefinition: PeripheralDefinition = {
       defaultConnection: 'VCC',
       relX: 72,
       relY: 95,
+      wireNet: 'vcc',
     },
     {
       name: 'TRIG',
@@ -44,6 +45,7 @@ export const ultrasonicDefinition: PeripheralDefinition = {
       defaultConnection: 12,
       relX: 82,
       relY: 95,
+      wireNet: 'secondary',
     },
     {
       name: 'ECHO',
@@ -54,6 +56,7 @@ export const ultrasonicDefinition: PeripheralDefinition = {
       defaultConnection: 13,
       relX: 92,
       relY: 95,
+      wireNet: 'primary',
     },
     {
       name: 'GND',
@@ -64,6 +67,7 @@ export const ultrasonicDefinition: PeripheralDefinition = {
       defaultConnection: 'GND',
       relX: 102,
       relY: 95,
+      wireNet: 'gnd',
     },
   ],
   props: ultrasonicProps,

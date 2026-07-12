@@ -24,6 +24,7 @@ export const oledDefinition: PeripheralDefinition = {
       defaultConnection: 21,
       relX: 40,
       relY: 75,
+      wireNet: 'primary',
     },
     {
       name: 'CLK',
@@ -34,6 +35,7 @@ export const oledDefinition: PeripheralDefinition = {
       defaultConnection: 22,
       relX: 50,
       relY: 75,
+      wireNet: 'secondary',
     },
     {
       name: 'DC',
@@ -74,6 +76,7 @@ export const oledDefinition: PeripheralDefinition = {
       defaultConnection: '3V3',
       relX: 90,
       relY: 75,
+      wireNet: 'vcc',
     },
     {
       name: 'VIN',
@@ -84,6 +87,7 @@ export const oledDefinition: PeripheralDefinition = {
       defaultConnection: null,
       relX: 100,
       relY: 75,
+      wireNet: 'vcc',
     },
     {
       name: 'GND',
@@ -94,6 +98,7 @@ export const oledDefinition: PeripheralDefinition = {
       defaultConnection: 'GND',
       relX: 110,
       relY: 75,
+      wireNet: 'gnd',
     },
   ],
   props: {},

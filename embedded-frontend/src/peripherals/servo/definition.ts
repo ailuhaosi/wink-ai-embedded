@@ -22,6 +22,7 @@ export const servoDefinition: PeripheralDefinition = {
       defaultConnection: null,
       relX: -5,
       relY: 15,
+      wireNet: 'primary',
     },
     {
       name: 'VCC',
@@ -32,6 +33,7 @@ export const servoDefinition: PeripheralDefinition = {
       defaultConnection: 'VCC',
       relX: -5,
       relY: 30,
+      wireNet: 'vcc',
     },
     {
       name: 'GND',
@@ -42,6 +44,7 @@ export const servoDefinition: PeripheralDefinition = {
       defaultConnection: 'GND',
       relX: -5,
       relY: 45,
+      wireNet: 'gnd',
     },
   ],
   props: {

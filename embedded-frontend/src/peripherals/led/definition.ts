@@ -49,6 +49,7 @@ export const ledDefinition: PeripheralDefinition = {
       defaultConnection: 13,
       relX: 30,
       relY: 50,
+      wireNet: 'primary',
     },
     {
       name: 'C',
@@ -59,6 +60,7 @@ export const ledDefinition: PeripheralDefinition = {
       defaultConnection: 'GND',
       relX: 10,
       relY: 50,
+      wireNet: 'gnd',
     },
   ],
   props: ledProps,

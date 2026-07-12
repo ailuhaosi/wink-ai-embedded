@@ -23,6 +23,7 @@ export const motorDriverStubDefinition: PeripheralDefinition = {
       defaultConnection: 14,
       relX: 20,
       relY: 62,
+      wireNet: 'primary',
     },
     {
       name: 'PWM_RIGHT',
@@ -33,6 +34,7 @@ export const motorDriverStubDefinition: PeripheralDefinition = {
       defaultConnection: 15,
       relX: 50,
       relY: 62,
+      wireNet: 'secondary',
     },
     {
       name: 'VCC',
@@ -43,6 +45,7 @@ export const motorDriverStubDefinition: PeripheralDefinition = {
       defaultConnection: 'VCC',
       relX: 80,
       relY: 62,
+      wireNet: 'vcc',
     },
     {
       name: 'GND',
@@ -53,6 +56,7 @@ export const motorDriverStubDefinition: PeripheralDefinition = {
       defaultConnection: 'GND',
       relX: 100,
       relY: 62,
+      wireNet: 'gnd',
     },
   ],
   props: {

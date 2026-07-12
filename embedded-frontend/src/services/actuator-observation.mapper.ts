@@ -15,6 +15,10 @@ interface ConverterSessionState {
 
 const converterSessionStates = new Map<string, ConverterSessionState>();
 
+export function clearActuatorConverterSessionStates(): void {
+  converterSessionStates.clear();
+}
+
 function getConverterSessionState(
   deviceComponentId: string,
   subAddress: number | undefined,

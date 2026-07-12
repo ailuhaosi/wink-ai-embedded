@@ -1,6 +1,9 @@
 <script setup lang="ts">
 defineProps<{
+  id: string;
   label?: string;
+  rpmLeft?: number;
+  rpmRight?: number;
 }>();
 </script>
 
@@ -8,6 +11,7 @@ defineProps<{
   <div class="stub-glyph motor-driver-glyph">
     <span class="title">Motor Driver</span>
     <span v-if="label" class="label">{{ label }}</span>
+    <span class="rpm">L {{ Math.round(rpmLeft ?? 0) }} · R {{ Math.round(rpmRight ?? 0) }} rpm</span>
   </div>
 </template>
 
@@ -35,5 +39,10 @@ defineProps<{
 .label {
   font-size: 9px;
   color: #94a3b8;
+}
+.rpm {
+  font-size: 9px;
+  color: #fdba74;
+  margin-top: 2px;
 }
 </style>

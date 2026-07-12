@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mapActuatorOutputs } from '../actuator-observation.mapper';
+import {
+  clearActuatorConverterSessionStates,
+  mapActuatorOutputs,
+} from '../actuator-observation.mapper';
 import { actuatorConverterRegistry } from '../actuator-converter-registry';
 import { registry } from '@/peripherals';
 import '@/peripherals/servo';
@@ -120,6 +123,36 @@ describe('actuator-observation mapper', () => {
     const obs = mapActuatorOutputs(batch, sources, [servoComp('a')]);
     expect(obs).toHaveLength(1);
     expect(obs[0].value).toBe(0);
+  });
+
+  it('clears converter session so remapped motor rpm starts near zero', () => {
+    const sources: ActuatorObserveSource[] = [
+      { deviceComponentId: 'drive_motor', transport: 'pwm_channel', transportKey: 0, subAddress: 0 },
+      { deviceComponentId: 'drive_motor', transport: 'pwm_channel', transportKey: 1, subAddress: 1 },
+    ];
+    const components = [motorComp('drive_motor')];
+    const batch = { simTimeUs: '0', pwm: { 0: 50, 1: 100 }, gpio: {} };
+
+    let obs = mapActuatorOutputs(batch, sources, components);
+    for (let step = 1; step <= 60; step += 1) {
+      obs = mapActuatorOutputs(
+        { simTimeUs: String(step * 100_000), pwm: { 0: 50, 1: 100 }, gpio: {} },
+        sources,
+        components,
+      );
+    }
+    expect(obs[0].value).toBeCloseTo(60, 1);
+    expect(obs[1].value).toBeCloseTo(120, 1);
+
+    clearActuatorConverterSessionStates();
+
+    obs = mapActuatorOutputs(
+      { simTimeUs: '6100000', pwm: { 0: 50, 1: 100 }, gpio: {} },
+      sources,
+      components,
+    );
+    expect(obs[0].value).toBeLessThan(5);
+    expect(obs[1].value).toBeLessThan(5);
   });
 
   it('maps dual pwm sources to angular_velocity for motor stub', () => {

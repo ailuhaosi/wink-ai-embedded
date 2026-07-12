@@ -19,7 +19,10 @@ import {
   lastComponents,
   actuatorObservations,
 } from './simulation-runtime';
-import { mapActuatorOutputs } from './actuator-observation.mapper';
+import {
+  clearActuatorConverterSessionStates,
+  mapActuatorOutputs,
+} from './actuator-observation.mapper';
 import {
   getSimWorker,
   setSimWorker,
@@ -85,6 +88,7 @@ export function initSimulation() {
 
   ctrl.resetForInit();
   resetDataPlane();
+  clearActuatorConverterSessionStates();
 
   console.log('[SimulationClient] Spawning simulation worker...');
   const worker = new WasmWorker();
@@ -100,6 +104,7 @@ export function initSimulation() {
     switch (type) {
       case 'INIT_DONE':
         c.onInitDone();
+        clearActuatorConverterSessionStates();
         console.log('[SimulationClient] Simulator initialized successfully!');
         break;
 
@@ -132,6 +137,7 @@ export function initSimulation() {
       case 'RESET_DONE':
         c.onResetDone();
         resetDataPlane();
+        clearActuatorConverterSessionStates();
         break;
     }
   };
@@ -163,6 +169,7 @@ export function pauseSimulation() {
 export function resetSimulation() {
   const worker = getSimWorker();
   if (worker) {
+    clearActuatorConverterSessionStates();
     const msg: SimWorkerInbound = { type: SimWorkerInboundType.RESET };
     worker.postMessage(msg);
     requireControl().setRunning(false);

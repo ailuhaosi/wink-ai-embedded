@@ -66,6 +66,7 @@ export const templateDefinition: PeripheralDefinition = {
       defaultConnection: 13,
       relX: 40,
       relY: 55,
+      wireNet: 'primary',
     },
     {
       name: 'VCC',
@@ -76,6 +77,7 @@ export const templateDefinition: PeripheralDefinition = {
       defaultConnection: '3V3',
       relX: 20,
       relY: 55,
+      wireNet: 'vcc',
     },
     {
       name: 'GND',
@@ -86,6 +88,7 @@ export const templateDefinition: PeripheralDefinition = {
       defaultConnection: 'GND',
       relX: 60,
       relY: 55,
+      wireNet: 'gnd',
     },
   ],
   props: exampleProps,

@@ -49,6 +49,11 @@ export interface UnifiedPinDef {
   /** Pin position relative to component top-left (canvas layout) */
   relX?: number;
   relY?: number;
+  /**
+   * 画布走线网角色。同 wireNet 的脚合并为一条 NetDefinition 的 pinCandidates。
+   * 省略时由 deriveNetDefinitions 启发式推断。
+   */
+  wireNet?: 'primary' | 'secondary' | 'vcc' | 'gnd';
 }
 
 /** @deprecated Use UnifiedPinDef — alias kept for incremental migration */

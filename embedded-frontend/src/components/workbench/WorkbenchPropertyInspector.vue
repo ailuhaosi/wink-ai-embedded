@@ -12,11 +12,9 @@ import {
 const props = defineProps<{
   selectedComp: CircuitComponentInstance | undefined;
   canEdit: boolean;
-  ultrasonicDistance: number;
 }>();
 
 const emit = defineEmits<{
-  'update:ultrasonicDistance': [value: number];
   'set-rotation': [comp: CircuitComponentInstance, deg: number];
 }>();
 
@@ -130,9 +128,9 @@ const propSchema = computed(() => selectedDefinition.value?.props ?? {});
       <component
         :is="inspectorExtra"
         v-if="inspectorExtra"
-        :model-value="ultrasonicDistance"
+        :model-value="selectedComp.props.distance"
         :disabled="!canEdit"
-        @update:model-value="emit('update:ultrasonicDistance', $event)"
+        @update:model-value="selectedComp.props.distance = $event"
       />
 
       <div class="form-group">

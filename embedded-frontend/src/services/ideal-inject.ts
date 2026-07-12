@@ -1,4 +1,4 @@
-import { registry } from '@/peripherals';
+import { registry } from '@/peripherals/registry';
 import type { InjectContext } from '@/peripherals/types';
 import type { CircuitComponentInstance } from '@/types/circuit-component';
 import { clockUs } from '@/services/simulation-runtime';

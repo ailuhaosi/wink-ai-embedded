@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * World widget — rendered in the 3D world viewport panel.
- * Wire simulation interactions here (e.g. setPinIdeal, raycast hooks).
+ * Wire simulation interactions here via peripheral simulation plugins.
  */
 import type { PinConnectionValue } from '@/types/peripheral-pins';
 

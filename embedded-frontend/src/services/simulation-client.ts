@@ -26,6 +26,7 @@ import {
   setPinIdeal,
   setUltrasonicDistance,
 } from './simulation-pin-api';
+import { runInjectIdle } from './ideal-inject';
 
 export type { SimFaultsConfig } from '../types/sim-worker-protocol';
 export type { SimTrace } from './simulation-runtime';
@@ -169,19 +170,9 @@ export function resetSimulation() {
 }
 
 export function syncIdleGpioFromComponents(
-  components: Array<{
-    type: string;
-    pinConnections: Record<string, PinConnectionValue>;
-    props: Record<string, unknown>;
-  }>,
+  components: CircuitComponentInstance[],
 ): void {
-  for (const comp of components) {
-    if (comp.type !== 'button') continue;
-    const signalPin = comp.pinConnections['1.l'];
-    if (typeof signalPin !== 'number') continue;
-    const activeLow = comp.props.activeLow !== false;
-    setPinIdeal(signalPin, activeLow);
-  }
+  runInjectIdle(components);
 }
 
 /** Preferred: components-only. Collects GPIO pins + plugin observe. */

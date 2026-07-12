@@ -1,7 +1,8 @@
 import type { Component } from 'vue';
 import type { PinConnectionValue } from '@/types/peripheral-pins';
+import type { CircuitComponentInstance } from '@/types/circuit-component';
 import type { ObserveFn } from './observe-builder';
-import type { ActuatorObserveProfile } from '@/types/actuator-observation';
+import type { ActuatorObservation, ActuatorObserveProfile } from '@/types/actuator-observation';
 
 /** 单个属性的定义 schema */
 export interface PeripheralPropDef {
@@ -106,6 +107,56 @@ export interface PeripheralDefinition {
 
   /** 可选：属性面板额外插槽（用于非常规控件，如距离滑块） */
   inspectorExtra?: Component;
+
+  /** 仿真视图绑定插件（canvas/world props 派生；M2 起替代宿主内 switch 分发） */
+  ui?: PeripheralUiBind;
 }
 
 export type { PinConnectionValue };
+
+/** 多态引脚信号态（对接 tech-design §13.4），兼容今日 boolean 表示 */
+export interface PinSignalState {
+  level: boolean;
+  voltage?: number;
+  mode: 'input' | 'output' | 'high_z' | 'analog';
+  pull: 'none' | 'up' | 'down';
+}
+
+/** 外设 ui.canvasProps/worldProps 只读上下文（只读冻结，避免 binder 反向写宿主状态） */
+export interface SimViewContext {
+  readonly pinStates: Record<number, boolean | PinSignalState>;
+  /** ② 今日单屏过渡：与 oledFb 同值 */
+  readonly displayFb: Uint8Array | null;
+  /** @deprecated 别名，binder 内可读 ctx.displayFb */
+  readonly oledFb?: Uint8Array | null;
+  readonly actuatorObservations: readonly ActuatorObservation[];
+}
+
+/**
+ * 安全判断引脚是否为高电平。
+ * Worker/C 侧偶发回传 0/1 number（非 boolean）；必须在此归一，否则
+ * `isPinHigh(0)` 会误走对象分支得到 `undefined`，World LED `level` 崩掉。
+ */
+export function isPinHigh(
+  state: boolean | number | PinSignalState | undefined | null,
+): boolean {
+  if (state === undefined || state === null) return false;
+  if (typeof state === 'boolean') return state;
+  if (typeof state === 'number') return state !== 0;
+  if (typeof state === 'object' && 'level' in state) {
+    return isPinHigh(state.level);
+  }
+  return Boolean(state);
+}
+
+/** 外设仿真视图绑定：将 CircuitComponentInstance + SimViewContext 映射为渲染组件 props */
+export interface PeripheralUiBind {
+  canvasProps?: (
+    comp: CircuitComponentInstance,
+    ctx: SimViewContext,
+  ) => Record<string, unknown>;
+  worldProps?: (
+    comp: CircuitComponentInstance,
+    ctx: SimViewContext,
+  ) => Record<string, unknown>;
+}

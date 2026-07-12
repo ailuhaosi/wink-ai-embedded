@@ -43,7 +43,9 @@ export function applyStateUpdate(payload: SimStatePayload) {
   pinStates.value = normalizePinStates(
     payload.pinStates as Record<number, unknown> | undefined,
   );
-  oledFb.value = payload.oledFb ?? null;
+  if ('oledFb' in payload) {
+    oledFb.value = payload.oledFb ?? null;
+  }
   traces.value = (payload.traces ?? []) as SimTrace[];
 }
 

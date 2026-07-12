@@ -45,7 +45,7 @@ describe('observePins aggregation via ObserveBuilder', () => {
     return client;
   }
 
-  it('posts OBSERVE_PINS with pins + oledConfig + ultrasonicConfig for led+oled+ultrasonic', async () => {
+  it('posts OBSERVE_PINS with pins + oled displayKinds without ultrasonic observe config', async () => {
     const { observePins } = await setupWorker();
 
     observePins([
@@ -69,8 +69,9 @@ describe('observePins aggregation via ObserveBuilder', () => {
     expect(msg.payload.pins).toEqual(expect.arrayContaining([2, 21, 22, 12, 13]));
     expect(msg.payload.pins).toHaveLength(5);
     expect(msg.payload.oled).toBe(true);
+    expect(msg.payload.displayKinds).toEqual(['ssd1306_fb']);
     expect(msg.payload.oledConfig).toEqual({ sda: 21, scl: 22 });
-    expect(msg.payload.ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
+    expect(msg.payload.ultrasonicConfig).toBeNull();
   });
 
   it('sets oled false and oledConfig null when no oled component', async () => {
@@ -90,7 +91,7 @@ describe('observePins aggregation via ObserveBuilder', () => {
     const msg = postMessage.mock.calls[0][0];
     expect(msg.payload.oled).toBe(false);
     expect(msg.payload.oledConfig).toBeNull();
-    expect(msg.payload.ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
+    expect(msg.payload.ultrasonicConfig).toBeNull();
     expect(msg.payload.pins).toEqual([5, 12, 13]);
   });
 

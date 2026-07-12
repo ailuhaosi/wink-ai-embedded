@@ -77,14 +77,6 @@ export const ultrasonicDefinition: PeripheralDefinition = {
     }),
   },
   simulation: {
-    observe(comp, builder) {
-      const trig = comp.pinConnections.TRIG;
-      const echo = comp.pinConnections.ECHO;
-      builder.watchUltrasonic(
-        typeof trig === 'number' ? trig : null,
-        typeof echo === 'number' ? echo : null,
-      );
-    },
     inject: {
       kind: 'ultrasonic_distance',
       apply(comp, ctx) {

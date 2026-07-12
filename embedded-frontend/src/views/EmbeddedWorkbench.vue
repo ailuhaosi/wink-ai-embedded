@@ -13,7 +13,7 @@ import {
   setUltrasonicDistance,
   syncIdleGpioFromComponents,
 } from '../services/simulation-client';
-import { pinStates, oledFb } from '../services/simulation-runtime';
+import { pinStates, oledFb, actuatorObservations } from '../services/simulation-runtime';
 
 import TopBar from '@/components/layout/TopBar.vue';
 import SplitPane from '@/components/layout/SplitPane.vue';
@@ -418,6 +418,8 @@ onUnmounted(() => {
                 v-model:selected-component-id="selectedCompId"
                 :pin-states="pinStates"
                 :readonly="!modeStore.canEditCircuit"
+                :oled-fb="oledFb"
+                :actuator-observations="actuatorObservations"
                 @button-press="handleButtonPress"
                 @button-release="handleButtonRelease"
                 @layout-change="syncCanvasToManifest"

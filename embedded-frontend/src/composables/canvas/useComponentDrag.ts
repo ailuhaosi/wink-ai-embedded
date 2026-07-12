@@ -24,8 +24,16 @@ export function useComponentDrag(
   function onPeripheralMouseDown(event: MouseEvent, comp: CircuitComponentInstance) {
     if (event.button !== 0) return;
 
+    // During simulation the canvas is readonly. Interactive glyphs (buttons) must
+    // receive the native event so wokwi-pushbutton can fire button-press/release.
+    // Selecting/dragging here re-renders the host mid-gesture and drops the click.
+    if (ctx.readonly.value) {
+      if (comp.type === 'button') return;
+      layout.selectComponent(comp);
+      return;
+    }
+
     layout.selectComponent(comp);
-    if (ctx.readonly.value) return;
 
     const { x: mouseX, y: mouseY } = viewport.clientToCanvas(event.clientX, event.clientY);
     ctx.componentDragOrigin.value = { x: mouseX, y: mouseY };

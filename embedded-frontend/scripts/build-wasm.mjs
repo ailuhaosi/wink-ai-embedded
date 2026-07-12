@@ -41,7 +41,7 @@ if (!fs.existsSync(appDir)) {
 
 const codegenDir = process.env.WINK_CODEGEN_ROOT
   ? path.resolve(process.env.WINK_CODEGEN_ROOT)
-  : path.join(repoRoot, 'tools/codegen');
+  : path.join(repoRoot, 'wink-micro-os/tools/codegen');
 
 // Step 1: emcmake cmake configure
 const cmakeArgs = [

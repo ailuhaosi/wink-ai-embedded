@@ -2,6 +2,8 @@ import { POWER_RAIL_VALUES } from '@/constants/power-rail';
 import type { PowerRailValue } from '@/constants/power-rail';
 import { getDefaultBoardCanvasDescriptor } from '@/boards';
 import type { BoardCanvasDescriptor } from '@/boards';
+import { registry } from '@/peripherals/registry';
+import { deriveNetDefinitions } from '@/peripherals/derive-net-definitions';
 
 export type PinConnectionValue = number | PowerRailValue | null;
 
@@ -128,7 +130,7 @@ export function rotatePinOffset(
   W: number,
   H: number,
   rotation: number,
-): { x: number; y: number } {
+ ): { x: number; y: number } {
   const cx = W / 2;
   const cy = H / 2;
   const dx = relX - cx;
@@ -148,39 +150,9 @@ export function rotatePinOffset(
 }
 
 export function getNetDefinitions(type: string): NetDefinition[] {
-  const netMaps: Record<string, NetDefinition[]> = {
-    led: [
-      { mode: 'primary', signalType: 'digital', pinCandidates: ['A'] },
-      { mode: 'gnd', signalType: 'power', pinCandidates: ['C'] },
-    ],
-    button: [
-      {
-        mode: 'primary',
-        signalType: 'digital',
-        pinCandidates: ['1.l', '1.r'],
-        defaultConnection: 14,
-      },
-      {
-        mode: 'gnd',
-        signalType: 'power',
-        pinCandidates: ['2.l', '2.r'],
-        defaultConnection: 'GND',
-      },
-    ],
-    oled: [
-      { mode: 'primary', signalType: 'i2c', pinCandidates: ['DATA'] },
-      { mode: 'secondary', signalType: 'i2c', pinCandidates: ['CLK'] },
-      { mode: 'vcc', signalType: 'power', pinCandidates: ['3V3', 'VIN'] },
-      { mode: 'gnd', signalType: 'power', pinCandidates: ['GND'] },
-    ],
-    ultrasonic: [
-      { mode: 'primary', signalType: 'digital', pinCandidates: ['ECHO'] },
-      { mode: 'secondary', signalType: 'digital', pinCandidates: ['TRIG'] },
-      { mode: 'vcc', signalType: 'power', pinCandidates: ['VCC'] },
-      { mode: 'gnd', signalType: 'power', pinCandidates: ['GND'] },
-    ],
-  };
-  return netMaps[type] || [];
+  const def = registry.get(type);
+  if (!def) return [];
+  return deriveNetDefinitions(def.pins);
 }
 
 interface Point {

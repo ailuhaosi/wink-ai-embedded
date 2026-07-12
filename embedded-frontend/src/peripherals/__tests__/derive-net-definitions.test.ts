@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { deriveNetDefinitions } from '../derive-net-definitions';
 import type { UnifiedPinDef } from '../types';
 import { registry } from '../registry';
+import { getNetDefinitions } from '@/types/peripheral-pins';
 import '@/peripherals'; // Load registry definitions
 
 describe('deriveNetDefinitions', () => {
@@ -70,5 +71,9 @@ describe('deriveNetDefinitions', () => {
         }
       }
     }
+  });
+
+  it('getNetDefinitions returns empty array for unknown peripheral type', () => {
+    expect(getNetDefinitions('unknown_xyz')).toEqual([]);
   });
 });

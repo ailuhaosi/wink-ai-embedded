@@ -2270,6 +2270,7 @@ var _pal_wasm_set_gpio_input = Module['_pal_wasm_set_gpio_input'] = makeInvalidE
 var _pal_wasm_get_gpio_output = Module['_pal_wasm_get_gpio_output'] = makeInvalidEarlyAccess('_pal_wasm_get_gpio_output');
 var _pal_wasm_get_ssd1306_fb = Module['_pal_wasm_get_ssd1306_fb'] = makeInvalidEarlyAccess('_pal_wasm_get_ssd1306_fb');
 var _pal_wasm_get_servo_angle = Module['_pal_wasm_get_servo_angle'] = makeInvalidEarlyAccess('_pal_wasm_get_servo_angle');
+var _pal_wasm_get_pwm_duty_percent = Module['_pal_wasm_get_pwm_duty_percent'] = makeInvalidEarlyAccess('_pal_wasm_get_pwm_duty_percent');
 var _pal_wasm_set_ultrasonic_distance = Module['_pal_wasm_set_ultrasonic_distance'] = makeInvalidEarlyAccess('_pal_wasm_set_ultrasonic_distance');
 var _malloc = Module['_malloc'] = makeInvalidEarlyAccess('_malloc');
 var _free = Module['_free'] = makeInvalidEarlyAccess('_free');
@@ -2334,6 +2335,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['pal_wasm_get_gpio_output'] != 'undefined', 'missing Wasm export: pal_wasm_get_gpio_output');
   assert(typeof wasmExports['pal_wasm_get_ssd1306_fb'] != 'undefined', 'missing Wasm export: pal_wasm_get_ssd1306_fb');
   assert(typeof wasmExports['pal_wasm_get_servo_angle'] != 'undefined', 'missing Wasm export: pal_wasm_get_servo_angle');
+  assert(typeof wasmExports['pal_wasm_get_pwm_duty_percent'] != 'undefined', 'missing Wasm export: pal_wasm_get_pwm_duty_percent');
   assert(typeof wasmExports['pal_wasm_set_ultrasonic_distance'] != 'undefined', 'missing Wasm export: pal_wasm_set_ultrasonic_distance');
   assert(typeof wasmExports['malloc'] != 'undefined', 'missing Wasm export: malloc');
   assert(typeof wasmExports['free'] != 'undefined', 'missing Wasm export: free');
@@ -2395,6 +2397,7 @@ function assignWasmExports(wasmExports) {
   _pal_wasm_get_gpio_output = Module['_pal_wasm_get_gpio_output'] = createExportWrapper('pal_wasm_get_gpio_output', 1);
   _pal_wasm_get_ssd1306_fb = Module['_pal_wasm_get_ssd1306_fb'] = createExportWrapper('pal_wasm_get_ssd1306_fb', 2);
   _pal_wasm_get_servo_angle = Module['_pal_wasm_get_servo_angle'] = createExportWrapper('pal_wasm_get_servo_angle', 1);
+  _pal_wasm_get_pwm_duty_percent = Module['_pal_wasm_get_pwm_duty_percent'] = createExportWrapper('pal_wasm_get_pwm_duty_percent', 1);
   _pal_wasm_set_ultrasonic_distance = Module['_pal_wasm_set_ultrasonic_distance'] = createExportWrapper('pal_wasm_set_ultrasonic_distance', 2);
   _malloc = Module['_malloc'] = createExportWrapper('malloc', 1);
   _free = Module['_free'] = createExportWrapper('free', 1);

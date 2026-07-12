@@ -11,7 +11,7 @@ export interface ObserveBuilder {
   /** 声明显示载荷观察需求 */
   watchDisplay(kind: string): void;
 
-  /** 声明超声波传感器配置 */
+  /** @deprecated Ultrasonic simulation now uses ideal inject instead of observe. */
   watchUltrasonic(trig: number | null, echo: number | null): void;
 
   /** 声明执行器观察源配置 */

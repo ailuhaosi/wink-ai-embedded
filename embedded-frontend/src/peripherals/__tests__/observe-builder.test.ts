@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ObserveBuilderImpl } from '@/peripherals/observe-builder';
 import { oledDefinition } from '@/peripherals/oled/definition';
 import { ultrasonicDefinition } from '@/peripherals/ultrasonic/definition';
@@ -99,18 +99,25 @@ describe('definition.simulation.observe hooks', () => {
     expect(builder.build().oledConfig).toEqual({ sda: null, scl: null });
   });
 
-  it('ultrasonic observe watches TRIG/ECHO', () => {
-    const builder = new ObserveBuilderImpl();
-    const comp = makeComp('ultrasonic', { TRIG: 12, ECHO: 13 });
-    expect(ultrasonicDefinition.simulation?.observe).toBeTypeOf('function');
-    ultrasonicDefinition.simulation!.observe!(comp, builder);
-    expect(builder.build().ultrasonicConfig).toEqual({ trig: 12, echo: 13 });
+  it('ultrasonic does not declare fake observe config', () => {
+    expect(ultrasonicDefinition.simulation?.observe).toBeUndefined();
   });
 
-  it('ultrasonic observe coerces non-number pins to null', () => {
-    const builder = new ObserveBuilderImpl();
-    const comp = makeComp('ultrasonic', { TRIG: 'VCC', ECHO: null });
-    ultrasonicDefinition.simulation!.observe!(comp, builder);
-    expect(builder.build().ultrasonicConfig).toEqual({ trig: null, echo: null });
+  it('ultrasonic inject still writes distance to TRIG/ECHO pins', () => {
+    const setUltrasonicDistance = vi.fn();
+    const comp = {
+      ...makeComp('ultrasonic', { TRIG: 12, ECHO: 13 }),
+      props: { distance: 25 },
+    };
+
+    ultrasonicDefinition.simulation!.inject!.apply(comp, {
+      apis: {
+        setPinIdeal: vi.fn(),
+        setUltrasonicDistance,
+        getCurrentSimTimeUs: () => '0',
+      },
+    });
+
+    expect(setUltrasonicDistance).toHaveBeenCalledWith(12, 13, 25);
   });
 });

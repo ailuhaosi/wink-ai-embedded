@@ -73,9 +73,17 @@ export const useSimulationStore = defineStore('simulation', {
 
     async fetchActiveAppId() {
       try {
-        const res = await fetch(`/wasm/wasm-app-id.txt?t=${Date.now()}`);
+        const projectStore = useProjectStore();
+        const projectCode = projectStore.manifest.logic?.projectCode;
+        const subDir = projectCode ? `${projectCode}/` : '';
+        const res = await fetch(`/simulator/wasm/${subDir}wasm-app-id.txt?t=${Date.now()}`);
         if (res.ok) {
-          this.activeAppId = (await res.text()).trim();
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('text/html')) {
+            this.activeAppId = 'unknown';
+          } else {
+            this.activeAppId = (await res.text()).trim();
+          }
         }
         else {
           this.activeAppId = 'unknown';
@@ -84,6 +92,23 @@ export const useSimulationStore = defineStore('simulation', {
       catch (e) {
         console.warn('Failed to fetch active wasm app id:', e);
         this.activeAppId = 'unknown';
+      }
+    },
+
+    async checkWasmExists(projectCode: string): Promise<boolean> {
+      try {
+        const res = await fetch(`/simulator/wasm/${projectCode}/wink_simulator.wasm`, { method: 'HEAD' });
+        if (!res.ok) return false;
+        
+        // Ensure we didn't hit Vite's SPA fallback that returns HTML with status 200
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+          return false;
+        }
+        return true;
+      }
+      catch {
+        return false;
       }
     },
 

@@ -11,38 +11,50 @@ let srcDir = path.resolve(__dirname, '../../build/wasm');
 if (!fs.existsSync(srcDir)) {
   srcDir = path.resolve(__dirname, '../../../../wink-ai-embedded/build/wasm');
 }
-const destDir = projectCode 
-  ? path.resolve(__dirname, '../public/wasm', projectCode)
-  : path.resolve(__dirname, '../public/wasm');
+
+const destDirs = [];
+if (projectCode) {
+  destDirs.push(path.resolve(__dirname, '../public/wasm', projectCode));
+} else {
+  // Root fallback only
+  destDirs.push(path.resolve(__dirname, '../public/wasm'));
+}
 
 const filesToCopy = ['wink_simulator.js', 'wink_simulator.wasm', 'wasm-app-id.txt'];
 
 console.log(`Copying WASM simulation assets...`);
 console.log(`Project Code: ${projectCode || 'None (root)'}`);
 console.log(`Source: ${srcDir}`);
-console.log(`Destination: ${destDir}`);
-
-if (!fs.existsSync(destDir)) {
-  fs.mkdirSync(destDir, { recursive: true });
-}
+console.log(`Destinations: ${destDirs.map(d => path.basename(d)).join(', ')}`);
 
 let success = true;
-for (const file of filesToCopy) {
-  const srcPath = path.join(srcDir, file);
-  const destPath = path.join(destDir, file);
-  
-  if (fs.existsSync(srcPath)) {
-    fs.copyFileSync(srcPath, destPath);
-    console.log(`✓ Copied ${file}`);
-  } else if (file === 'wasm-app-id.txt') {
-    // If it's the app id file and projectCode is provided, write it dynamically
-    if (projectCode) {
-      fs.writeFileSync(destPath, `${projectCode}\n`, 'utf8');
-      console.log(`✓ Generated ${file} with value: ${projectCode}`);
+
+for (const destDir of destDirs) {
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+
+  const isRoot = destDir === path.resolve(__dirname, '../public/wasm');
+  const targetCode = isRoot ? null : path.basename(destDir);
+
+  for (const file of filesToCopy) {
+    const srcPath = path.join(srcDir, file);
+    const destPath = path.join(destDir, file);
+    
+    if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+      // For default template directories, ensure wasm-app-id.txt contains the specific app name
+      if (file === 'wasm-app-id.txt' && targetCode) {
+        fs.writeFileSync(destPath, `${targetCode}\n`, 'utf8');
+      }
+    } else if (file === 'wasm-app-id.txt') {
+      if (targetCode) {
+        fs.writeFileSync(destPath, `${targetCode}\n`, 'utf8');
+      }
+    } else {
+      console.error(`✗ Source file not found: ${srcPath}`);
+      success = false;
     }
-  } else {
-    console.error(`✗ Source file not found: ${srcPath}`);
-    success = false;
   }
 }
 
@@ -53,8 +65,4 @@ if (!success) {
   console.warn('  # or: npm run wasm:build:oled\n');
 } else {
   console.log(`✓ WASM simulation assets copied successfully!`);
-  const appIdPath = path.join(destDir, 'wasm-app-id.txt');
-  if (fs.existsSync(appIdPath)) {
-    console.log(`Active wasm app id: ${fs.readFileSync(appIdPath, 'utf8').trim()}`);
-  }
 }

@@ -17,8 +17,9 @@
     "format": "prettier --write .",
     "typecheck": "vue-tsc -b --pretty false",
     "typecheck:strict-dirs": "tsc -p tsconfig.strict-dirs.json --noEmit",
-    "wasm:build:oled": "node scripts/build-wasm.mjs oled_dashboard && node scripts/copy-wasm.js",
-    "wasm:build:avoidance": "node scripts/build-wasm.mjs avoidance_car && node scripts/copy-wasm.js",
+    "wasm:clean": "node scripts/clean-wasm.js",
+    "wasm:build:oled": "python ../wink-micro-os/tools/wink.py build wasm --app ../wink-micro-app/oled_dashboard && node scripts/copy-wasm.js",
+    "wasm:build:avoidance": "python ../wink-micro-os/tools/wink.py build wasm --app ../wink-micro-app/avoidance_car && node scripts/copy-wasm.js",
     "wasm:copy": "node scripts/copy-wasm.js",
     "prepare": "simple-git-hooks"
   },

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const srcDir = path.resolve(__dirname, '../../build-wasm');
+const srcDir = path.resolve(__dirname, '../../build/wasm');
 const destDir = path.resolve(__dirname, '../public/wasm');
 
 const filesToCopy = ['wink_simulator.js', 'wink_simulator.wasm'];
@@ -34,8 +34,9 @@ for (const file of filesToCopy) {
 
 if (!success) {
   console.warn('\n⚠️ Warning: Some WASM simulation assets are missing.');
-  console.warn('Please run the WASM CMake build first in the repo root:');
-  console.warn('  cmake --build build-wasm\n');
+  console.warn('Please build wasm first (from repo root or embedded-frontend):');
+  console.warn('  python wink-micro-os/tools/wink.py build wasm --app wink-micro-app/oled_dashboard');
+  console.warn('  # or: npm run wasm:build:oled\n');
 } else {
   console.log(`✓ WASM simulation assets copied successfully!`);
   const appIdPath = path.join(destDir, 'wasm-app-id.txt');

@@ -97,6 +97,10 @@ export const OLED_DASHBOARD_DEMO_MANIFEST: EmbeddedProjectManifest = {
     fields: [{ fieldId: 'ambient', type: 'uniform_temperature', valueC: 25 }],
   },
   bindings: { actuators: [], sensors: [], displays: [] },
+  logic: {
+    sourceType: 'dsl',
+    projectCode: 'oled_dashboard',
+  },
 };
 
 /**

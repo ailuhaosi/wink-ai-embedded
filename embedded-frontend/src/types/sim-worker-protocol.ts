@@ -46,7 +46,7 @@ export interface ObservePinsPayload {
 }
 
 export type SimWorkerInbound
-  = | { type: 'INIT' }
+  = | { type: 'INIT'; payload?: { projectCode?: string } }
     | { type: 'START' }
     | { type: 'PAUSE' }
     | { type: 'RESET' }

@@ -312,7 +312,7 @@ function simLoop() {
       ...(displayFrame ? { oledFb: displayFrame.frame } : {}),
     };
 
-    self.postMessage({
+    (self as any).postMessage({
       type: SimWorkerOutboundType.STATE_UPDATE,
       payload,
     } satisfies SimWorkerOutbound, displayFrame?.transferables ?? []);

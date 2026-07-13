@@ -5,12 +5,20 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const srcDir = path.resolve(__dirname, '../../build/wasm');
-const destDir = path.resolve(__dirname, '../public/wasm');
+const projectCode = process.argv[2];
+let srcDir = path.resolve(__dirname, '../../build/wasm');
+// If not found in local package parent, check sibling SDK monorepo location
+if (!fs.existsSync(srcDir)) {
+  srcDir = path.resolve(__dirname, '../../../../wink-ai-embedded/build/wasm');
+}
+const destDir = projectCode 
+  ? path.resolve(__dirname, '../public/wasm', projectCode)
+  : path.resolve(__dirname, '../public/wasm');
 
-const filesToCopy = ['wink_simulator.js', 'wink_simulator.wasm'];
+const filesToCopy = ['wink_simulator.js', 'wink_simulator.wasm', 'wasm-app-id.txt'];
 
 console.log(`Copying WASM simulation assets...`);
+console.log(`Project Code: ${projectCode || 'None (root)'}`);
 console.log(`Source: ${srcDir}`);
 console.log(`Destination: ${destDir}`);
 
@@ -26,6 +34,12 @@ for (const file of filesToCopy) {
   if (fs.existsSync(srcPath)) {
     fs.copyFileSync(srcPath, destPath);
     console.log(`✓ Copied ${file}`);
+  } else if (file === 'wasm-app-id.txt') {
+    // If it's the app id file and projectCode is provided, write it dynamically
+    if (projectCode) {
+      fs.writeFileSync(destPath, `${projectCode}\n`, 'utf8');
+      console.log(`✓ Generated ${file} with value: ${projectCode}`);
+    }
   } else {
     console.error(`✗ Source file not found: ${srcPath}`);
     success = false;

@@ -7,6 +7,7 @@ import type {
 
 export interface LogicSection {
   sourceType?: 'dsl' | 'c';
+  projectCode?: string;
   dslPath?: string;
   generatedCPath?: string;
 }

@@ -31,6 +31,10 @@ export const AVOIDANCE_CAR_W2_MINIMAL: EmbeddedProjectManifest = {
     fields: [{ fieldId: 'ambient', type: 'uniform_temperature', valueC: 25 }],
   },
   bindings: { actuators: [], sensors: [], displays: [] },
+  logic: {
+    sourceType: 'dsl',
+    projectCode: 'avoidance_car',
+  },
 };
 
 export function createUltrasonicBinding(

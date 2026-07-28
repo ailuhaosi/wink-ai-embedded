@@ -16,7 +16,7 @@ Embedded Workbench 前端源码已迁移到 Wink-AI 主 monorepo：
 cd ../../wink-ai/packages/embedded-frontend
 bun run dev               # Vite dev server :5174（base=/simulator/）
 bun run build             # 构建到 ../frontend/public/simulator
-bun run wasm:build:oled   # 构建 oled_dashboard 示例 wasm（自动调用 ../wink-ai-embedded/wink-micro-os/tools/wink.py）
+bun run wasm:build:oled   # 构建 oled_dashboard 示例 wasm（自动调用 ../wink-ai-embedded/wink-tools/wink.py）
 bun run wasm:build:avoidance
 bun run test              # Vitest 单元测试
 bun run test:e2e          # playwright-cli e2e

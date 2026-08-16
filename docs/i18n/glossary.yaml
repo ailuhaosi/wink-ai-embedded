@@ -1,0 +1,50 @@
+# WinkMicroOS Machine-Readable Terminology Glossary
+
+canonical_forms:
+  - canonical: "Platform Abstraction Layer (PAL)"
+    acronym: "PAL"
+    aliases:
+      - "Pal"
+      - "pal layer"
+      - "platform abstraction"
+
+  - canonical: "Device Abstraction Layer (DAL)"
+    acronym: "DAL"
+    aliases:
+      - "Dali"
+      - "dal layer"
+      - "device abstraction"
+
+  - canonical: "Business Abstraction Layer (BAL)"
+    acronym: "BAL"
+    aliases:
+      - "bal layer"
+
+  - canonical: "Operating System Abstraction Layer (OSAL)"
+    acronym: "OSAL"
+    aliases:
+      - "osal layer"
+
+  - canonical: "Hardware Abstraction Layer (HAL)"
+    acronym: "HAL"
+    aliases:
+      - "hal layer"
+
+  - canonical: "single-source dual-target compilation"
+    aliases:
+      - "single source dual target"
+      - "dual-target single-source"
+
+  - canonical: "compile-time static dispatch"
+    aliases:
+      - "compile time dispatch"
+
+  - canonical: "negative status-code convention"
+    aliases:
+      - "minus error code"
+
+forbidden:
+  - pattern: "\\bfriend\\b"
+    reason: "Mistranslation for PAL"
+  - pattern: "\\bDali\\b"
+    reason: "Mistranslation for DAL"

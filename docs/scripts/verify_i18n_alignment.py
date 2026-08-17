@@ -272,7 +272,7 @@ def diff_section_subtrees(src_node: SectionNode, tgt_node: SectionNode, diffs: L
     # 1. Compare Section Level & Numbering Prefix
     total_score_points += 2
     if src_node.level == tgt_node.level:
-        matched_score_points += 1
+        matched_score_points += 2
     else:
         diffs.append(f"[{cur_path}] Level mismatch: Source=H{src_node.level} vs Target=H{tgt_node.level}")
 
@@ -320,6 +320,9 @@ def diff_section_subtrees(src_node: SectionNode, tgt_node: SectionNode, diffs: L
 
     if len(src_children) != len(tgt_children):
         diffs.append(f"[{cur_path}] Child sections count mismatch: Source has {len(src_children)} sub-sections vs Target has {len(tgt_children)}")
+        matched_score_points += min(len(src_children), len(tgt_children)) * 4
+    else:
+        matched_score_points += child_points
 
     min_children = min(len(src_children), len(tgt_children))
     for idx in range(min_children):

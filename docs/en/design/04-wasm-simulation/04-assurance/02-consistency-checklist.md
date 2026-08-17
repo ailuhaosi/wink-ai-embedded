@@ -33,13 +33,29 @@ sync-status: up-to-date
 | 🚫 **Intentionally Unmodeled** | Outside product boundaries; approximate or omitted |
 | — **N/A** | Feature path unexposed in current product |
 
-### 0.2 Verification Entry Column
+### 0.2 Verification Entry Column (Evidence Pointer, not Specification Body)
 
 | Value | Meaning |
 |---|---|
-| Command / Test ID | Reproducible entry point (e.g., `python wink-tools/wink.py test ...`, lint rule) |
-| `Pending` | Entry point unlinked. Promoting to ✅ requires non-pending entry points |
+| Command / Test ID | Reproducible entry point (e.g., `python wink-tools/wink.py test ...`, lint rule, test name); **does not** duplicate assertions |
+| `Pending` | Entry point unlinked. **Promoting to ✅ forbids** leaving `Pending` (see [`03` §4](./03-roadmap-and-governance.md)). Legacy ✅ marked `Pending` are considered **evidence debt** and must not claim audited proof |
 | `N/A` | Primary status is 🚫 or — |
+
+### 0.3 Solution Types (Category Overview; Details in `01`)
+
+| Type | Meaning |
+|---|---|
+| **A** | Static / build constraint (lint / compile-time / JSON gate) |
+| **B** | Engine modeling |
+| **C** | Observability gate |
+| **Hardware** | HIL / real hardware fallback |
+
+### 0.4 Document Pointers
+
+- Five-field template and C1~C25 contract body $\rightarrow$ [`01`](./01-consistency-spec.md)
+- Production criteria (Completeness $\ne$ Identity) $\rightarrow$ [`../01-overview/03-production-contract.md`](../01-overview/03-production-contract.md)
+- Mechanism landing maturity $\rightarrow$ Root [`00-README.md` §3.2](../00-README.md), [`03` §1.1](./03-roadmap-and-governance.md)
+- Phase / CI / ✅ promotion / golden governance $\rightarrow$ [`03`](./03-roadmap-and-governance.md)
 
 ---
 

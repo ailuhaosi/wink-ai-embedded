@@ -1,4 +1,4 @@
-# ⚡ 5-Minute Getting Started Guide
+# ⚡ 5-Minute Quick Start Guide
 
 <!-- i18n-meta
 source: docs/zh/design/00-quick-start/01-5min-getting-started.md
@@ -8,34 +8,34 @@ translator: AI-assisted
 sync-status: up-to-date
 -->
 
-This guide helps new developers and AI agents quickly set up the local environment, launch the `wink-micro-os` WebAssembly simulation, and run their first closed-loop demo.
+This guide helps new developers and AI Agents quickly set up their environment, launch the `wink-micro-os` local WebAssembly simulation, and run their first closed-loop demo.
 
 ---
 
 ## 1. Prerequisites
 
-Before starting, ensure the following toolchains are installed on your host machine:
+Before starting, please ensure the following toolchains are installed locally:
 
 * **Node.js**: `>= 18.0.0`
-* **Python**: `>= 3.9` (used for running documentation and governance test suites)
-* **CMake & GCC / Clang**: (Optional, for compiling native MCU C kernel unit tests)
-* **Emscripten (emsdk)**: (Optional, for compiling `wink-micro-os` to `wasm32`)
+* **Python**: `>= 3.9` (Used for documentation and plan verification scripts)
+* **CMake & GCC / Clang**: (Optional, used for local cross-compilation of native MCU C kernel unit tests)
+* **Emscripten (emsdk)**: (Optional, used for re-compiling `wink-micro-os` to `wasm32`)
 
 ---
 
-## 2. 5-Minute Quick Run: First Wasm Simulation Demo
+## 2. Running Your First Wasm Simulation Demo in 5 Minutes
 
-### Step 1: Install Dependencies & Check Plans
+### Step 1: Install Dependencies & Build
 ```bash
 # Enter workspace
 cd wink-ai-embedded
 
-# Inspect implementation plans and active development items
+# Run toolchain tests or local build verification
 python docs/implementation-plans/scripts/list_plans.py
 ```
 
-### Step 2: Load Sample Manifest (`wink-app.json`)
-The platform uses a Single Source of Truth (SSOT) configuration manifest to drive virtual peripheral topology. You can find standard manifests under `examples/`:
+### Step 2: Load Example Manifest (`wink-app.json`)
+The platform is driven by a single source of truth configuration file defining peripheral topology. A standard sample manifest can be found under the `examples/` directory:
 
 ```json
 {
@@ -53,9 +53,9 @@ The platform uses a Single Source of Truth (SSOT) configuration manifest to driv
 }
 ```
 
-### Step 3: Launch Wasm Simulation & Online Tracing
-* Load the exported Wasm module (`wink_micro_os.wasm`) inside the Workbench frontend.
-* Observe the `SimTraceSpecV2` event stream in the console:
+### Step 3: Launch Wasm Simulation & Live Tracing
+* Load the exported Wasm module (`wink_micro_os.wasm`) into the frontend workbench.
+* Observe the `SimTraceSpecV2` event stream emitted in the Console:
   ```text
   [TRACE] 00:00:00.010000 | GPIO_SET | pin: 2 | value: 1
   [TRACE] 00:00:00.510000 | GPIO_SET | pin: 2 | value: 0
@@ -63,8 +63,8 @@ The platform uses a Single Source of Truth (SSOT) configuration manifest to driv
 
 ---
 
-## 3. Development Navigation Links
+## 3. Common Development Navigation
 
-* **Modifying C Kernel DAL/PAL** ➔ Refer to [02-wink-micro-os Specification](../02-wink-micro-os/README.md)
-* **Wasm Bridge ABI & Simulation Contract** ➔ Refer to [04-wasm-simulation Specification](../04-wasm-simulation/00-README.md)
-* **AI Agent Instructions** ➔ Refer to [docs/AGENTS.md](../../AGENTS.md)
+* **Modifying C Kernel DAL/PAL** ➔ See [02-wink-micro-os Design Specifications](../02-wink-micro-os/README.md)
+* **Inspecting Wasm Bridge ABI Contract** ➔ See [04-wasm-simulation Design Specifications](../04-wasm-simulation/00-README.md)
+* **AI Retrieval Guidelines** ➔ Please refer to [docs/AGENTS.md](../../AGENTS.md)

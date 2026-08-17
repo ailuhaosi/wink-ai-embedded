@@ -10,25 +10,49 @@ sync-status: up-to-date
 
 | Item | Content |
 |---|---|
-| Tier | Ⅱb Thin Index |
-| Status | **Active** (Switched on 2026-08-02; Active SSOT) |
-| Canonical Definition | [`../01-overview/02-axes-af.md`](../01-overview/02-axes-af.md) |
+| Layer | Ⅱb Lean Axis Index |
+| Status | **Active** (Switched 2026-08-02; Active Wasm simulation SSOT) |
+| Definition Source | [`../01-overview/02-axes-af.md`](../01-overview/02-axes-af.md) (Wording strictly frozen) |
 
-## 1. Questions Answered
+---
 
-Where does sensor, actuator, and bus data come from?
+## 1. Question Addressed
+
+Where sensor/actuator/bus data originates
+
+Definition: Refer to Axis A in [`../01-overview/02-axes-af.md`](../01-overview/02-axes-af.md).
+
+---
 
 ## 2. Primary Mechanism
 
-- [`../02-mechanisms/08-channel-routing.md`](../02-mechanisms/08-channel-routing.md) — 5-Channel data plane and peripheral routing.
+- [`../02-mechanisms/08-channel-routing.md`](../02-mechanisms/08-channel-routing.md) — 4-Channel Data Plane & Peripheral Selection (How physical quantities enter firmware)
+
+---
 
 ## 3. Secondary Mechanisms
 
-- Configuration Plane (Registry / PinArbiter / Schemas) → [`../02-mechanisms/07-peripheral-registry.md`](../02-mechanisms/07-peripheral-registry.md)
-- Physical degradation and bus fault injection → [`../02-mechanisms/06-physical-degradation.md`](../02-mechanisms/06-physical-degradation.md)
+- Configuration plane (Registry / PinArbiter / Schematics) $\rightarrow$ [`../02-mechanisms/07-peripheral-registry.md`](../02-mechanisms/07-peripheral-registry.md)
+- Physical degradation and bus fault injection $\rightarrow$ [`../02-mechanisms/06-physical-degradation.md`](../02-mechanisms/06-physical-degradation.md)
 
-## 4. Typical Bounds & Constraints
+---
 
-1. **Model Upper Bound**: Does not simulate ADC quantization, impedance, or power integrity.
-2. **Channel Coverage**: Channel 1 (Pin edge) and Channel 2 (Bus payload) are main paths; Channel 1b handles PWM duty.
-3. **Bypass Discipline**: Sinks to PAL physical sources only; DAL business shortcuts are forbidden.
+## 4. Typical Upper Bounds (Expanded)
+
+1. **Model Scope**: Does not simulate analog frontends, impedance, or power rail dynamics; electrical validation requires real hardware or HIL ([`../01-overview/03-production-contract.md`](../01-overview/03-production-contract.md)).
+2. **Channel Coverage**: Channel 1 (Pin edges) and Channel 2 (Bus payloads) are primary; Channel 1b (PWM) provides **duty routing** (Hardware carrier cycles belong to Axis C, see [`C-timer-semantics.md`](./C-timer-semantics.md)).
+3. **Pending Channels**: Channel 3 (Analog) and Channel 4 (Buffer) are architectural placeholders.
+4. **UART**: Master TX and transactional modes are Landed; asynchronous RX byte timing and RX IRQs are Planned.
+5. **Bypass Discipline**: Substitutes physical data sources only, strictly banning DAL business bypasses.
+6. **Cross-Axis Claims**: ECHO edge capture requires **A + B** (+ `timing` Accuracy Mode); Servo/PWM output requires **A + C**; I2C packet drops require **A + D + F**.
+
+---
+
+## 5. Associated C Scenarios
+
+Scenario specifications reside in [`../04-assurance/01-consistency-spec.md`](../04-assurance/01-consistency-spec.md). Statuses reside exclusively in [`../04-assurance/02-consistency-checklist.md`](../04-assurance/02-consistency-checklist.md).
+
+- **C1** — Business Causality & State Machine Logic
+- **C7** — Bus Protocol Frames / CRC / Error Recovery
+- **C17** — Peripheral Resource Mutual Exclusion & Clock Coupling
+- **C8** — DMA / Bus Asynchronous Transfer Windows; **C18** — Bus Fault State Machines

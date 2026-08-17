@@ -1,5 +1,7 @@
 # 🤖 Wink-AI 嵌入式平台 AI Agent 检索与开发指南 (AGENTS.md)
 
+> 📌 **语言版本 / Language**：[中文架构 SSOT (默认)](zh/design/) ｜ [English SSOT](en/design/)
+
 本文件是专门为 AI 智能体 (Antigravity, Cursor, Copilot 等) 编写的快速上下文指南。在分析、修改或解答本仓库代码与架构时，**必须严格遵守以下 SSOT 导引与黑盒隔离原则**。
 
 ---
@@ -19,13 +21,13 @@
 
 | 领域 (Domain) | 设计 SSOT (Design Spec) | 源码 / 契约映射 (Mapping Target) | 性质 (Type) |
 | :--- | :--- | :--- | :--- |
-| **系统总体与跨仓** | [01-system-overall/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/01-system-overall/01-system-overview.md) | [跨仓边界契约](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/01-system-overall/04-cross-repo-boundary-contract.md) | 架构规范 |
-| **WinkMicroOS 内核** | [02-wink-micro-os/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/02-wink-micro-os/README.md) | `Code-Mapping: /src/core/` (`dal/`, `pal/`, `bal/`) | **内仓源码** |
-| **应用生成 & Manifest** | [03-app-codegen/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/03-app-codegen/01-app-business-logic.md) | `Contract-Mapping: wink-app.json (v2 Schema)` | 契约/Schema |
-| **UniSim Wasm 仿真** | [04-wasm-simulation/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/04-wasm-simulation/00-README.md) | `Contract-Mapping: wasm_bridge.h` & `SimTraceSpecV2` | 外仓黑盒 ABI |
-| **前端工作台** | [05-frontend-workbench/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/05-frontend-workbench/01-frontend-workbench-architecture.md) | `Contract-Mapping: Dual-Viewport State DTO` | 外仓黑盒 DTO |
-| **云编译工具链** | [06-build-toolchain/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/06-build-toolchain/01-toolchain-deployment.md) | `Contract-Mapping: Build Job Protocol (job.proto)` | 编译 Protocol |
-| **平台治理与 Registry** | [07-platform-governance/](file:///d:/MyWorkSpace_program/lowcode-nocode/ai-app/wink-ai-embedded/docs/design/07-platform-governance/01-device-model-registry.md) | `Contract-Mapping: Device Model Registry Schema` | 治理 Schema |
+| **系统总体与跨仓** | [01-system-overall/](zh/design/01-system-overall/01-system-overview.md) | [跨仓边界契约](zh/design/01-system-overall/04-cross-repo-boundary-contract.md) | 架构规范 |
+| **WinkMicroOS 内核** | [02-wink-micro-os/](zh/design/02-wink-micro-os/README.md) | `Code-Mapping: /src/core/` (`dal/`, `pal/`, `bal/`) | **内仓源码** |
+| **应用生成 & Manifest** | [03-app-codegen/](zh/design/03-app-codegen/01-app-business-logic.md) | `Contract-Mapping: wink-app.json (v2 Schema)` | 契约/Schema |
+| **UniSim Wasm 仿真** | [04-wasm-simulation/](zh/design/04-wasm-simulation/00-README.md) | `Contract-Mapping: wasm_bridge.h` & `SimTraceSpecV2` | 外仓黑盒 ABI |
+| **前端工作台** | [05-frontend-workbench/](zh/design/05-frontend-workbench/01-frontend-workbench-architecture.md) | `Contract-Mapping: Dual-Viewport State DTO` | 外仓黑盒 DTO |
+| **云编译工具链** | [06-build-toolchain/](zh/design/06-build-toolchain/01-toolchain-deployment.md) | `Contract-Mapping: Build Job Protocol (job.proto)` | 编译 Protocol |
+| **平台治理与 Registry** | [07-platform-governance/](zh/design/07-platform-governance/01-device-model-registry.md) | `Contract-Mapping: Device Model Registry Schema` | 治理 Schema |
 
 ---
 
@@ -34,4 +36,4 @@
 当响应用户请求时，AI 智能体必须遵守：
 1. **禁止假设 VM 解释器**：`wink-micro-os` 在 MCU 上是 100% 静态编译的 C 代码，不使用 MicroPython、JS VM 或 Wasm-on-MCU（如 WAMR）。
 2. **禁止编写动态内存分配**：`wink-micro-os` 严格限制使用 `malloc`/`free`，应用层采用静态 BSS 分配与 Protothreads 无栈协程。
-3. **不可破坏黑盒**：不要试图在 `docs/design/` 中添加外仓 TypeScript 的实现逻辑细节。若存在功能修改诉求，提出契约层变更提案（ADR）。
+3. **不可破坏黑盒**：不要试图在 `docs/{zh,en}/design/` 中添加外仓 TypeScript 的实现逻辑细节。若存在功能修改诉求，提出契约层变更提案（ADR）。
